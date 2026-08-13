@@ -259,6 +259,21 @@ button:disabled {
   font-size: 0.9rem;
 }
 
+.model-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #eee;
+}
+
+.model-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
 .cap-badges {
   display: flex;
   align-items: center;
@@ -323,6 +338,11 @@ button:disabled {
   max-height: 280px;
   border-radius: 8px;
   border: 1px solid #ddd;
+}
+
+.gen-error {
+  width: 100%;
+  margin: 0;
 }
 
 .test-result {

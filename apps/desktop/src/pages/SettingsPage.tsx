@@ -91,6 +91,7 @@ export function SettingsPage() {
     capability: string;
   } | null>(null);
   const [genJobs, setGenJobs] = useState<Record<string, GenerationJob>>({});
+  const [genErrors, setGenErrors] = useState<Record<string, string>>({});
   const [genBusy, setGenBusy] = useState(false);
   const genPollRef = useRef<string | null>(null);
 
@@ -210,6 +211,11 @@ export function SettingsPage() {
       delete next[model.id];
       return next;
     });
+    setGenErrors((prev) => {
+      const next = { ...prev };
+      delete next[model.id];
+      return next;
+    });
   }
 
   function closeGenPanel() {
@@ -221,7 +227,11 @@ export function SettingsPage() {
     e.preventDefault();
     if (!genPanel) return;
     setGenBusy(true);
-    setError("");
+    setGenErrors((prev) => {
+      const next = { ...prev };
+      delete next[genPanel.modelId];
+      return next;
+    });
     try {
       const job = await createGenerationJob({
         model_id: genPanel.modelId,
@@ -241,7 +251,10 @@ export function SettingsPage() {
         }
       }
     } catch (err) {
-      setError((err as Error).message);
+      setGenErrors((prev) => ({
+        ...prev,
+        [genPanel.modelId]: (err as Error).message,
+      }));
       genPollRef.current = null;
     } finally {
       setGenBusy(false);
@@ -672,204 +685,213 @@ export function SettingsPage() {
                     .filter((m) => m.provider_id === provider.id)
                     .map((model) => (
                       <Fragment key={model.id}>
-                      <div className="model-row">
-                        <span className="model-name">{model.model_id}</span>
-                        <span className={`badge badge-${model.model_type}`}>
-                          {TYPE_LABEL[model.model_type]}
-                        </span>
-                        <span className="cap-badges">
-                          {(model.model_type === "image"
-                            ? IMAGE_CAPABILITIES
-                            : model.model_type === "video"
-                              ? VIDEO_CAPABILITIES
-                              : []
-                          ).map((cap) => (
-                            <span
-                              key={cap}
-                              className={
-                                model.capabilities.includes(cap)
-                                  ? "cap-badge cap-on"
-                                  : "cap-badge cap-off"
-                              }
-                            >
-                              {model.capabilities.includes(cap) ? "✓" : "✕"}{" "}
-                              {CAPABILITY_LABELS[cap]}
+                        <div className="model-block">
+                          <div className="model-head">
+                            <span className="model-name">{model.model_id}</span>
+                            <span className={`badge badge-${model.model_type}`}>
+                              {TYPE_LABEL[model.model_type]}
                             </span>
-                          ))}
-                          {model.model_type !== "llm" && (
-                            <span className="muted">
-                              {model.capability_source === "manual" ? "手动" : "自动"}
-                            </span>
-                          )}
-                        </span>
-                        {model.is_default_image && (
-                          <span className="badge badge-default">默认 Image</span>
-                        )}
-                        {model.is_default_video && (
-                          <span className="badge badge-default">默认 Video</span>
-                        )}
-                        <div className="actions">
-                          <button
-                            type="button"
-                            onClick={() => handleToggleModel(model)}
-                          >
-                            {model.enabled ? "启用" : "禁用"}
-                          </button>
-                          {model.model_type !== "llm" && (
-                            <button type="button" onClick={() => handleDefault(model)}>
-                              设默认
-                            </button>
-                          )}
-                          {model.model_type !== "llm" && (
-                            <button type="button" onClick={() => openGenPanel(model)}>
-                              生成测试
-                            </button>
-                          )}
-                          {model.model_type !== "llm" &&
-                            (capEdit?.modelId === model.id ? (
-                              <form
-                                className="cap-edit-form"
-                                onSubmit={handleSaveCapabilities}
-                              >
-                                <span className="cap-edit-list">
-                                  {(model.model_type === "image"
-                                    ? IMAGE_CAPABILITIES
-                                    : VIDEO_CAPABILITIES
-                                  ).map((cap) => (
-                                    <label key={cap} className="checkbox-row">
-                                      <input
-                                        type="checkbox"
-                                        checked={capEdit.caps.includes(cap)}
-                                        onChange={(e) =>
-                                          toggleCap(cap, e.target.checked)
-                                        }
-                                      />
-                                      {CAPABILITY_LABELS[cap]}
-                                    </label>
-                                  ))}
+                            {model.is_default_image && (
+                              <span className="badge badge-default">默认 Image</span>
+                            )}
+                            {model.is_default_video && (
+                              <span className="badge badge-default">默认 Video</span>
+                            )}
+                            <span className="cap-badges">
+                              {(model.model_type === "image"
+                                ? IMAGE_CAPABILITIES
+                                : model.model_type === "video"
+                                  ? VIDEO_CAPABILITIES
+                                  : []
+                              ).map((cap) => (
+                                <span
+                                  key={cap}
+                                  className={
+                                    model.capabilities.includes(cap)
+                                      ? "cap-badge cap-on"
+                                      : "cap-badge cap-off"
+                                  }
+                                >
+                                  {model.capabilities.includes(cap) ? "✓" : "✕"}{" "}
+                                  {CAPABILITY_LABELS[cap]}
                                 </span>
-                                <button type="submit">保存</button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleResetCapabilities(model)}
-                                >
-                                  重置为自动
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setCapEdit(null)}
-                                >
-                                  取消
-                                </button>
-                              </form>
-                            ) : (
+                              ))}
+                              {model.model_type !== "llm" && (
+                                <span className="muted">
+                                  {model.capability_source === "manual" ? "手动" : "自动"}
+                                </span>
+                              )}
+                            </span>
+                          </div>
+                          <div className="actions">
+                            <button
+                              type="button"
+                              onClick={() => handleToggleModel(model)}
+                            >
+                              {model.enabled ? "启用" : "禁用"}
+                            </button>
+                            {model.model_type !== "llm" && (
+                              <button type="button" onClick={() => handleDefault(model)}>
+                                设默认
+                              </button>
+                            )}
+                            {model.model_type !== "llm" && (
+                              <button type="button" onClick={() => openGenPanel(model)}>
+                                生成测试
+                              </button>
+                            )}
+                            {model.model_type !== "llm" && (
                               <button
                                 type="button"
                                 onClick={() =>
-                                  setCapEdit({
-                                    modelId: model.id,
-                                    caps: model.capabilities,
-                                  })
+                                  capEdit?.modelId === model.id
+                                    ? setCapEdit(null)
+                                    : setCapEdit({
+                                        modelId: model.id,
+                                        caps: model.capabilities,
+                                      })
                                 }
                               >
                                 编辑能力
                               </button>
-                            ))}
-                          {confirmDelete?.kind === "model" &&
-                          confirmDelete.id === model.id ? (
-                            <>
+                            )}
+                            {confirmDelete?.kind === "model" &&
+                            confirmDelete.id === model.id ? (
+                              <>
+                                <button
+                                  type="button"
+                                  className="button-danger"
+                                  onClick={() => handleDeleteModel(model)}
+                                >
+                                  确认删除
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setConfirmDelete(null)}
+                                >
+                                  取消
+                                </button>
+                              </>
+                            ) : (
                               <button
                                 type="button"
                                 className="button-danger"
                                 onClick={() => handleDeleteModel(model)}
                               >
-                                确认删除
+                                删除
                               </button>
+                            )}
+                          </div>
+                          {capEdit?.modelId === model.id && (
+                            <form
+                              className="cap-edit-form"
+                              onSubmit={handleSaveCapabilities}
+                            >
+                              <span className="cap-edit-list">
+                                {(model.model_type === "image"
+                                  ? IMAGE_CAPABILITIES
+                                  : VIDEO_CAPABILITIES
+                                ).map((cap) => (
+                                  <label key={cap} className="checkbox-row">
+                                    <input
+                                      type="checkbox"
+                                      checked={capEdit.caps.includes(cap)}
+                                      onChange={(e) =>
+                                        toggleCap(cap, e.target.checked)
+                                      }
+                                    />
+                                    {CAPABILITY_LABELS[cap]}
+                                  </label>
+                                ))}
+                              </span>
+                              <button type="submit">保存</button>
                               <button
                                 type="button"
-                                onClick={() => setConfirmDelete(null)}
+                                onClick={() => handleResetCapabilities(model)}
                               >
+                                重置为自动
+                              </button>
+                              <button type="button" onClick={() => setCapEdit(null)}>
                                 取消
                               </button>
-                            </>
-                          ) : (
-                            <button
-                              type="button"
-                              className="button-danger"
-                              onClick={() => handleDeleteModel(model)}
-                            >
-                              删除
-                            </button>
+                            </form>
+                          )}
+                          {genPanel?.modelId === model.id && (
+                            <form className="gen-test-panel" onSubmit={startGenTest}>
+                              <label>
+                                提示词
+                                <input
+                                  value={genPanel.prompt}
+                                  onChange={(e) =>
+                                    setGenPanel({ ...genPanel, prompt: e.target.value })
+                                  }
+                                  placeholder="描述要生成的内容"
+                                  required
+                                />
+                              </label>
+                              <label>
+                                能力
+                                <select
+                                  value={genPanel.capability}
+                                  onChange={(e) =>
+                                    setGenPanel({
+                                      ...genPanel,
+                                      capability: e.target.value,
+                                    })
+                                  }
+                                >
+                                  {model.capabilities.map((cap) => (
+                                    <option key={cap} value={cap}>
+                                      {CAPABILITY_LABELS[cap as CapabilityKey]}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                              <button type="submit" disabled={genBusy}>
+                                {genBusy ? "提交中…" : "确认生成（会产生真实费用）"}
+                              </button>
+                              <button type="button" onClick={closeGenPanel}>
+                                关闭
+                              </button>
+                              {genErrors[model.id] && (
+                                <p className="error gen-error">
+                                  {genErrors[model.id]}
+                                </p>
+                              )}
+                              {genJobs[model.id] && (
+                                <div className="gen-result">
+                                  <p className="muted">
+                                    状态：{GEN_STATUS_LABEL[genJobs[model.id].status]}
+                                  </p>
+                                  {genJobs[model.id].error && (
+                                    <p className="error">{genJobs[model.id].error}</p>
+                                  )}
+                                  {genJobs[model.id].result?.urls.map((u, i) => {
+                                    const isVideo =
+                                      genJobs[model.id].capability === "text_to_video" ||
+                                      genJobs[model.id].capability === "image_to_video" ||
+                                      /\.(mp4|webm|mov)(\?|$)/i.test(u);
+                                    return isVideo ? (
+                                      <video
+                                        key={i}
+                                        src={u}
+                                        controls
+                                        className="gen-media"
+                                      />
+                                    ) : (
+                                      <img
+                                        key={i}
+                                        src={u}
+                                        alt="生成结果"
+                                        className="gen-media"
+                                      />
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </form>
                           )}
                         </div>
-                      </div>
-                      {genPanel?.modelId === model.id && (
-                        <form className="gen-test-panel" onSubmit={startGenTest}>
-                          <label>
-                            提示词
-                            <input
-                              value={genPanel.prompt}
-                              onChange={(e) =>
-                                setGenPanel({ ...genPanel, prompt: e.target.value })
-                              }
-                              placeholder="描述要生成的内容"
-                              required
-                            />
-                          </label>
-                          <label>
-                            能力
-                            <select
-                              value={genPanel.capability}
-                              onChange={(e) =>
-                                setGenPanel({ ...genPanel, capability: e.target.value })
-                              }
-                            >
-                              {model.capabilities.map((cap) => (
-                                <option key={cap} value={cap}>
-                                  {CAPABILITY_LABELS[cap as CapabilityKey]}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                          <button type="submit" disabled={genBusy}>
-                            {genBusy ? "提交中…" : "确认生成（会产生真实费用）"}
-                          </button>
-                          <button type="button" onClick={closeGenPanel}>
-                            关闭
-                          </button>
-                          {genJobs[model.id] && (
-                            <div className="gen-result">
-                              <p className="muted">
-                                状态：{GEN_STATUS_LABEL[genJobs[model.id].status]}
-                              </p>
-                              {genJobs[model.id].error && (
-                                <p className="error">{genJobs[model.id].error}</p>
-                              )}
-                              {genJobs[model.id].result?.urls.map((u, i) => {
-                                const isVideo =
-                                  genJobs[model.id].capability === "text_to_video" ||
-                                  genJobs[model.id].capability === "image_to_video" ||
-                                  /\.(mp4|webm|mov)(\?|$)/i.test(u);
-                                return isVideo ? (
-                                  <video
-                                    key={i}
-                                    src={u}
-                                    controls
-                                    className="gen-media"
-                                  />
-                                ) : (
-                                  <img
-                                    key={i}
-                                    src={u}
-                                    alt="生成结果"
-                                    className="gen-media"
-                                  />
-                                );
-                              })}
-                            </div>
-                          )}
-                        </form>
-                      )}
                       </Fragment>
                     ))}
                 </div>
