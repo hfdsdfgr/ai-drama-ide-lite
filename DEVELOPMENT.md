@@ -8,6 +8,9 @@
 >
 > 产品不是一个“输入小说 → 黑箱生成视频”的工具，而是一个可观察、可干预、可暂停、可重做的 AI 漫剧生产 IDE。
 
+> **UI 开发强制阅读**：所有界面改动前先读 `docs/development-notes/ui-guidelines.md`
+> （设计 token、布局结构、组件规范、状态生命周期、响应式与验证方法）。
+
 ---
 
 # 1. Product Positioning
