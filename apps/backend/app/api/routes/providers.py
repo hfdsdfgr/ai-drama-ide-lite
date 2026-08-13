@@ -8,13 +8,16 @@ from app.schemas.provider import (
     BuiltinModelOut,
     DefaultRequest,
     ModelCreate,
+    ModelCapabilityUpdate,
     ModelOut,
     ModelUpdate,
     PresetOut,
     ProviderCreate,
     ProviderOut,
+    ProviderTestOut,
     ProviderUpdate,
 )
+from app.services.api_tester import run_provider_test
 from app.services.model_catalog import get_builtin_models
 from app.services.model_discovery import fetch_model_ids
 from app.services.provider_repo import ProviderRepository
@@ -98,6 +101,30 @@ def discover_models(provider_id: str, request: Request) -> list[ModelOut]:
     return repo.upsert_discovered(provider_id, model_ids)
 
 
+@router.post("/{provider_id}/test", response_model=ProviderTestOut)
+def test_provider(provider_id: str, request: Request) -> ProviderTestOut:
+    """L1/L2 连接测试：可达性、鉴权、模型可用性（零成本）。"""
+    repo = _repo(request)
+    provider = repo.get_provider(provider_id)
+    preset = get_preset(provider.preset_key) if provider.preset_key else None
+    discoverable = preset.discoverable if preset else True
+    api_key = (
+        repo.secret_store.get(f"provider:{provider_id}")
+        if provider.needs_key
+        else None
+    )
+    models = repo.list_models(provider_id=provider_id, enabled_only=True)
+    return run_provider_test(
+        provider_id=provider_id,
+        base_url=provider.api_base_url,
+        api_key=api_key,
+        needs_key=provider.needs_key,
+        has_key=provider.has_api_key,
+        discoverable=discoverable,
+        models=models,
+    )
+
+
 @router.post("/{provider_id}/models/bulk", response_model=list[ModelOut], status_code=201)
 def bulk_add_models(
     provider_id: str, payload: BulkModelsRequest, request: Request
@@ -136,11 +163,13 @@ def list_models(
     provider_id: str | None = None,
     model_type: str | None = None,
     enabled_only: bool = False,
+    capability: str | None = None,
 ) -> list[ModelOut]:
     return _repo(request).list_models(
         provider_id=provider_id,
         model_type=model_type,
         enabled_only=enabled_only,
+        capability=capability,
     )
 
 
@@ -159,6 +188,14 @@ def update_model(
     model_id: str, payload: ModelUpdate, request: Request
 ) -> ModelOut:
     return _repo(request).update_model(model_id, payload)
+
+
+@models_router.put("/{model_id}/capabilities", response_model=ModelOut)
+def update_model_capabilities(
+    model_id: str, payload: ModelCapabilityUpdate, request: Request
+) -> ModelOut:
+    """能力手动覆盖或重置为自动推断。"""
+    return _repo(request).update_model_capabilities(model_id, payload)
 
 
 @models_router.delete("/{model_id}", status_code=204)

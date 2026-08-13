@@ -13,15 +13,24 @@ import {
   listPresets,
   listProviders,
   setDefaultModel,
+  testProvider,
+  updateModelCapabilities,
   updateModel,
   updateProvider,
 } from "../api/providers";
 import type {
   BuiltinModel,
+  CapabilityKey,
   Model,
   ModelType,
   Preset,
   Provider,
+  ProviderTestResult,
+} from "../types/provider";
+import {
+  CAPABILITY_LABELS,
+  IMAGE_CAPABILITIES,
+  VIDEO_CAPABILITIES,
 } from "../types/provider";
 
 const CUSTOM_KEY = "__custom__";
@@ -41,9 +50,17 @@ export function SettingsPage() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Provider | null>(null);
   const [discoveringId, setDiscoveringId] = useState<string | null>(null);
+  const [testingId, setTestingId] = useState<string | null>(null);
+  const [testResults, setTestResults] = useState<
+    Record<string, ProviderTestResult>
+  >({});
   const [builtin, setBuiltin] = useState<Record<string, BuiltinModel[]>>({});
   const [builtinOpen, setBuiltinOpen] = useState<string | null>(null);
   const [builtinBusy, setBuiltinBusy] = useState<string | null>(null);
+  const [capEdit, setCapEdit] = useState<{
+    modelId: string;
+    caps: CapabilityKey[];
+  } | null>(null);
 
   const [formPreset, setFormPreset] = useState("");
   const [formName, setFormName] = useState("");
@@ -96,6 +113,53 @@ export function SettingsPage() {
     } finally {
       setDiscoveringId(null);
     }
+  }
+
+  async function runTest(provider: Provider) {
+    setTestingId(provider.id);
+    setError("");
+    try {
+      const result = await testProvider(provider.id);
+      setTestResults((prev) => ({ ...prev, [provider.id]: result }));
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setTestingId(null);
+    }
+  }
+
+  async function handleSaveCapabilities(e: React.FormEvent) {
+    e.preventDefault();
+    if (!capEdit) return;
+    setError("");
+    try {
+      await updateModelCapabilities(capEdit.modelId, capEdit.caps, "manual");
+      setCapEdit(null);
+      await refresh();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  async function handleResetCapabilities(model: Model) {
+    setError("");
+    try {
+      await updateModelCapabilities(model.id, [], "auto");
+      setCapEdit(null);
+      await refresh();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  function toggleCap(cap: CapabilityKey, on: boolean) {
+    setCapEdit((prev) => {
+      if (!prev) return prev;
+      const caps = on
+        ? [...prev.caps, cap]
+        : prev.caps.filter((c) => c !== cap);
+      return { ...prev, caps };
+    });
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -265,7 +329,7 @@ export function SettingsPage() {
 
       <p className="muted">
         API Key 仅保存在本机系统凭据管理器中，不会进入项目文件或日志。
-        能力检测将在 Phase 4 提供。
+        模型能力由规则自动推断（可手动调整），「测试连接」可验证 API Key 与模型可用性。
       </p>
 
       {error && <p className="error">{error}</p>}
@@ -413,12 +477,45 @@ export function SettingsPage() {
                   </button>
                   <button
                     type="button"
+                    onClick={() => runTest(provider)}
+                    disabled={testingId === provider.id}
+                  >
+                    {testingId === provider.id ? "测试中…" : "测试连接"}
+                  </button>
+                  <button
+                    type="button"
                     className="button-danger"
                     onClick={() => handleDeleteProvider(provider)}
                   >
                     删除
                   </button>
                 </div>
+
+                {testResults[provider.id] && (
+                  <div className="test-result">
+                    <p className={testResults[provider.id].ok ? "ok" : "error"}>
+                      {testResults[provider.id].ok
+                        ? "连接测试通过"
+                        : "连接测试未通过"}
+                    </p>
+                    <ul className="check-list">
+                      {testResults[provider.id].checks.map((c, i) => (
+                        <li key={i} className={`check-${c.status}`}>
+                          <span className="check-mark">
+                            {c.status === "ok" ? "✓" : c.status === "fail" ? "✕" : "–"}
+                          </span>
+                          {c.label}：{c.detail}
+                        </li>
+                      ))}
+                      {testResults[provider.id].model_checks.map((m) => (
+                        <li key={m.model_id} className={m.ok ? "check-ok" : "check-fail"}>
+                          <span className="check-mark">{m.ok ? "✓" : "✕"}</span>
+                          {m.model_id}：{m.detail}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
 
                 <div className="models">
                   {models
@@ -428,6 +525,31 @@ export function SettingsPage() {
                         <span className="model-name">{model.model_id}</span>
                         <span className={`badge badge-${model.model_type}`}>
                           {TYPE_LABEL[model.model_type]}
+                        </span>
+                        <span className="cap-badges">
+                          {(model.model_type === "image"
+                            ? IMAGE_CAPABILITIES
+                            : model.model_type === "video"
+                              ? VIDEO_CAPABILITIES
+                              : []
+                          ).map((cap) => (
+                            <span
+                              key={cap}
+                              className={
+                                model.capabilities.includes(cap)
+                                  ? "cap-badge cap-on"
+                                  : "cap-badge cap-off"
+                              }
+                            >
+                              {model.capabilities.includes(cap) ? "✓" : "✕"}{" "}
+                              {CAPABILITY_LABELS[cap]}
+                            </span>
+                          ))}
+                          {model.model_type !== "llm" && (
+                            <span className="muted">
+                              {model.capability_source === "manual" ? "手动" : "自动"}
+                            </span>
+                          )}
                         </span>
                         {model.is_default_image && (
                           <span className="badge badge-default">默认 Image</span>
@@ -447,6 +569,56 @@ export function SettingsPage() {
                               设默认
                             </button>
                           )}
+                          {model.model_type !== "llm" &&
+                            (capEdit?.modelId === model.id ? (
+                              <form
+                                className="cap-edit-form"
+                                onSubmit={handleSaveCapabilities}
+                              >
+                                <span className="cap-edit-list">
+                                  {(model.model_type === "image"
+                                    ? IMAGE_CAPABILITIES
+                                    : VIDEO_CAPABILITIES
+                                  ).map((cap) => (
+                                    <label key={cap} className="checkbox-row">
+                                      <input
+                                        type="checkbox"
+                                        checked={capEdit.caps.includes(cap)}
+                                        onChange={(e) =>
+                                          toggleCap(cap, e.target.checked)
+                                        }
+                                      />
+                                      {CAPABILITY_LABELS[cap]}
+                                    </label>
+                                  ))}
+                                </span>
+                                <button type="submit">保存</button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleResetCapabilities(model)}
+                                >
+                                  重置为自动
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setCapEdit(null)}
+                                >
+                                  取消
+                                </button>
+                              </form>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setCapEdit({
+                                    modelId: model.id,
+                                    caps: model.capabilities,
+                                  })
+                                }
+                              >
+                                编辑能力
+                              </button>
+                            ))}
                           <button
                             type="button"
                             className="button-danger"

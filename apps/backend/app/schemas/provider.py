@@ -65,6 +65,13 @@ class ModelUpdate(BaseModel):
     is_default_video: bool | None = None
 
 
+class ModelCapabilityUpdate(BaseModel):
+    """能力覆盖：source=manual 使用 capabilities；source=auto 重新按规则推断。"""
+
+    capabilities: list[str] = Field(default_factory=list)
+    source: Literal["auto", "manual"] = "manual"
+
+
 class DefaultRequest(BaseModel):
     model_type: Literal["image", "video"] | None = None
 
@@ -87,8 +94,30 @@ class ModelOut(BaseModel):
     provider_has_api_key: bool = False
     model_id: str
     model_type: ModelType
+    capabilities: list[str] = Field(default_factory=list)
+    capability_source: Literal["auto", "manual"] = "auto"
     enabled: bool = True
     is_default_image: bool = False
     is_default_video: bool = False
     created_at: datetime
     updated_at: datetime
+
+
+class ProviderCheckOut(BaseModel):
+    label: str
+    status: Literal["ok", "fail", "skipped"]
+    detail: str = ""
+
+
+class ModelCheckOut(BaseModel):
+    model_id: str
+    ok: bool
+    detail: str = ""
+
+
+class ProviderTestOut(BaseModel):
+    provider_id: str
+    ok: bool
+    checks: list[ProviderCheckOut] = Field(default_factory=list)
+    model_checks: list[ModelCheckOut] = Field(default_factory=list)
+    tested_at: datetime

@@ -9,12 +9,19 @@ from app.core.errors import AppError
 from app.db.database import get_connection
 from app.schemas.provider import (
     ModelCreate,
+    ModelCapabilityUpdate,
     ModelOut,
     ModelType,
     ModelUpdate,
     ProviderCreate,
     ProviderOut,
     ProviderUpdate,
+)
+from app.services.capability_registry import (
+    infer_capabilities,
+    parse,
+    serialize,
+    validate_capabilities,
 )
 from app.services.secret_store import SecretStore
 from app.services.vendor_presets import classify_model, get_preset
@@ -202,6 +209,7 @@ class ProviderRepository:
         provider_id: str | None = None,
         model_type: str | None = None,
         enabled_only: bool = False,
+        capability: str | None = None,
     ) -> list[ModelOut]:
         conditions = ["m.deleted_at IS NULL", "p.deleted_at IS NULL"]
         params: list = []
@@ -213,6 +221,9 @@ class ProviderRepository:
             params.append(model_type)
         if enabled_only:
             conditions.append("m.enabled = 1")
+        if capability:
+            conditions.append("m.capabilities LIKE ?")
+            params.append(f'%"{capability}"%')
         where = " AND ".join(conditions)
         with get_connection(self.db_path) as conn:
             rows = conn.execute(
@@ -249,6 +260,9 @@ class ProviderRepository:
         provider = self.get_provider(data.provider_id)
         now = _now_iso()
         model_id = _new_id("model")
+        capabilities = infer_capabilities(
+            provider.preset_key, data.model_id.strip(), data.model_type
+        )
         with get_connection(self.db_path) as conn:
             exists = conn.execute(
                 "SELECT 1 FROM models WHERE provider_id = ? AND model_id = ? AND deleted_at IS NULL",
@@ -261,19 +275,42 @@ class ProviderRepository:
             if data.is_default_video:
                 conn.execute("UPDATE models SET is_default_video = 0 WHERE is_default_video = 1")
             conn.execute(
-                "INSERT INTO models (id, provider_id, model_id, model_type, enabled, is_default_image, is_default_video, created_at, updated_at, deleted_at)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)",
+                "INSERT INTO models (id, provider_id, model_id, model_type, capabilities, capability_source, enabled, is_default_image, is_default_video, created_at, updated_at, deleted_at)"
+                " VALUES (?, ?, ?, ?, ?, 'auto', ?, ?, ?, ?, ?, NULL)",
                 (
                     model_id,
                     data.provider_id,
                     data.model_id.strip(),
                     data.model_type,
+                    serialize(capabilities),
                     1 if data.enabled else 0,
                     1 if data.is_default_image else 0,
                     1 if data.is_default_video else 0,
                     now,
                     now,
                 ),
+            )
+        return self.get_model(model_id)
+
+    def update_model_capabilities(
+        self, model_id: str, data: ModelCapabilityUpdate
+    ) -> ModelOut:
+        model = self.get_model(model_id)
+        if data.source == "auto":
+            provider = self.get_provider(model.provider_id)
+            capabilities = infer_capabilities(
+                provider.preset_key, model.model_id, model.model_type
+            )
+            source = "auto"
+        else:
+            capabilities = validate_capabilities(
+                model.model_type, data.capabilities
+            )
+            source = "manual"
+        with get_connection(self.db_path) as conn:
+            conn.execute(
+                "UPDATE models SET capabilities = ?, capability_source = ?, updated_at = ? WHERE id = ?",
+                (serialize(capabilities), source, _now_iso(), model_id),
             )
         return self.get_model(model_id)
 
@@ -340,6 +377,7 @@ class ProviderRepository:
         now = _now_iso()
         for mid in model_ids:
             model_type = classify_model(preset_key, mid)
+            capabilities = infer_capabilities(preset_key, mid, model_type)
             with get_connection(self.db_path) as conn:
                 exists = conn.execute(
                     "SELECT 1 FROM models WHERE provider_id = ? AND model_id = ? AND deleted_at IS NULL",
@@ -347,9 +385,17 @@ class ProviderRepository:
                 ).fetchone()
                 if not exists:
                     conn.execute(
-                        "INSERT INTO models (id, provider_id, model_id, model_type, enabled, is_default_image, is_default_video, created_at, updated_at, deleted_at)"
-                        " VALUES (?, ?, ?, ?, 1, 0, 0, ?, ?, NULL)",
-                        (_new_id("model"), provider_id, mid, model_type, now, now),
+                        "INSERT INTO models (id, provider_id, model_id, model_type, capabilities, capability_source, enabled, is_default_image, is_default_video, created_at, updated_at, deleted_at)"
+                        " VALUES (?, ?, ?, ?, ?, 'auto', 1, 0, 0, ?, ?, NULL)",
+                        (
+                            _new_id("model"),
+                            provider_id,
+                            mid,
+                            model_type,
+                            serialize(capabilities),
+                            now,
+                            now,
+                        ),
                     )
         return self.list_models(provider_id=provider_id)
 
@@ -388,6 +434,8 @@ def _model_out(row, secret_store: SecretStore) -> ModelOut:
         provider_has_api_key=has_key,
         model_id=row["model_id"],
         model_type=row["model_type"],
+        capabilities=parse(row["capabilities"]),
+        capability_source=row["capability_source"],
         enabled=bool(row["enabled"]),
         is_default_image=bool(row["is_default_image"]),
         is_default_video=bool(row["is_default_video"]),

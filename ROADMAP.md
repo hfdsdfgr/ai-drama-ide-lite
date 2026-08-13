@@ -185,18 +185,9 @@ Phase 4 — API Validation & Capability Engine
 不只是“保存 API”，而是真正判断它能不能工作。
 
 API Test
-Level 1
- Connection Test
- Endpoint Test
- Network Error Handling
-Level 2
- API Key Test
- Authentication Test
- Model Test
-Level 3
- Image Generation Test
- Video Generation Test
- User Confirmation Before Paid Test
+- [x] Level 1 — Connection / Endpoint / Network Error Handling（/api/providers/{id}/test）
+- [x] Level 2 — API Key / Authentication / Model Test（/models 校验 + 模型可用性检查）
+- [ ] Level 3 — Image / Video Generation Test（Phase 5 适配器就绪后实现，触发前需用户确认费用）
 Capability Engine
 
 建立：
@@ -213,11 +204,11 @@ first_frame
 last_frame
 first_last_frame
 Tasks
- Capability Schema
- Capability Registry
- Capability Detection
- Manual Capability Override
- Capability Validation
+- [x] Capability Schema（models.capabilities / capability_source，含安全迁移与旧数据回填）
+- [x] Capability Registry（规则驱动推断，参考 models.dev / LiteLLM 目录思路）
+- [x] Capability Detection（厂商预设 + 模型名片段 → 能力集，保守推断）
+- [x] Manual Capability Override（单模型手动勾选 / 重置为自动）
+- [x] Capability Validation（/api/models?capability= 聚合过滤；非法能力拒绝）
 完成标准
 
 用户添加模型后可以看到：

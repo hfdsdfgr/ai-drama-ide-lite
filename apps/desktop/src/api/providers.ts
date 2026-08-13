@@ -1,11 +1,13 @@
 import type {
   BuiltinModel,
+  CapabilityKey,
   Model,
   ModelInput,
   ModelType,
   Preset,
   Provider,
   ProviderInput,
+  ProviderTestResult,
 } from "../types/provider";
 import { request } from "./client";
 
@@ -44,6 +46,12 @@ export function discoverModels(providerId: string): Promise<Model[]> {
   });
 }
 
+export function testProvider(providerId: string): Promise<ProviderTestResult> {
+  return request<ProviderTestResult>(`/providers/${providerId}/test`, {
+    method: "POST",
+  });
+}
+
 export function getPresetModels(presetKey: string): Promise<BuiltinModel[]> {
   return request<BuiltinModel[]>(`/providers/presets/${presetKey}/models`);
 }
@@ -62,11 +70,13 @@ export function listModels(params?: {
   provider_id?: string;
   model_type?: ModelType;
   enabled_only?: boolean;
+  capability?: CapabilityKey;
 }): Promise<Model[]> {
   const query = new URLSearchParams();
   if (params?.provider_id) query.set("provider_id", params.provider_id);
   if (params?.model_type) query.set("model_type", params.model_type);
   if (params?.enabled_only) query.set("enabled_only", "true");
+  if (params?.capability) query.set("capability", params.capability);
   const suffix = query.toString() ? `?${query.toString()}` : "";
   return request<Model[]>(`/models${suffix}`);
 }
@@ -85,6 +95,17 @@ export function updateModel(
   return request<Model>(`/models/${id}`, {
     method: "PUT",
     body: JSON.stringify(input),
+  });
+}
+
+export function updateModelCapabilities(
+  id: string,
+  capabilities: CapabilityKey[],
+  source: "auto" | "manual" = "manual",
+): Promise<Model> {
+  return request<Model>(`/models/${id}/capabilities`, {
+    method: "PUT",
+    body: JSON.stringify({ capabilities, source }),
   });
 }
 

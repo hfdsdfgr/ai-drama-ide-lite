@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { createProvider, listModels } from "./providers";
+import {
+  createProvider,
+  listModels,
+  testProvider,
+  updateModelCapabilities,
+} from "./providers";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -30,8 +35,34 @@ describe("providers api", () => {
 
   it("listModels appends query params", async () => {
     const mock = stubFetch([]);
-    await listModels({ model_type: "image", enabled_only: true });
+    await listModels({
+      model_type: "image",
+      enabled_only: true,
+      capability: "image_to_video",
+    });
     const [url] = mock.mock.calls[0] as unknown as [string];
-    expect(url).toBe("/api/models?model_type=image&enabled_only=true");
+    expect(url).toBe(
+      "/api/models?model_type=image&enabled_only=true&capability=image_to_video",
+    );
+  });
+
+  it("testProvider posts to provider test endpoint", async () => {
+    const mock = stubFetch({ provider_id: "prov_1", ok: true, checks: [] });
+    await testProvider("prov_1");
+    const [url, init] = mock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("/api/providers/prov_1/test");
+    expect(init.method).toBe("POST");
+  });
+
+  it("updateModelCapabilities puts manual capabilities", async () => {
+    const mock = stubFetch({ id: "model_1", capabilities: ["text_to_image"] });
+    await updateModelCapabilities("model_1", ["text_to_image"], "manual");
+    const [url, init] = mock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("/api/models/model_1/capabilities");
+    expect(init.method).toBe("PUT");
+    expect(JSON.parse(String(init.body))).toEqual({
+      capabilities: ["text_to_image"],
+      source: "manual",
+    });
   });
 });

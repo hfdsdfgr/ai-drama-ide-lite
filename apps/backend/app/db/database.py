@@ -31,8 +31,13 @@ def init_db(db_path: Path) -> None:
     with get_connection(db_path) as conn:
         conn.executescript(schema)
         _apply_safe_migrations(conn)
+        _backfill_model_capabilities(conn)
         conn.execute(
             "INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES (1, ?)",
+            (datetime.now(timezone.utc).isoformat(),),
+        )
+        conn.execute(
+            "INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES (2, ?)",
             (datetime.now(timezone.utc).isoformat(),),
         )
     logger.info("Database ready: %s", db_path)
@@ -43,9 +48,33 @@ def _apply_safe_migrations(conn: sqlite3.Connection) -> None:
     statements = [
         "ALTER TABLE novels ADD COLUMN deleted_at TEXT",
         "ALTER TABLE chapters ADD COLUMN deleted_at TEXT",
+        "ALTER TABLE models ADD COLUMN capabilities TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE models ADD COLUMN capability_source TEXT NOT NULL DEFAULT 'auto'",
     ]
     for statement in statements:
         try:
             conn.execute(statement)
         except sqlite3.OperationalError:
             pass
+
+
+def _backfill_model_capabilities(conn: sqlite3.Connection) -> None:
+    """为已有模型回填自动推断的能力（一次性；已有能力或手动覆盖的不动）。"""
+    from app.services.capability_registry import infer_capabilities, serialize
+
+    rows = conn.execute(
+        """
+        SELECT m.id, m.model_id, m.model_type, p.preset_key
+        FROM models m
+        JOIN providers p ON p.id = m.provider_id
+        WHERE m.capability_source = 'auto' AND (m.capabilities IS NULL OR m.capabilities = '')
+        """
+    ).fetchall()
+    for row in rows:
+        caps = infer_capabilities(row["preset_key"], row["model_id"], row["model_type"])
+        conn.execute(
+            "UPDATE models SET capabilities = ? WHERE id = ?",
+            (serialize(caps), row["id"]),
+        )
+    if rows:
+        logger.info("Backfilled capabilities for %d model(s)", len(rows))

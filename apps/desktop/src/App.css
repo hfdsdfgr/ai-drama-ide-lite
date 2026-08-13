@@ -259,6 +259,92 @@ button:disabled {
   font-size: 0.9rem;
 }
 
+.cap-badges {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.cap-badge {
+  font-size: 0.7rem;
+  padding: 0.08rem 0.4rem;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+  white-space: nowrap;
+}
+
+.cap-badge.cap-on {
+  border-color: #2c9a5f;
+  color: #2c9a5f;
+  background: #f0faf4;
+}
+
+.cap-badge.cap-off {
+  color: #aaa;
+  background: #f7f7f7;
+}
+
+.cap-edit-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.cap-edit-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.9rem;
+}
+
+.test-result {
+  border: 1px solid #eee;
+  border-radius: 8px;
+  padding: 0.6rem 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.test-result p {
+  margin: 0;
+  font-weight: 600;
+}
+
+.check-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.82rem;
+}
+
+.check-mark {
+  display: inline-block;
+  width: 1.1em;
+  font-weight: 700;
+}
+
+.check-ok {
+  color: #2c9a5f;
+}
+
+.check-fail {
+  color: #d33;
+}
+
+.check-skipped {
+  color: #888;
+}
+
+.ok {
+  color: #2c9a5f;
+}
+
 .checkbox-row {
   flex-direction: row;
   align-items: center;
