@@ -20,7 +20,7 @@ function App() {
             className={view === "project" ? "nav-active" : ""}
             onClick={() => setView("project")}
           >
-            项目
+            主页
           </button>
           <button
             type="button"

@@ -288,7 +288,7 @@ export function NovelPage() {
       </div>
 
       {projects.length === 0 ? (
-        <p className="muted">还没有项目，请先在「项目」页创建。</p>
+        <p className="muted">还没有项目，请先在「主页」创建。</p>
       ) : (
         <label>
           项目

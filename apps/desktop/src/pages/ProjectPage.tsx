@@ -143,7 +143,7 @@ export function ProjectPage() {
   return (
     <div className="page">
       <div className="page-head">
-        <h2>项目</h2>
+        <h2>主页</h2>
         <div className="toolbar">
           <input
             type="file"
