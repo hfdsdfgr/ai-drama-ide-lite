@@ -75,7 +75,7 @@ class ScriptRepository:
     ) -> list[Episode]:
         _validate_id(project_id, "项目")
         params: list = [project_id]
-        where = "deleted_at IS NULL"
+        where = "project_id = ? AND deleted_at IS NULL"
         if novel_id:
             where += " AND novel_id = ?"
             params.append(novel_id)

@@ -142,6 +142,12 @@ def test_save_episode_script_and_detail(client):
     assert len(detail["scenes"]) == 1
     assert detail["scenes"][0]["slugline"] == "室内·大殿·夜"
 
+    listing = client.get(
+        f"/api/projects/{project_id}/script/episodes?novel_id={novel_id}"
+    ).json()
+    assert len(listing) == 1
+    assert listing[0]["title"] == "第一集"
+
 
 def test_generate_shots(client, monkeypatch):
     project_id, novel_id = _create_project_with_novel(client)
