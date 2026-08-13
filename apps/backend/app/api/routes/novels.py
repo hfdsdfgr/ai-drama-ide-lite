@@ -18,7 +18,7 @@ from app.schemas.novel import (
     NovelUpdate,
 )
 from app.services.novel_repo import NovelRepository
-from app.services.story_repo import StoryRepository
+from app.services.story_repo import bible_context_text
 from app.services.text_import import parse_novel_file
 
 router = APIRouter(prefix="/api/projects/{project_id}/novels", tags=["novels"])
@@ -26,37 +26,6 @@ router = APIRouter(prefix="/api/projects/{project_id}/novels", tags=["novels"])
 
 def _repo(request: Request) -> NovelRepository:
     return NovelRepository(request.app.state.settings.db_path)
-
-
-def _bible_context(request: Request, project_id: str) -> str:
-    """把项目 Story Bible 压缩成写作上下文；无 Bible 返回空串。"""
-    bible = StoryRepository(request.app.state.settings.db_path).get_bible(project_id)
-    if bible is None:
-        return ""
-    lines: list[str] = []
-    if bible.synopsis:
-        lines.append(f"故事简介：{bible.synopsis}")
-    if bible.characters:
-        lines.append(
-            "角色："
-            + "；".join(
-                f"{c.name}（{c.role_hint or '角色'}：{c.summary}）"
-                for c in bible.characters
-            )
-        )
-    if bible.locations:
-        lines.append(
-            "地点："
-            + "；".join(f"{loc.name}（{loc.description}）" for loc in bible.locations)
-        )
-    if bible.props:
-        lines.append(
-            "道具："
-            + "；".join(f"{prop.name}（{prop.description}）" for prop in bible.props)
-        )
-    if bible.plotlines:
-        lines.append("情节线：" + "；".join(bible.plotlines))
-    return "\n".join(lines)
 
 
 def _build_ai_messages(
@@ -164,7 +133,7 @@ def ai_writing(
         action,
         chapter.title,
         chapter.content,
-        _bible_context(request, project_id),
+        bible_context_text(request.app.state.settings.db_path, project_id),
     )
     text = request.app.state.provider_manager.chat(payload.model_id, messages)
     return NovelAiResult(text=text)

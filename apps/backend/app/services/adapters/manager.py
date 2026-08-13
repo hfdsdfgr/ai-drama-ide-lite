@@ -62,13 +62,17 @@ class ProviderManager:
     # ---------- 对外：文本 ----------
 
     def chat(
-        self, model_id: str, messages: list[dict], temperature: float = 0.8
+        self,
+        model_id: str,
+        messages: list[dict],
+        temperature: float = 0.8,
+        timeout: int = 60,
     ) -> str:
         model = self.repo.get_model(model_id)
         if model.model_type != "llm":
             raise AppError(422, "not_llm_model", "请选择文本模型（LLM）")
         self._check_model(model, None)
-        return self._openai.chat(self._ctx(model), messages, temperature)
+        return self._openai.chat(self._ctx(model), messages, temperature, timeout)
 
     # ---------- 对外：生成 ----------
 

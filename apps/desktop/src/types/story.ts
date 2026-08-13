@@ -49,3 +49,27 @@ export interface AnalysisJob {
   error: string | null;
   created_at: string;
 }
+
+export interface AiNovelBrief {
+  genre: string;
+  audience: string;
+  ideas: string;
+  complexity: number;
+  chapter_count: number;
+}
+
+export interface OutlineChapter {
+  title: string;
+  summary: string;
+}
+
+export interface AiOutlineResult {
+  title: string;
+  chapters: OutlineChapter[];
+}
+
+export interface AiChapter {
+  title: string;
+  content: string;
+  summary: string;
+}

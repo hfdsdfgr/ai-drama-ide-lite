@@ -92,3 +92,44 @@ class AnalysisJobOut(BaseModel):
 
 class StoryBibleOut(BaseModel):
     bible: StoryBible | None = None
+
+
+# ---------- AI 撰写向导 ----------
+
+
+class AiNovelBrief(BaseModel):
+    genre: str = Field(default="", max_length=50)
+    audience: str = Field(default="", max_length=50)
+    ideas: str = Field(default="", max_length=3000)
+    complexity: int = Field(default=5, ge=1, le=10)
+    chapter_count: int = Field(default=10, ge=1, le=60)
+
+
+class OutlineChapter(BaseModel):
+    title: str = Field(min_length=1, max_length=100)
+    summary: str = Field(default="", max_length=1000)
+
+
+class AiOutlineResult(BaseModel):
+    title: str = Field(default="", max_length=100)
+    chapters: list[OutlineChapter] = Field(default_factory=list)
+
+
+class AiOutlineRequest(BaseModel):
+    model_id: str
+    brief: AiNovelBrief
+
+
+class AiChapterRequest(BaseModel):
+    model_id: str
+    brief: AiNovelBrief
+    outline: list[OutlineChapter] = Field(min_length=1, max_length=60)
+    chapter_index: int = Field(ge=0)
+    user_instruction: str = Field(default="", max_length=2000)
+    previous_summaries: list[str] = Field(default_factory=list, max_length=100)
+
+
+class AiChapterOut(BaseModel):
+    title: str
+    content: str
+    summary: str = ""

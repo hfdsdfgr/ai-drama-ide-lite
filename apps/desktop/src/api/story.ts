@@ -1,4 +1,12 @@
-import type { AnalysisJob, AnalysisMode, StoryBible } from "../types/story";
+import type {
+  AiChapter,
+  AiNovelBrief,
+  AiOutlineResult,
+  AnalysisJob,
+  AnalysisMode,
+  OutlineChapter,
+  StoryBible,
+} from "../types/story";
 import { request } from "./client";
 
 export function startStoryAnalysis(
@@ -32,4 +40,32 @@ export function getStoryBible(
   return request<{ bible: StoryBible | null }>(
     `/projects/${projectId}/story/bible`,
   );
+}
+
+export function generateAiOutline(
+  projectId: string,
+  modelId: string,
+  brief: AiNovelBrief,
+): Promise<AiOutlineResult> {
+  return request<AiOutlineResult>(`/projects/${projectId}/story/ai-outline`, {
+    method: "POST",
+    body: JSON.stringify({ model_id: modelId, brief }),
+  });
+}
+
+export function generateAiChapter(
+  projectId: string,
+  input: {
+    model_id: string;
+    brief: AiNovelBrief;
+    outline: OutlineChapter[];
+    chapter_index: number;
+    user_instruction: string;
+    previous_summaries: string[];
+  },
+): Promise<AiChapter> {
+  return request<AiChapter>(`/projects/${projectId}/story/ai-chapter`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 }

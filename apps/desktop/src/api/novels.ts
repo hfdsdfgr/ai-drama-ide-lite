@@ -43,7 +43,7 @@ export function deleteNovel(projectId: string, novelId: string): Promise<void> {
 export function addChapter(
   projectId: string,
   novelId: string,
-  input: { title?: string },
+  input: { title?: string; content?: string },
 ): Promise<Chapter> {
   return request<Chapter>(`/projects/${projectId}/novels/${novelId}/chapters`, {
     method: "POST",

@@ -6,7 +6,6 @@
 """
 
 import json
-import re
 import threading
 import uuid
 from datetime import datetime, timezone
@@ -15,8 +14,11 @@ from pathlib import Path
 from app.core.errors import AppError
 from app.schemas.story import ChapterExtraction, StoryBible
 from app.services.adapters.manager import ProviderManager
+from app.services.llm_json import extract_json, parse_llm_json, trim
 from app.services.novel_repo import NovelRepository
 from app.services.story_repo import StoryRepository
+
+_extract_json = extract_json  # 兼容旧引用（测试导入）
 
 MAX_CHAPTER_CHARS = 12000
 MAX_ROLLING_CHARS = 3000
@@ -58,30 +60,8 @@ _CONSOLIDATION_USER = """小说：《{title}》
 {extractions_json}
 请合并为一份完整的 Story Bible。"""
 
-_REPAIR_SYSTEM = (
-    "你上一次输出的 JSON 无法通过解析。请只输出一个严格符合要求的 JSON 对象，"
-    "不要解释、不要代码块标记。"
-)
-
-
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-
-
-def _extract_json(text: str) -> str:
-    text = text.strip()
-    fence = re.match(r"^```(?:json)?\s*(.*?)\s*```$", text, re.S)
-    if fence:
-        return fence.group(1)
-    start = text.find("{")
-    end = text.rfind("}")
-    if start >= 0 and end > start:
-        return text[start : end + 1]
-    return text
-
-
-def _trim(text: str, limit: int) -> str:
-    return text if len(text) <= limit else text[:limit] + "…（已截断）"
 
 
 class StoryAnalysisService:
@@ -160,7 +140,7 @@ class StoryAnalysisService:
                     extracted_names,
                 )
                 extractions.append(extraction)
-                rolling_summary = _trim(
+                rolling_summary = trim(
                     rolling_summary + "\n" + extraction.chapter_summary,
                     MAX_ROLLING_CHARS,
                 )
@@ -202,7 +182,7 @@ class StoryAnalysisService:
         rolling_summary: str,
         prev_entities: str,
     ) -> ChapterExtraction:
-        content = _trim(content, MAX_CHAPTER_CHARS)
+        content = trim(content, MAX_CHAPTER_CHARS)
         user = _EXTRACTION_USER.format(
             title=title,
             rolling_summary=rolling_summary or "（第一章）",
@@ -232,13 +212,13 @@ class StoryAnalysisService:
             existing_json = json.dumps(existing.model_dump(), ensure_ascii=False)
             merge_context = (
                 "这是已存在的 Story Bible（合并模式下请保留其中实体，并合并新增内容）：\n"
-                + _trim(existing_json, MAX_EXTRACTIONS_DUMP_CHARS)
+                + trim(existing_json, MAX_EXTRACTIONS_DUMP_CHARS)
                 + "\n\n"
             )
         user = _CONSOLIDATION_USER.format(
             title=title,
             merge_context=merge_context,
-            extractions_json=_trim(
+            extractions_json=trim(
                 json.dumps(
                     self._compact(extractions),
                     ensure_ascii=False,
@@ -257,34 +237,7 @@ class StoryAnalysisService:
         return self._parse_json(StoryBible, text, model_id, "Story Bible 合并")
 
     def _parse_json(self, model, text: str, model_id: str, label: str):
-        for attempt in range(2):
-            try:
-                data = json.loads(_extract_json(text))
-                return model(**data)
-            except Exception as exc:  # noqa: BLE001 - 需要把解析错误喂回模型
-                if attempt == 0:
-                    text = self.manager.chat(
-                        model_id,
-                        [
-                            {"role": "system", "content": _REPAIR_SYSTEM},
-                            {
-                                "role": "user",
-                                "content": (
-                                    f"上一次输出无法解析：{exc}\n"
-                                    f"原始输出：{_trim(text, 3000)}\n"
-                                    "请重新输出符合要求的 JSON。"
-                                ),
-                            },
-                        ],
-                        temperature=0.1,
-                    )
-                else:
-                    raise AppError(
-                        502,
-                        "analysis_invalid_output",
-                        f"{label}结果无法解析，请重试或更换模型",
-                    ) from exc
-        raise AppError(502, "analysis_invalid_output", f"{label}结果无法解析")
+        return parse_llm_json(model, text, self.manager.chat, model_id, label)
 
     # ---------- 辅助 ----------
 
@@ -302,7 +255,7 @@ class StoryAnalysisService:
         for name in names:
             if name not in seen:
                 seen.append(name)
-        return _trim("、".join(seen), MAX_PREV_ENTITIES_CHARS)
+        return trim("、".join(seen), MAX_PREV_ENTITIES_CHARS)
 
     @staticmethod
     def _compact(extractions: list[ChapterExtraction]) -> list[dict]:

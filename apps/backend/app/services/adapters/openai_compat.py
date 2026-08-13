@@ -40,12 +40,13 @@ class OpenAICompatAdapter(Adapter):
         ctx: ProviderContext,
         messages: list[dict],
         temperature: float = 0.8,
+        timeout: int = 60,
     ) -> str:
         url = ctx.base_url.rstrip("/") + "/chat/completions"
         headers = {"Authorization": f"Bearer {ctx.api_key}"} if ctx.api_key else {}
         payload = {"model": ctx.model_id, "messages": messages, "temperature": temperature}
         try:
-            with httpx.Client(timeout=60) as client:
+            with httpx.Client(timeout=timeout) as client:
                 response = client.post(url, headers=headers, json=payload)
                 response.raise_for_status()
                 data = response.json()

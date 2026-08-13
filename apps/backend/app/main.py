@@ -9,6 +9,7 @@ from app.core.errors import register_exception_handlers
 from app.core.logging import get_logger, setup_logging
 from app.db.database import init_db
 from app.services.adapters.manager import ProviderManager
+from app.services.ai_novel import AiNovelService
 from app.services.generation_service import GenerationService
 from app.services.project_repo import migrate_legacy_json_projects
 from app.services.provider_repo import ProviderRepository
@@ -37,6 +38,9 @@ def create_app(
         app.state.provider_manager, config.data_dir / "generation_tests"
     )
     app.state.story_service = StoryAnalysisService(
+        app.state.provider_manager, config.db_path
+    )
+    app.state.ai_novel_service = AiNovelService(
         app.state.provider_manager, config.db_path
     )
     app.add_middleware(

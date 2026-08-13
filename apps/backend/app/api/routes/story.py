@@ -4,6 +4,10 @@ from fastapi import APIRouter, Request
 
 from app.core.errors import AppError
 from app.schemas.story import (
+    AiChapterOut,
+    AiChapterRequest,
+    AiOutlineResult,
+    AiOutlineRequest,
     AnalysisJobOut,
     AnalysisRequest,
     StoryBibleOut,
@@ -34,3 +38,25 @@ def get_analysis(project_id: str, job_id: str, request: Request) -> dict:
 def get_bible(project_id: str, request: Request) -> dict:
     repo = StoryRepository(request.app.state.settings.db_path)
     return {"bible": repo.get_bible(project_id)}
+
+
+@router.post("/ai-outline", response_model=AiOutlineResult)
+def ai_outline(
+    project_id: str, payload: AiOutlineRequest, request: Request
+) -> AiOutlineResult:
+    return request.app.state.ai_novel_service.outline(
+        project_id, payload.model_id, payload.brief
+    )
+
+
+@router.post("/ai-chapter", response_model=AiChapterOut)
+def ai_chapter(project_id: str, payload: AiChapterRequest, request: Request) -> AiChapterOut:
+    return request.app.state.ai_novel_service.chapter(
+        project_id,
+        payload.model_id,
+        payload.brief,
+        payload.outline,
+        payload.chapter_index,
+        payload.user_instruction,
+        payload.previous_summaries,
+    )

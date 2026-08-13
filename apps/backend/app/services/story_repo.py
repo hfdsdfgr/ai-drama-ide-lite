@@ -94,3 +94,34 @@ class StoryRepository:
                     " VALUES (?, ?, ?, ?, ?, ?)",
                     (_new_id(prefix), project_id, item.name, description, now, now),
                 )
+
+
+def bible_context_text(db_path: Path, project_id: str) -> str:
+    """把项目 Story Bible 压缩成写作上下文；无 Bible 返回空串。"""
+    bible = StoryRepository(db_path).get_bible(project_id)
+    if bible is None:
+        return ""
+    lines: list[str] = []
+    if bible.synopsis:
+        lines.append(f"故事简介：{bible.synopsis}")
+    if bible.characters:
+        lines.append(
+            "角色："
+            + "；".join(
+                f"{c.name}（{c.role_hint or '角色'}：{c.summary}）"
+                for c in bible.characters
+            )
+        )
+    if bible.locations:
+        lines.append(
+            "地点："
+            + "；".join(f"{loc.name}（{loc.description}）" for loc in bible.locations)
+        )
+    if bible.props:
+        lines.append(
+            "道具："
+            + "；".join(f"{prop.name}（{prop.description}）" for prop in bible.props)
+        )
+    if bible.plotlines:
+        lines.append("情节线：" + "；".join(bible.plotlines))
+    return "\n".join(lines)

@@ -463,6 +463,31 @@ button:disabled {
   gap: 0.25rem;
 }
 
+.wizard-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.wizard-outline {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.wizard-outline-row {
+  display: grid;
+  grid-template-columns: 200px 1fr auto;
+  gap: 0.5rem;
+  align-items: start;
+}
+
+.wizard-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
 /* ---- InfoTip ---- */
 .info-tip {
   position: relative;
