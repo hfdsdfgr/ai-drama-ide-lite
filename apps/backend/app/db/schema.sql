@@ -72,20 +72,29 @@ CREATE TABLE IF NOT EXISTS props (
 );
 
 CREATE TABLE IF NOT EXISTS episodes (
-    id         TEXT PRIMARY KEY,
-    project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-    title      TEXT NOT NULL DEFAULT '',
-    summary    TEXT NOT NULL DEFAULT '',
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    id                  TEXT PRIMARY KEY,
+    project_id          TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    novel_id            TEXT REFERENCES novels(id) ON DELETE SET NULL,
+    title               TEXT NOT NULL DEFAULT '',
+    summary             TEXT NOT NULL DEFAULT '',
+    order_index         INTEGER NOT NULL DEFAULT 0,
+    source_chapter_index INTEGER,
+    deleted_at          TEXT,
+    created_at          TEXT NOT NULL,
+    updated_at          TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS scenes (
     id          TEXT PRIMARY KEY,
     project_id  TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     episode_id  TEXT REFERENCES episodes(id) ON DELETE SET NULL,
+    novel_id    TEXT REFERENCES novels(id) ON DELETE SET NULL,
     title       TEXT NOT NULL DEFAULT '',
-    description TEXT NOT NULL DEFAULT '',
+    order_index INTEGER NOT NULL DEFAULT 0,
+    slugline    TEXT NOT NULL DEFAULT '',
+    action      TEXT NOT NULL DEFAULT '',
+    dialogue    TEXT NOT NULL DEFAULT '',
+    deleted_at  TEXT,
     created_at  TEXT NOT NULL,
     updated_at  TEXT NOT NULL
 );
@@ -95,7 +104,16 @@ CREATE TABLE IF NOT EXISTS shots (
     project_id  TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     scene_id    TEXT REFERENCES scenes(id) ON DELETE SET NULL,
     shot_number INTEGER,
-    description TEXT NOT NULL DEFAULT '',
+    order_index INTEGER NOT NULL DEFAULT 0,
+    shot_type   TEXT NOT NULL DEFAULT '',
+    camera      TEXT NOT NULL DEFAULT '',
+    characters  TEXT NOT NULL DEFAULT '',
+    action      TEXT NOT NULL DEFAULT '',
+    lighting    TEXT NOT NULL DEFAULT '',
+    dialogue    TEXT NOT NULL DEFAULT '',
+    duration    REAL NOT NULL DEFAULT 0,
+    prompt      TEXT NOT NULL DEFAULT '',
+    deleted_at  TEXT,
     created_at  TEXT NOT NULL,
     updated_at  TEXT NOT NULL
 );
