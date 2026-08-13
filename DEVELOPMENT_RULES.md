@@ -1584,3 +1584,22 @@ REPORT.
 The objective is not to make Codex appear autonomous.
 
 The objective is to make Codex a reliable engineering partner
+
+75. Research Before Every Step
+
+Before implementing any feature, module, or integration step:
+
+1. Research first: search GitHub, official documentation, and mature open-source projects for how the same problem is already solved.
+2. Record findings with source URLs in `docs/investigations/` or `docs/decisions/`.
+3. Only after research, write the plan and implement.
+
+Do not skip research for "obvious" implementations; AI integrations and provider/model systems change frequently.
+
+76. Clean Residue After Testing
+
+After testing (including phase acceptance tests):
+
+1. Stop all test-launched processes (backend, frontend, desktop shell) and release occupied ports.
+2. Delete all test residue: temporary files, exported test zips, pytest / vitest temp directories, test-generated database rows and project directories.
+3. Preserve pre-existing user data (e.g., the user's own projects); ask before deleting anything ambiguous.
+4. Report the cleanup result, then wait for the user's instruction before starting the next step.
