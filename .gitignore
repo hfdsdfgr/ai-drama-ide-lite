@@ -20,6 +20,8 @@ coverage/
 .env
 .env.local
 .env.*.local
+githubtoken.txt
+*.token
 
 # ---- 运行时数据 ----
 apps/backend/data/
