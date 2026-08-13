@@ -42,9 +42,14 @@ def _fetch_models(base_url: str, api_key: str | None) -> tuple[str, str, list[st
 
     status = response.status_code
     if status in (401, 403):
+        region_hint = (
+            "；如为阿里云百炼，请确认 Key 所属站点与 Base URL 匹配（国内 dashscope.aliyuncs.com / 国际 dashscope-intl.aliyuncs.com）"
+            if "dashscope" in base_url
+            else ""
+        )
         return (
             "auth_fail",
-            f"鉴权失败（HTTP {status}）：API Key 无效或没有权限",
+            f"鉴权失败（HTTP {status}）：API Key 无效或没有权限{region_hint}",
             [],
         )
     if status == 404:

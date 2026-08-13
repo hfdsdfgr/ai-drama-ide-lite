@@ -19,7 +19,8 @@ def test_presets_listed(client):
     presets = {p["key"]: p for p in response.json()}
     assert "openai" in presets and "ollama" in presets and "bailian" in presets
     assert presets["openai"]["discoverable"] is True
-    assert presets["bailian"]["discoverable"] is False
+    # 百炼国际站实测支持 OpenAI 兼容 /models（2026-08-13）
+    assert presets["bailian"]["discoverable"] is True
 
 
 def test_create_provider_with_preset(client):
@@ -210,14 +211,27 @@ def test_discover_models_classification(client, monkeypatch):
     assert len(client.get("/api/models", params={"provider_id": pid}).json()) == 2
 
 
-def test_discover_bailian_unsupported(client):
+def test_discover_bailian_supported(client, monkeypatch):
     provider = client.post(
         "/api/providers",
         json={"preset_key": "bailian", "api_key": "sk-bailian"},
     ).json()
+
+    import app.api.routes.providers as routes
+
+    monkeypatch.setattr(
+        routes,
+        "fetch_model_ids",
+        lambda base_url, api_key: ["qwen-plus", "qwen-image-plus", "wan2.1-t2v"],
+    )
     response = client.post(f"/api/providers/{provider['id']}/discover-models")
-    assert response.status_code == 422
-    assert response.json()["error"]["code"] == "discovery_unsupported"
+    assert response.status_code == 200
+    types = {m["model_id"]: m["model_type"] for m in response.json()}
+    assert types == {
+        "qwen-plus": "llm",
+        "qwen-image-plus": "image",
+        "wan2.1-t2v": "video",
+    }
 
 
 def test_preset_models_endpoint(client):

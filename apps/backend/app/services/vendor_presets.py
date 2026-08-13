@@ -56,7 +56,7 @@ PRESETS: dict[str, VendorPreset] = {
         name="阿里云百炼",
         base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
         needs_key=True,
-        discoverable=False,
+        discoverable=True,
         type_rules=(
             ("qwen-image", "image"),
             ("wanx", "image"),
@@ -64,6 +64,8 @@ PRESETS: dict[str, VendorPreset] = {
             ("wan2.2-t2v", "video"),
             ("wan-video", "video"),
             ("qwen-video", "video"),
+            ("z-image", "image"),
+            ("image", "image"),
             ("qwen", "llm"),
             ("text-embedding", "llm"),
         ),

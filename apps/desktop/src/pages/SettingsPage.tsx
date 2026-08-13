@@ -387,10 +387,10 @@ export function SettingsPage() {
             </label>
           )}
 
-          {editing && editing.preset_key === null && (
+          {editing && (
             <label>
               API Base URL
-              <InfoTip text="通常形如 https://api.example.com/v1，在提供商官方文档中查找" />
+              <InfoTip text="通常形如 https://api.example.com/v1，在提供商官方文档中查找；阿里云百炼国内站 https://dashscope.aliyuncs.com/compatible-mode/v1，国际站 https://dashscope-intl.aliyuncs.com/compatible-mode/v1" />
               <input
                 value={formBaseUrl}
                 onChange={(e) => setFormBaseUrl(e.target.value)}
@@ -427,6 +427,13 @@ export function SettingsPage() {
             <p className="muted">
               Base URL：{selectedPreset.base_url}
               {selectedPreset.needs_key ? "" : "（无需 API Key）"}
+            </p>
+          )}
+          {!editing && !isCustom && selectedPreset?.key === "bailian" && (
+            <p className="muted">
+              阿里云百炼分国内站 / 国际站：国内 Key 用{" "}
+              dashscope.aliyuncs.com，国际 Key 用 dashscope-intl.aliyuncs.com。
+              保存后可编辑 Base URL 切换站点。
             </p>
           )}
           {!editing && !isCustom && selectedPreset && !selectedPreset.discoverable && (

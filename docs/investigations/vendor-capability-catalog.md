@@ -46,3 +46,47 @@
 - 硅基流动 FLUX.1-schnell（文生图）：https://www.siliconflow.com/zh/models/flux-1-schnell
 - 硅基流动图像生成接口 + Kolors 图生图：https://docs.siliconflow.cn/cn/api-reference/images/images-generations
 - Stable Diffusion 3.5 Large（text-to-image / image-to-image mode）：https://docs.aws.amazon.com/zh_cn/bedrock/latest/userguide/model-parameters-diffusion-3-5-large.html
+
+---
+
+# 补充调研（2026-08-13）：无 /models 厂商的自动模型发现可行性
+
+## 结论
+
+「服务商不给 OpenAI 兼容 /models」不等于「无法自动获取模型」：
+
+1. **百炼（DashScope）有原生模型列表接口**：
+   `GET https://dashscope.aliyuncs.com/api/v1/deployments/models`
+   （列举可部署模型，支持分页；文档注明仅华北 2（北京）地域的 API Key 可用）。
+   来源：https://help.aliyun.com/zh/model-studio/list-deployable-models-api
+
+2. **Ollama 有原生列表接口**：`GET http://127.0.0.1:11434/api/tags`，返回本地模型及
+   size/modified/details 元数据（无需 Key）。来源：https://mintlify.wiki/ollama/ollama/api/endpoints/list
+
+3. **智谱 v4 API 为 OpenAI 兼容**，大概率支持 `/api/paas/v4/models`（待有效 Key 实测）。
+   来源：https://pkg.go.dev/github.com/jieliu2000/anyi@v0.2.6/llm/zhipu
+
+4. **模型元数据（上下文/价格/能力）可由 models.dev 公开 API 提供**：
+   https://models.dev/api.json，社区开源目录，字段含 modalities / limits / cost /
+   reasoning / tool_call 等；可作为本地目录的离线同步来源（拉取→落库→审核后生效）。
+
+## 实测记录（2026-08-13，使用用户已保存的百炼 Key）
+
+| 端点 | 结果 |
+| --- | --- |
+| /api/v1/deployments/models | 401 InvalidApiKey |
+| /api/v1/models | 401 InvalidApiKey |
+| /compatible-mode/v1/models | 401 invalid_api_key |
+| /compatible-mode/v1/chat/completions（qwen-plus，1 token） | 401 invalid_api_key |
+
+**结论：用户当前保存的百炼 Key 无效**（key 前缀 sk-ws-，可能过期/被吊销/workspace 不匹配）。
+此前「拉取模型列表一直失败」的根因之一即 Key 未通过鉴权，而非仅有「无列表接口」。
+替换有效 Key 后应重新验证自动发现（原生接口需北京地域 Key）。
+
+## 对设计的影响（Phase 4 后续）
+
+- 发现层升级为「多源 Adapter」：OpenAI 兼容 /models → DashScope 原生接口 → Ollama /api/tags
+  → 本地调研目录；自定义未知厂商保持手动添加。
+- 能力仍然以本地调研目录为标准（厂商列表接口只给模型 ID，不给能力表）。
+- L2 鉴权测试对无 /models 的厂商应增加「最小 chat 探测」（1 token）或明确提示 Key 无效，
+  避免当前「skipped」导致无效 Key 无法被发现。
