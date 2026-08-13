@@ -681,32 +681,32 @@ export function NovelPage() {
         )}
       </div>
 
-      {projectId && (
+      {projects.length > 0 && (
         <div className="novel-workspace">
           <aside className="novel-sidebar">
-            {projects.length > 0 && (
-              <div className="sidebar-block">
-                <div className="sidebar-head">
-                  <h3>项目</h3>
-                </div>
-                <select
-                  className="project-select"
-                  value={projectId}
-                  onChange={(e) => setProjectId(e.target.value)}
-                >
-                  <option value="">选择项目</option>
-                  {projects.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
+            <div className="sidebar-block">
+              <div className="sidebar-head">
+                <h3>项目</h3>
               </div>
-            )}
+              <select
+                className="project-select"
+                value={projectId}
+                onChange={(e) => setProjectId(e.target.value)}
+              >
+                <option value="">选择项目</option>
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
 
             <div className="sidebar-block">
               <h3>小说</h3>
-            {loading ? (
+            {!projectId ? (
+              <p className="muted">选择上方项目后查看小说。</p>
+            ) : loading ? (
               <p>加载中…</p>
             ) : novels.length === 0 ? (
               <p className="muted">没有小说，新建或导入一个。</p>
@@ -761,76 +761,80 @@ export function NovelPage() {
               </div>
             )}
 
-            <div className="sidebar-block">
-              <h3>导入与管理</h3>
-              <input
-                type="file"
-                id="novel-import-input"
-                accept=".txt,.md,.markdown,.docx"
-                style={{ display: "none" }}
-                onChange={handleImport}
-              />
-              <label htmlFor="novel-import-input" className="button-like">
-                导入 TXT/MD/DOCX
-              </label>
-              {confirmDelete === "novel" ? (
-                <div className="actions">
+            {projectId && (
+              <>
+              <div className="sidebar-block">
+                <h3>导入与管理</h3>
+                <input
+                  type="file"
+                  id="novel-import-input"
+                  accept=".txt,.md,.markdown,.docx"
+                  style={{ display: "none" }}
+                  onChange={handleImport}
+                />
+                <label htmlFor="novel-import-input" className="button-like">
+                  导入 TXT/MD/DOCX
+                </label>
+                {confirmDelete === "novel" ? (
+                  <div className="actions">
+                    <button
+                      type="button"
+                      className="button-danger"
+                      onClick={handleDeleteNovel}
+                    >
+                      确认删除
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDelete(null)}
+                    >
+                      取消
+                    </button>
+                  </div>
+                ) : detail ? (
                   <button
                     type="button"
-                    className="button-danger"
+                    className="button-danger button-ghost"
                     onClick={handleDeleteNovel}
                   >
-                    确认删除
+                    删除小说
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setConfirmDelete(null)}
-                  >
-                    取消
-                  </button>
-                </div>
-              ) : detail ? (
-                <button
-                  type="button"
-                  className="button-danger button-ghost"
-                  onClick={handleDeleteNovel}
-                >
-                  删除小说
-                </button>
-              ) : null}
-            </div>
+                ) : null}
+              </div>
 
-            <form className="sidebar-block" onSubmit={handleCreate}>
-              <h3>新建小说</h3>
-              <input
-                value={newNovelTitle}
-                onChange={(e) => setNewNovelTitle(e.target.value)}
-                placeholder="新小说标题"
-              />
-              <button type="submit">创建</button>
-            </form>
+              <form className="sidebar-block" onSubmit={handleCreate}>
+                <h3>新建小说</h3>
+                <input
+                  value={newNovelTitle}
+                  onChange={(e) => setNewNovelTitle(e.target.value)}
+                  placeholder="新小说标题"
+                />
+                <button type="submit">创建</button>
+              </form>
 
-            <div className="sidebar-block">
-              <h3>项目统计</h3>
-              <ul className="stats-list">
-                <li>
-                  <span>章节</span>
-                  <b>{detail?.chapters.length ?? 0}</b>
-                </li>
-                <li>
-                  <span>字数</span>
-                  <b>{totalWords}</b>
-                </li>
-                <li>
-                  <span>角色</span>
-                  <b>{bible?.characters.length ?? 0}</b>
-                </li>
-                <li>
-                  <span>场景</span>
-                  <b>{bible?.locations.length ?? 0}</b>
-                </li>
-              </ul>
-            </div>
+              <div className="sidebar-block">
+                <h3>项目统计</h3>
+                <ul className="stats-list">
+                  <li>
+                    <span>章节</span>
+                    <b>{detail?.chapters.length ?? 0}</b>
+                  </li>
+                  <li>
+                    <span>字数</span>
+                    <b>{totalWords}</b>
+                  </li>
+                  <li>
+                    <span>角色</span>
+                    <b>{bible?.characters.length ?? 0}</b>
+                  </li>
+                  <li>
+                    <span>场景</span>
+                    <b>{bible?.locations.length ?? 0}</b>
+                  </li>
+                </ul>
+              </div>
+              </>
+            )}
         </aside>
 
         <section className="novel-main">
@@ -907,7 +911,11 @@ export function NovelPage() {
               </>
             ) : (
               <div className="novel-empty">
-                <p className="muted">从左侧选择一部小说开始阅读与创作。</p>
+                <p className="muted">
+                  {!projectId
+                    ? "请先在上方选择项目，再打开一部小说。"
+                    : "从左侧选择一部小说开始阅读与创作。"}
+                </p>
               </div>
             )}
           </section>
