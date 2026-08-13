@@ -1,0 +1,27 @@
+[package]
+name = "app"
+version = "0.1.0"
+description = "AI Drama IDE Lite desktop shell"
+authors = ["AI Drama IDE Lite"]
+license = ""
+repository = ""
+edition = "2021"
+rust-version = "1.77.2"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "app_lib"
+# 纯桌面应用：不需要移动端用的 cdylib。
+# GNU ld 无法处理 rustc 为 cdylib 生成的 -exclude-symbols 指令（见 DEVELOPMENT_PITFALLS.md）。
+crate-type = ["staticlib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.6.3" }
+
+[dependencies]
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+log = "0.4"
+tauri = { version = "2.11.3" }
+tauri-plugin-log = "2"

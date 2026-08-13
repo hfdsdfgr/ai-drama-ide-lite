@@ -160,7 +160,8 @@ Create Project
 - Python FastAPI 后端：环境变量、日志、错误处理、健康检查、最小 Project 接口（JSON 文件存储，Phase 1 迁移 SQLite）
 - React + TypeScript 前端：Vite 代理、统一 API 客户端、Project 页面（创建/保存/打开）、Settings 占位页
 - 测试：后端 pytest 5 项、前端 Vitest 3 项；lint / build 通过；端到端验证通过
-- **待办**：Tauri 壳初始化（需要先安装 Rust 工具链）
+- Tauri 2 桌面壳：已初始化并通过编译验证（Rust GNU 工具链 + MinGW）
+- **注意**：MinGW 工具链无法处理含空格的构建路径（`G:\Vibe Coding\AICV`），桌面构建必须通过无空格 junction 路径，见下方「桌面模式」。
 
 ## 快速开始
 
@@ -185,7 +186,18 @@ npm run dev
 
 打开 http://localhost:5173 即可使用。
 
-### 3. 运行测试
+### 3. 桌面模式（Tauri）
+
+环境要求：Rust（GNU 工具链）+ MinGW（`C:\Qt\Tools\mingw1310_64`）。
+
+```powershell
+# 在仓库根目录执行
+.\scripts\tauri-dev.ps1
+```
+
+该脚本会自动创建无空格 junction 路径（`C:\Users\Administrator\ai-drama-ide` → 本项目）并从该路径启动 `tauri dev`，以绕过 MinGW 的路径空格问题。
+
+### 4. 运行测试
 
 ```powershell
 # 后端
@@ -196,8 +208,6 @@ cd apps/backend
 cd apps/desktop
 npm test
 ```
-
-> Tauri 桌面壳初始化后，本小节将补充桌面运行方式。
 
 ## 文档索引
 

@@ -112,3 +112,12 @@
 - **onefile 启动竞态（双实例）**：后端 exe 解压约需 5–10 秒；客户端启动后立即健康检查若失败会触发 `ensureBackend`，与 `start.bat` 各自拉起一个后端 → 8000 端口争抢、出现 2 组 quantnova-server 进程。修复：客户端在启动新后端前先带重试探测 `127.0.0.1:8000`（最长约 6 秒），已就绪则跳过；`start_release.bat` 也先等 `/health` 就绪再拉起客户端。
 - **PyInstaller windowed（console=False）版 stderr 为 None**：无控制台模式下 `sys.stderr/sys.stdout` 为 None，uvicorn/logging 的 StreamHandler 写日志直接抛异常 → 启动失败（健康检查不通、进程残留）。修复：frozen 模式下把 stdout/stderr 重定向到 `data\server.log`（`_redirect_stdio_in_frozen_mode`），spec 设 `disable_windowed_traceback=True` 避免崩溃弹窗。
 - **Compress-Archive 丢顶层目录**：`Compress-Archive -Path "$dir\*"` 会把目录本身丢掉，zip 里文件散落在根部；要保留顶层文件夹必须用 `-Path $dir`（不带 `\*`）。另外 PS 5.1 的 Compress-Archive 产物里 `ZipArchiveEntry.FullName` 用**反斜杠**（如 `QuantNova\.env`），判断条目时注意分隔符，别按惯例用 `/`。
+
+## 9. Tauri / Rust（AI Drama IDE）
+
+- **系统没有 MSVC Build Tools 时 rustup 默认装 msvc 工具链无法链接**：本机无 VS Build Tools，但有 MinGW（`C:\Qt\Tools\mingw1310_64`）。解决办法：`rustup toolchain install stable-x86_64-pc-windows-gnu --profile minimal` 后 `rustup default stable-x86_64-pc-windows-gnu`；编译/运行前把 MinGW bin 加到 PATH。
+- **MinGW windres 无法处理含空格的路径**：项目位于 `G:\Vibe Coding\AICV`，tauri-winres 调 windres 编译资源时 `cc1.exe: fatal error: ...: No such file or directory` / `windres: preprocessing failed`。根治办法是建一个无空格的 junction 路径再编译（已建 `C:\Users\Administrator\ai-drama-ide` → `G:\Vibe Coding\AICV`）；用 `scripts\tauri-dev.ps1` 一键启动，或先 `New-Item -ItemType Junction` 再 cd 到 junction 路径执行。**不要**尝试从含空格路径直接 cargo build。
+- **GNU ld 无法处理 rustc 为 cdylib 生成的 `-exclude-symbols` 指令**：Tauri 模板默认 `crate-type = ["staticlib", "cdylib", "rlib"]`，纯桌面构建 cdylib（DLL）时 ld 报大量 `corrupt .drectve` / `unrecognized` 警告并链接失败。解决办法：去掉 `cdylib`，只保留 `["staticlib", "rlib"]`（移动端才需要 cdylib）。
+- **tauri init 新版本不支持 `--identifier` 参数**：传该参数会报 `unexpected argument`；用其余参数初始化后，在 `tauri.conf.json` 里手动改 `identifier`。
+- **cargo 进度输出走 stderr**：PowerShell 里 `cargo build 2>&1` 会把进度当 NativeCommandError 导致退出码为 1，即使编译成功；验证以产物为准（如 `target\debug\app.exe` 是否存在），或设置 `$ErrorActionPreference = 'Continue'`。
+- **沙箱/CI 环境看不到 Tauri 窗口**：与第 1 节同理，GUI 进程在独立桌面运行；需提权（非沙箱）启动 `npm run tauri dev`，窗口才会出现在用户桌面。

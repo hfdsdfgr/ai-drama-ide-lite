@@ -21,7 +21,7 @@
 ## Tasks
 
 - [x] 创建 Git Repository
-- [ ] 初始化 Tauri（待安装 Rust 工具链）
+- [x] 初始化 Tauri（Rust GNU 工具链 + MinGW，含构建路径 workaround）
 - [x] 初始化 React + TypeScript
 - [x] 初始化 Python Backend
 - [x] 建立 Frontend / Backend 通信（Vite 代理 + 统一 API 客户端）
