@@ -69,6 +69,15 @@ class DefaultRequest(BaseModel):
     model_type: Literal["image", "video"] | None = None
 
 
+class BulkModelsRequest(BaseModel):
+    model_ids: list[str] = Field(min_length=1)
+
+
+class BuiltinModelOut(BaseModel):
+    id: str
+    type: ModelType
+
+
 class ModelOut(BaseModel):
     id: str
     provider_id: str

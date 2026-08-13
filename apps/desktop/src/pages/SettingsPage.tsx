@@ -2,11 +2,13 @@ import { useCallback, useEffect, useState } from "react";
 
 import { InfoTip } from "../components/InfoTip";
 import {
+  bulkAddModels,
   createModel,
   createProvider,
   deleteModel,
   deleteProvider,
   discoverModels,
+  getPresetModels,
   listModels,
   listPresets,
   listProviders,
@@ -14,7 +16,13 @@ import {
   updateModel,
   updateProvider,
 } from "../api/providers";
-import type { Model, ModelType, Preset, Provider } from "../types/provider";
+import type {
+  BuiltinModel,
+  Model,
+  ModelType,
+  Preset,
+  Provider,
+} from "../types/provider";
 
 const CUSTOM_KEY = "__custom__";
 
@@ -33,6 +41,9 @@ export function SettingsPage() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Provider | null>(null);
   const [discoveringId, setDiscoveringId] = useState<string | null>(null);
+  const [builtin, setBuiltin] = useState<Record<string, BuiltinModel[]>>({});
+  const [builtinOpen, setBuiltinOpen] = useState<string | null>(null);
+  const [builtinBusy, setBuiltinBusy] = useState<string | null>(null);
 
   const [formPreset, setFormPreset] = useState("");
   const [formName, setFormName] = useState("");
@@ -200,6 +211,35 @@ export function SettingsPage() {
     setError("");
     try {
       await setDefaultModel(model.id, model.model_type);
+      await refresh();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  async function toggleBuiltin(provider: Provider) {
+    if (builtinOpen === provider.id) {
+      setBuiltinOpen(null);
+      return;
+    }
+    setBuiltinOpen(provider.id);
+    if (!provider.preset_key || builtin[provider.id]) return;
+    setBuiltinBusy(provider.id);
+    try {
+      const list = await getPresetModels(provider.preset_key);
+      setBuiltin((prev) => ({ ...prev, [provider.id]: list }));
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBuiltinBusy(null);
+    }
+  }
+
+  async function addBuiltinModels(provider: Provider, ids: string[]) {
+    if (ids.length === 0) return;
+    setError("");
+    try {
+      await bulkAddModels(provider.id, ids);
       await refresh();
     } catch (err) {
       setError((err as Error).message);
@@ -464,6 +504,76 @@ export function SettingsPage() {
                   >
                     手动添加模型
                   </button>
+                )}
+
+                {provider.preset_key && (
+                  <div className="builtin-section">
+                    <button
+                      type="button"
+                      className="button-like"
+                      onClick={() => toggleBuiltin(provider)}
+                    >
+                      {builtinOpen === provider.id ? "收起内置模型" : "内置模型列表"}
+                    </button>
+                    {builtinOpen === provider.id && (
+                      <div className="builtin-list">
+                        {builtinBusy === provider.id ? (
+                          <p className="muted">加载中…</p>
+                        ) : (builtin[provider.id] ?? []).length === 0 ? (
+                          <p className="muted">该厂商暂无内置模型，请手动添加或拉取。</p>
+                        ) : (
+                          <>
+                            <div className="actions">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  addBuiltinModels(
+                                    provider,
+                                    (builtin[provider.id] ?? [])
+                                      .map((m) => m.id)
+                                      .filter(
+                                        (id) =>
+                                          !models.some(
+                                            (x) =>
+                                              x.provider_id === provider.id &&
+                                              x.model_id === id,
+                                          ),
+                                      ),
+                                  )
+                                }
+                              >
+                                全部添加
+                              </button>
+                            </div>
+                            <ul className="builtin-items">
+                              {(builtin[provider.id] ?? []).map((m) => {
+                                const added = models.some(
+                                  (x) =>
+                                    x.provider_id === provider.id &&
+                                    x.model_id === m.id,
+                                );
+                                return (
+                                  <li key={m.id} className="model-row">
+                                    <span className="model-name">{m.id}</span>
+                                    <span className={`badge badge-${m.type}`}>
+                                      {TYPE_LABEL[m.type]}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      disabled={added}
+                                      onClick={() => addBuiltinModels(provider, [m.id])}
+                                    >
+                                      {added ? "已添加" : "添加"}
+                                    </button>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             ))}

@@ -1,4 +1,5 @@
 import type {
+  BuiltinModel,
   Model,
   ModelInput,
   ModelType,
@@ -40,6 +41,20 @@ export function deleteProvider(id: string): Promise<void> {
 export function discoverModels(providerId: string): Promise<Model[]> {
   return request<Model[]>(`/providers/${providerId}/discover-models`, {
     method: "POST",
+  });
+}
+
+export function getPresetModels(presetKey: string): Promise<BuiltinModel[]> {
+  return request<BuiltinModel[]>(`/providers/presets/${presetKey}/models`);
+}
+
+export function bulkAddModels(
+  providerId: string,
+  modelIds: string[],
+): Promise<Model[]> {
+  return request<Model[]>(`/providers/${providerId}/models/bulk`, {
+    method: "POST",
+    body: JSON.stringify({ model_ids: modelIds }),
   });
 }
 

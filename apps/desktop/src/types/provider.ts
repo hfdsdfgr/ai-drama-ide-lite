@@ -52,3 +52,8 @@ export interface ModelInput {
   model_type: ModelType;
   enabled?: boolean;
 }
+
+export interface BuiltinModel {
+  id: string;
+  type: ModelType;
+}

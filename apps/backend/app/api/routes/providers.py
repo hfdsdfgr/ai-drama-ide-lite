@@ -4,6 +4,8 @@ from fastapi import APIRouter, Request, Response
 
 from app.core.errors import AppError
 from app.schemas.provider import (
+    BulkModelsRequest,
+    BuiltinModelOut,
     DefaultRequest,
     ModelCreate,
     ModelOut,
@@ -13,6 +15,7 @@ from app.schemas.provider import (
     ProviderOut,
     ProviderUpdate,
 )
+from app.services.model_catalog import get_builtin_models
 from app.services.model_discovery import fetch_model_ids
 from app.services.provider_repo import ProviderRepository
 from app.services.vendor_presets import PRESETS, get_preset
@@ -38,6 +41,13 @@ def list_presets() -> list[PresetOut]:
         )
         for p in PRESETS.values()
     ]
+
+
+@router.get("/presets/{preset_key}/models", response_model=list[BuiltinModelOut])
+def list_preset_models(preset_key: str) -> list[BuiltinModelOut]:
+    if preset_key not in PRESETS:
+        raise AppError(422, "unknown_preset", f"未知厂商预设: {preset_key}")
+    return [BuiltinModelOut(id=item["id"], type=item["type"]) for item in get_builtin_models(preset_key)]
 
 
 @router.get("", response_model=list[ProviderOut])
@@ -86,6 +96,38 @@ def discover_models(provider_id: str, request: Request) -> list[ModelOut]:
     )
     model_ids = fetch_model_ids(provider.api_base_url, api_key)
     return repo.upsert_discovered(provider_id, model_ids)
+
+
+@router.post("/{provider_id}/models/bulk", response_model=list[ModelOut], status_code=201)
+def bulk_add_models(
+    provider_id: str, payload: BulkModelsRequest, request: Request
+) -> list[ModelOut]:
+    repo = _repo(request)
+    provider = repo.get_provider(provider_id)
+    builtin_map = {
+        item["id"]: item["type"]
+        for item in get_builtin_models(provider.preset_key or "")
+    }
+    created: list[ModelOut] = []
+    for model_id in payload.model_ids:
+        model_type = builtin_map.get(model_id, "llm")
+        try:
+            created.append(
+                repo.create_model(
+                    ModelCreate(
+                        provider_id=provider_id,
+                        model_id=model_id.strip(),
+                        model_type=model_type,
+                    )
+                )
+            )
+        except AppError as exc:
+            if exc.code != "model_already_exists":
+                raise
+            continue
+        except Exception:
+            raise
+    return created
 
 
 @models_router.get("", response_model=list[ModelOut])

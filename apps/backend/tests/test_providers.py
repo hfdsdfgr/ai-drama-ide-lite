@@ -183,6 +183,32 @@ def test_discover_bailian_unsupported(client):
     assert response.json()["error"]["code"] == "discovery_unsupported"
 
 
+def test_preset_models_endpoint(client):
+    response = client.get("/api/providers/presets/bailian/models")
+    assert response.status_code == 200
+    items = response.json()
+    assert any(m["id"] == "qwen-plus" and m["type"] == "llm" for m in items)
+    assert any(m["id"] == "wan2.1-t2v" and m["type"] == "video" for m in items)
+    assert client.get("/api/providers/presets/unknown/models").status_code == 422
+
+
+def test_bulk_add_models_with_types(client):
+    provider = client.post(
+        "/api/providers",
+        json={"preset_key": "bailian", "api_key": "sk-bailian"},
+    ).json()
+    response = client.post(
+        f"/api/providers/{provider['id']}/models/bulk",
+        json={"model_ids": ["qwen-plus", "wan2.1-t2v", "qwen-plus"]},
+    )
+    assert response.status_code == 201
+    by_id = {m["model_id"]: m["model_type"] for m in response.json()}
+    assert by_id == {"qwen-plus": "llm", "wan2.1-t2v": "video"}
+    # 重复项跳过，总共只有 2 个模型
+    remaining = client.get("/api/models", params={"provider_id": provider["id"]}).json()
+    assert len(remaining) == 2
+
+
 def test_discover_requires_key(client):
     provider = client.post("/api/providers", json={"preset_key": "openai"}).json()
     response = client.post(f"/api/providers/{provider['id']}/discover-models")
