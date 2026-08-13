@@ -13,7 +13,6 @@ import {
   deleteShot,
   saveEpisodeScript,
   saveSceneShots,
-  updateEpisode,
   updateScene,
   updateShot,
 } from "../api/script";
@@ -86,11 +85,6 @@ export function ScriptPage({ active }: { active: boolean }) {
   const [confirmShotDeleteId, setConfirmShotDeleteId] = useState<string | null>(
     null,
   );
-  const [editingEpisodeId, setEditingEpisodeId] = useState<string | null>(null);
-  const [episodeDraft, setEpisodeDraft] = useState<{
-    title: string;
-    summary: string;
-  } | null>(null);
   const [confirmEpisodeDeleteId, setConfirmEpisodeDeleteId] = useState<
     string | null
   >(null);
@@ -312,28 +306,6 @@ export function ScriptPage({ active }: { active: boolean }) {
     }
   }
 
-  function startEditEpisode(ep: Episode) {
-    setEditingEpisodeId(ep.id);
-    setEpisodeDraft({ title: ep.title, summary: ep.summary });
-  }
-
-  async function saveEpisodeEdit() {
-    if (!projectId || !editingEpisodeId || !episodeDraft) return;
-    setError("");
-    try {
-      await updateEpisode(projectId, editingEpisodeId, episodeDraft);
-      const list = await listEpisodes(projectId, novelId);
-      setEpisodes(list);
-      if (selectedEpisodeId === editingEpisodeId) {
-        await loadEpisodeDetail(editingEpisodeId);
-      }
-      setEditingEpisodeId(null);
-      setEpisodeDraft(null);
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  }
-
   async function handleDeleteEpisode(episodeId: string) {
     if (!projectId) return;
     if (confirmEpisodeDeleteId !== episodeId) {
@@ -411,97 +383,45 @@ export function ScriptPage({ active }: { active: boolean }) {
               <ul className="chapter-tree">
                 {episodes.map((ep) => (
                   <li key={ep.id}>
-                    {editingEpisodeId === ep.id && episodeDraft ? (
-                      <div className="wizard-preview">
-                        <input
-                          value={episodeDraft.title}
-                          onChange={(e) =>
-                            setEpisodeDraft({
-                              ...episodeDraft,
-                              title: e.target.value,
-                            })
-                          }
-                          placeholder="分集标题"
-                        />
-                        <textarea
-                          value={episodeDraft.summary}
-                          onChange={(e) =>
-                            setEpisodeDraft({
-                              ...episodeDraft,
-                              summary: e.target.value,
-                            })
-                          }
-                          rows={2}
-                          placeholder="剧情摘要"
-                        />
-                        <div className="toolbar">
+                    <div className="chapter-row">
+                      <button
+                        type="button"
+                        className={
+                          ep.id === selectedEpisodeId
+                            ? "chapter-item active"
+                            : "chapter-item"
+                        }
+                        onClick={() => selectEpisode(ep.id)}
+                      >
+                        {ep.title || "未命名分集"}
+                      </button>
+                      {confirmEpisodeDeleteId === ep.id ? (
+                        <span className="chapter-row-actions">
                           <button
                             type="button"
-                            className="btn-primary"
-                            onClick={saveEpisodeEdit}
+                            className="button-danger"
+                            onClick={() => handleDeleteEpisode(ep.id)}
                           >
-                            保存
+                            确认
                           </button>
                           <button
                             type="button"
-                            onClick={() => {
-                              setEditingEpisodeId(null);
-                              setEpisodeDraft(null);
-                            }}
+                            onClick={() => setConfirmEpisodeDeleteId(null)}
                           >
                             取消
                           </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="chapter-row">
-                        <button
-                          type="button"
-                          className={
-                            ep.id === selectedEpisodeId
-                              ? "chapter-item active"
-                              : "chapter-item"
-                          }
-                          onClick={() => selectEpisode(ep.id)}
-                        >
-                          {ep.title || "未命名分集"}
-                        </button>
+                        </span>
+                      ) : (
                         <button
                           type="button"
                           className="chapter-delete"
-                          title="编辑分集"
-                          onClick={() => startEditEpisode(ep)}
+                          title="删除分集"
+                          onClick={() => handleDeleteEpisode(ep.id)}
                         >
-                          ✎
+                          ×
                         </button>
-                        {confirmEpisodeDeleteId === ep.id ? (
-                          <span className="chapter-row-actions">
-                            <button
-                              type="button"
-                              className="button-danger"
-                              onClick={() => handleDeleteEpisode(ep.id)}
-                            >
-                              确认
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setConfirmEpisodeDeleteId(null)}
-                            >
-                              取消
-                            </button>
-                          </span>
-                        ) : (
-                          <button
-                            type="button"
-                            className="chapter-delete"
-                            title="删除分集"
-                            onClick={() => handleDeleteEpisode(ep.id)}
-                          >
-                            ×
-                          </button>
-                        )}
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </li>
                 ))}
               </ul>
