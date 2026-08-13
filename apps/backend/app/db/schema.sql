@@ -18,6 +18,19 @@ CREATE TABLE IF NOT EXISTS novels (
     title       TEXT NOT NULL,
     content     TEXT NOT NULL DEFAULT '',
     source_type TEXT NOT NULL DEFAULT 'original',
+    deleted_at  TEXT,
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS chapters (
+    id          TEXT PRIMARY KEY,
+    project_id  TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    novel_id    TEXT NOT NULL REFERENCES novels(id) ON DELETE CASCADE,
+    title       TEXT NOT NULL DEFAULT '',
+    content     TEXT NOT NULL DEFAULT '',
+    order_index INTEGER NOT NULL DEFAULT 0,
+    deleted_at  TEXT,
     created_at  TEXT NOT NULL,
     updated_at  TEXT NOT NULL
 );
@@ -129,6 +142,7 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 );
 
 CREATE INDEX IF NOT EXISTS idx_novels_project ON novels(project_id);
+CREATE INDEX IF NOT EXISTS idx_chapters_novel ON chapters(novel_id);
 CREATE INDEX IF NOT EXISTS idx_stories_project ON stories(project_id);
 CREATE INDEX IF NOT EXISTS idx_characters_project ON characters(project_id);
 CREATE INDEX IF NOT EXISTS idx_locations_project ON locations(project_id);

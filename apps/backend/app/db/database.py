@@ -30,8 +30,22 @@ def init_db(db_path: Path) -> None:
     schema = _SCHEMA_PATH.read_text(encoding="utf-8")
     with get_connection(db_path) as conn:
         conn.executescript(schema)
+        _apply_safe_migrations(conn)
         conn.execute(
             "INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES (1, ?)",
             (datetime.now(timezone.utc).isoformat(),),
         )
     logger.info("Database ready: %s", db_path)
+
+
+def _apply_safe_migrations(conn: sqlite3.Connection) -> None:
+    """幂等加列迁移：旧库补列，已存在则静默跳过（见 DEVELOPMENT_PITFALLS.md）。"""
+    statements = [
+        "ALTER TABLE novels ADD COLUMN deleted_at TEXT",
+        "ALTER TABLE chapters ADD COLUMN deleted_at TEXT",
+    ]
+    for statement in statements:
+        try:
+            conn.execute(statement)
+        except sqlite3.OperationalError:
+            pass

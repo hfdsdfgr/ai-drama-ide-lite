@@ -34,6 +34,37 @@ def test_export_import_roundtrip(client):
     assert body["description"] == "含文件"
 
 
+def test_export_import_preserves_novels(client):
+    created = client.post(
+        "/api/projects", json={"name": "往返项目", "description": "含小说"}
+    ).json()
+    project_id = created["id"]
+    novel = client.post(
+        f"/api/projects/{project_id}/novels", json={"title": "书中仙"}
+    ).json()
+    chapter = client.post(
+        f"/api/projects/{project_id}/novels/{novel['id']}/chapters",
+        json={"title": "第一章"},
+    ).json()
+    client.put(
+        f"/api/projects/{project_id}/novels/{novel['id']}/chapters/{chapter['id']}",
+        json={"content": "正文"},
+    )
+
+    content = _export_zip(client, project_id)
+    imported = _import_zip(client, content)
+    assert imported.status_code == 201
+    imported_id = imported.json()["id"]
+
+    novels = client.get(f"/api/projects/{imported_id}/novels").json()
+    assert len(novels) == 1
+    assert novels[0]["title"] == "书中仙"
+    detail = client.get(
+        f"/api/projects/{imported_id}/novels/{novels[0]['id']}"
+    ).json()
+    assert detail["chapters"][0]["content"] == "正文"
+
+
 def test_export_import_preserves_files(client):
     created = client.post("/api/projects", json={"name": "带文件项目"}).json()
     project_id = created["id"]

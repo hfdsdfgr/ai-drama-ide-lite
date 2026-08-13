@@ -4,6 +4,7 @@ from fastapi import APIRouter, Request, Response
 
 from app.core.errors import AppError
 from app.schemas.project import Project, ProjectCreate, ProjectUpdate
+from app.services.novel_repo import NovelRepository
 from app.services.project_repo import ProjectRepository
 from app.services.project_transfer import export_project_zip, import_project_zip
 
@@ -55,7 +56,8 @@ def delete_project(project_id: str, request: Request) -> Response:
 def export_project(project_id: str, request: Request) -> Response:
     repo = _repo(request)
     project = repo.get(project_id)
-    content = export_project_zip(project, repo.projects_dir / project.id)
+    novel_repo = NovelRepository(request.app.state.settings.db_path)
+    content = export_project_zip(project, repo.projects_dir / project.id, novel_repo)
     return Response(
         content=content,
         media_type="application/zip",

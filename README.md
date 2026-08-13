@@ -171,6 +171,14 @@ Create Project
 - Phase 0 JSON 项目自动迁移归档；Asset ID / Project ID 规范
 - 测试：后端 pytest 16 项、前端 Vitest 5 项；lint / build 通过；端到端验证通过
 
+**Phase 2（Novel Studio）已完成**：
+
+- 新建小说；TXT / Markdown / DOCX 导入（编码探测 + 按标题自动分章）
+- 章节管理：新增 / 重命名 / 编辑 / 删除，编辑器自动保存
+- 小说与章节搜索；导出 / 导入项目时小说内容一并随包迁移
+- AI 续写 / 扩写 / 重写入口已占位（Phase 3 接入 AI Provider 后启用）
+- 测试：后端 pytest 26 项、前端 Vitest 6 项；lint / build 通过；端到端验证通过
+
 ## 快速开始
 
 环境要求：Python 3.12+、Node.js 20+、Git。

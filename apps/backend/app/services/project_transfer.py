@@ -10,29 +10,47 @@ from app.core.errors import AppError
 from app.schemas.project import ProjectCreate
 from app.services.project_files import ensure_project_layout
 from app.services.project_repo import ProjectRepository
+from app.services.novel_repo import NovelRepository
 
 MANIFEST_NAME = "project.json"
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 MAX_ZIP_ENTRIES = 10_000
 
 
-def _manifest(project) -> dict:
+def _manifest(project, novel_repo: NovelRepository | None) -> dict:
+    novels: list[dict] = []
+    if novel_repo is not None:
+        for novel in novel_repo.list_novels(project.id):
+            detail = novel_repo.get(project.id, novel.id)
+            novels.append(
+                {
+                    "title": detail.novel.title,
+                    "source_type": detail.novel.source_type,
+                    "chapters": [
+                        {"title": c.title, "content": c.content}
+                        for c in detail.chapters
+                    ],
+                }
+            )
     return {
         "schema_version": SCHEMA_VERSION,
         "project": {
             "name": project.name,
             "description": project.description,
         },
+        "novels": novels,
     }
 
 
-def export_project_zip(project, project_dir: Path) -> bytes:
+def export_project_zip(
+    project, project_dir: Path, novel_repo: NovelRepository | None = None
+) -> bytes:
     """导出为 zip：project.json manifest + files/ 文件树。"""
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
         zf.writestr(
             MANIFEST_NAME,
-            json.dumps(_manifest(project), ensure_ascii=False, indent=2),
+            json.dumps(_manifest(project, novel_repo), ensure_ascii=False, indent=2),
         )
         if project_dir.exists():
             for path in sorted(project_dir.rglob("*")):
@@ -72,7 +90,7 @@ def import_project_zip(raw: bytes, repo: ProjectRepository) -> object:
             if manifest_entry is None:
                 raise AppError(422, "import_invalid_manifest", "zip 缺少 project.json")
             manifest = json.loads(zf.read(manifest_entry))
-            if manifest.get("schema_version") != SCHEMA_VERSION:
+            if manifest.get("schema_version") not in (1, SCHEMA_VERSION):
                 raise AppError(422, "import_version_unsupported", "不支持的 manifest 版本")
             data = manifest.get("project") or {}
             name = str(data.get("name", "")).strip()
@@ -96,6 +114,9 @@ def import_project_zip(raw: bytes, repo: ProjectRepository) -> object:
                 target.parent.mkdir(parents=True, exist_ok=True)
                 with zf.open(entry) as src, open(target, "wb") as dst:
                     shutil.copyfileobj(src, dst)
+            if manifest.get("novels"):
+                novel_repo = NovelRepository(repo.db_path)
+                novel_repo.restore(project.id, manifest["novels"])
             return project
     except zipfile.BadZipFile as exc:
         raise AppError(422, "import_invalid_zip", "不是有效的 zip 文件") from exc

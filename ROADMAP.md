@@ -96,17 +96,15 @@ Phase 2 — Novel Studio
 首先让用户可以把“故事”放进系统。
 
 Tasks
- TXT 导入
- Markdown 导入
- DOCX 导入
- Novel Editor
- Chapter Management
- 搜索
- 文本编辑
- AI 创作入口
- AI 续写
- AI 扩写
- AI 重写
+- [x] TXT 导入（UTF-8 / GBK 编码探测）
+- [x] Markdown 导入（按标题自动分章）
+- [x] DOCX 导入（python-docx，按 Heading 分章）
+- [x] Novel Editor（章节编辑器 + 自动保存）
+- [x] Chapter Management（新增 / 重命名 / 编辑 / 删除）
+- [x] 搜索（标题 + 章节内容）
+- [x] 文本编辑
+- [x] AI 创作入口（占位，明确标注 Phase 3 后可用）
+- [ ] AI 续写 / 扩写 / 重写（依赖 Phase 3 — AI Provider 基础系统）
 完成标准
 
 用户可以：
