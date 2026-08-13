@@ -4,9 +4,10 @@ import { StatusBar } from "./components/StatusBar";
 import { NovelPage } from "./pages/NovelPage";
 import { ProjectPage } from "./pages/ProjectPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { StoryBiblePage } from "./pages/StoryBiblePage";
 import "./App.css";
 
-type View = "project" | "novel" | "settings";
+type View = "project" | "novel" | "bible" | "settings";
 
 interface ModuleDef {
   key: string;
@@ -18,7 +19,7 @@ interface ModuleDef {
 const CREATION_MODULES: ModuleDef[] = [
   { key: "project", label: "主页", ready: true },
   { key: "novel", label: "小说", ready: true },
-  { key: "bible", label: "故事圣经", ready: false },
+  { key: "bible", label: "故事圣经", ready: true },
   { key: "script", label: "剧本", ready: false },
   { key: "character", label: "角色", ready: false },
   { key: "scene", label: "场景", ready: false },
@@ -66,6 +67,7 @@ function App() {
       <main className="app-main">
         {view === "project" && <ProjectPage />}
         {view === "novel" && <NovelPage />}
+        {view === "bible" && <StoryBiblePage />}
         {view === "settings" && <SettingsPage />}
       </main>
       <StatusBar />
