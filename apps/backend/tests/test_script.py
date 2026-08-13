@@ -282,3 +282,34 @@ def test_update_scene_and_shot(client):
         f"/api/projects/{project_id}/script/scenes/{scene_id}"
     ).json()
     assert detail["shots"] == []
+
+
+def test_update_and_delete_episode(client):
+    project_id, novel_id = _create_project_with_novel(client)
+    saved = client.post(
+        f"/api/projects/{project_id}/script/save-episode-script",
+        json={
+            "novel_id": novel_id,
+            "chapter_index": 0,
+            "episode": {"title": "第一集", "summary": "s"},
+            "scenes": [],
+        },
+    ).json()
+    episode_id = saved["episode"]["id"]
+    updated = client.put(
+        f"/api/projects/{project_id}/script/episodes/{episode_id}",
+        json={"title": "第一集 改", "summary": "新摘要"},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["title"] == "第一集 改"
+    assert updated.json()["summary"] == "新摘要"
+    deleted = client.delete(
+        f"/api/projects/{project_id}/script/episodes/{episode_id}"
+    )
+    assert deleted.status_code == 204
+    assert (
+        client.get(
+            f"/api/projects/{project_id}/script/episodes/{episode_id}"
+        ).status_code
+        == 404
+    )

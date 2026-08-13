@@ -157,3 +157,27 @@ export function deleteShot(
     { method: "DELETE" },
   );
 }
+
+export function updateEpisode(
+  projectId: string,
+  episodeId: string,
+  input: { title?: string; summary?: string },
+): Promise<Episode> {
+  return request<Episode>(
+    `/projects/${projectId}/script/episodes/${episodeId}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(input),
+    },
+  );
+}
+
+export function deleteEpisode(
+  projectId: string,
+  episodeId: string,
+): Promise<void> {
+  return request<void>(
+    `/projects/${projectId}/script/episodes/${episodeId}`,
+    { method: "DELETE" },
+  );
+}

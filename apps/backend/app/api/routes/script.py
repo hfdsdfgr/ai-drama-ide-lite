@@ -8,6 +8,7 @@ from app.schemas.script import (
     Episode,
     EpisodeCreate,
     EpisodeDetail,
+    EpisodeUpdate,
     Scene,
     SceneCreate,
     SceneDetail,
@@ -70,6 +71,16 @@ def get_episode(project_id: str, episode_id: str, request: Request) -> EpisodeDe
 @router.delete("/episodes/{episode_id}", status_code=204)
 def delete_episode(project_id: str, episode_id: str, request: Request):
     _repo(request).soft_delete_episode(project_id, episode_id)
+
+
+@router.put("/episodes/{episode_id}", response_model=Episode)
+def update_episode(
+    project_id: str,
+    episode_id: str,
+    payload: EpisodeUpdate,
+    request: Request,
+) -> Episode:
+    return _repo(request).update_episode(project_id, episode_id, payload)
 
 
 @router.post("/generate-episode", response_model=AiEpisodeScriptResult)

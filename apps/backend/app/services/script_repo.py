@@ -12,6 +12,7 @@ from app.schemas.script import (
     Episode,
     EpisodeCreate,
     EpisodeDetail,
+    EpisodeUpdate,
     Scene,
     SceneCreate,
     SceneDetail,
@@ -120,6 +121,22 @@ class ScriptRepository:
                 "UPDATE episodes SET deleted_at = ?, updated_at = ? WHERE id = ?",
                 (_now_iso(), _now_iso(), episode_id),
             )
+
+    def update_episode(
+        self, project_id: str, episode_id: str, data: EpisodeUpdate
+    ) -> Episode:
+        episode = self.get_episode(project_id, episode_id)
+        payload = data.model_dump(exclude_unset=True)
+        title = payload["title"].strip() if "title" in payload else episode.title
+        summary = (
+            payload["summary"].strip() if "summary" in payload else episode.summary
+        )
+        with get_connection(self.db_path) as conn:
+            conn.execute(
+                "UPDATE episodes SET title = ?, summary = ?, updated_at = ? WHERE id = ?",
+                (title, summary, _now_iso(), episode_id),
+            )
+        return self.get_episode(project_id, episode_id)
 
     def save_episode_script(
         self,

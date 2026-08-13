@@ -24,6 +24,11 @@ class EpisodeCreate(BaseModel):
     source_chapter_index: int | None = Field(default=None, ge=0)
 
 
+class EpisodeUpdate(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    summary: str | None = Field(default=None, max_length=3000)
+
+
 class Scene(BaseModel):
     id: str
     project_id: str
