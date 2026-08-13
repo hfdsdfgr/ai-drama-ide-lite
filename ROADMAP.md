@@ -303,14 +303,16 @@ Phase 7 — Script Engine
 把小说变成真正可以制作漫剧的剧本。
 
 Tasks
- Episode Planning
- Scene Generation
- Dialogue Generation
- Action Description
- Camera Description
- Shot Generation
- Shot Duration
- Shot Ordering
+- [x] Episode Planning（章节 → 分集：标题/摘要/来源章节，AI 生成 + 人工确认）
+- [x] Scene Generation（分集 → 场景：slugline 中文直观格式 / 动作 / 台词，AI 生成 + 人工确认）
+- [x] Dialogue Generation（角色台词结构化输出）
+- [x] Action Description（动作描写现在时输出）
+- [x] Camera Description（分镜运镜/机位描述）
+- [x] Shot Generation（场景 → 分镜：景别/运镜/角色/动作/光影/台词/时长/视觉提示词）
+- [x] Shot Duration（时长秒数）
+- [x] Shot Ordering（镜头顺序号）
+- [x] Scene / Shot 编辑与删除（slugline、台词、镜头字段可手改，删除两步确认）
+- [x] 剧本页三栏工作台（分集树 / 场景镜头编辑 / AI 生成向导）
 Pipeline
 Novel
  ↓

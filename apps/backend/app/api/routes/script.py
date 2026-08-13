@@ -11,9 +11,12 @@ from app.schemas.script import (
     Scene,
     SceneCreate,
     SceneDetail,
+    SceneUpdate,
     ScriptGenerateRequest,
+    Shot,
     ShotsGenerateRequest,
     ShotCreate,
+    ShotUpdate,
 )
 from app.services.script_repo import ScriptRepository
 
@@ -110,3 +113,26 @@ def save_scene_shots(
 @router.delete("/scenes/{scene_id}", status_code=204)
 def delete_scene(project_id: str, scene_id: str, request: Request):
     _repo(request).soft_delete_scene(project_id, scene_id)
+
+
+@router.put("/scenes/{scene_id}", response_model=Scene)
+def update_scene(
+    project_id: str, scene_id: str, payload: SceneUpdate, request: Request
+) -> Scene:
+    return _repo(request).update_scene(project_id, scene_id, payload)
+
+
+@router.put("/scenes/{scene_id}/shots/{shot_id}", response_model=Shot)
+def update_shot(
+    project_id: str,
+    scene_id: str,
+    shot_id: str,
+    payload: ShotUpdate,
+    request: Request,
+) -> Shot:
+    return _repo(request).update_shot(project_id, scene_id, shot_id, payload)
+
+
+@router.delete("/scenes/{scene_id}/shots/{shot_id}", status_code=204)
+def delete_shot(project_id: str, scene_id: str, shot_id: str, request: Request):
+    _repo(request).soft_delete_shot(project_id, scene_id, shot_id)

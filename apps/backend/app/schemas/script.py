@@ -47,6 +47,13 @@ class SceneCreate(BaseModel):
     dialogue: str = Field(default="", max_length=10000)
 
 
+class SceneUpdate(BaseModel):
+    title: str | None = Field(default=None, max_length=200)
+    slugline: str | None = Field(default=None, max_length=300)
+    action: str | None = Field(default=None, max_length=6000)
+    dialogue: str | None = Field(default=None, max_length=10000)
+
+
 class Shot(BaseModel):
     id: str
     project_id: str
@@ -77,6 +84,17 @@ class ShotCreate(BaseModel):
     dialogue: str = Field(default="", max_length=2000)
     duration: float = Field(default=0, ge=0, le=600)
     prompt: str = Field(default="", max_length=3000)
+
+
+class ShotUpdate(BaseModel):
+    shot_type: str | None = Field(default=None, max_length=50)
+    camera: str | None = Field(default=None, max_length=300)
+    characters: str | None = Field(default=None, max_length=500)
+    action: str | None = Field(default=None, max_length=3000)
+    lighting: str | None = Field(default=None, max_length=300)
+    dialogue: str | None = Field(default=None, max_length=2000)
+    duration: float | None = Field(default=None, ge=0, le=600)
+    prompt: str | None = Field(default=None, max_length=3000)
 
 
 class EpisodeDetail(BaseModel):

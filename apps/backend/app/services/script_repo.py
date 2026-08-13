@@ -15,8 +15,10 @@ from app.schemas.script import (
     Scene,
     SceneCreate,
     SceneDetail,
+    SceneUpdate,
     Shot,
     ShotCreate,
+    ShotUpdate,
 )
 
 ID_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
@@ -230,6 +232,26 @@ class ScriptRepository:
                 (_now_iso(), _now_iso(), scene_id),
             )
 
+    def update_scene(
+        self, project_id: str, scene_id: str, data: SceneUpdate
+    ) -> Scene:
+        scene = self.get_scene(project_id, scene_id)
+        payload = data.model_dump(exclude_unset=True)
+        title = payload["title"].strip() if "title" in payload else scene.title
+        slugline = (
+            payload["slugline"].strip() if "slugline" in payload else scene.slugline
+        )
+        action = payload["action"].strip() if "action" in payload else scene.action
+        dialogue = (
+            payload["dialogue"].strip() if "dialogue" in payload else scene.dialogue
+        )
+        with get_connection(self.db_path) as conn:
+            conn.execute(
+                "UPDATE scenes SET title = ?, slugline = ?, action = ?, dialogue = ?, updated_at = ? WHERE id = ?",
+                (title, slugline, action, dialogue, _now_iso(), scene_id),
+            )
+        return self.get_scene(project_id, scene_id)
+
     # ---------- Shot ----------
 
     def save_scene_shots(
@@ -263,9 +285,66 @@ class ScriptRepository:
                 )
         return self.get_scene_detail(project_id, scene_id)
 
-    def soft_delete_shot(self, project_id: str, scene_id: str, shot_id: str) -> None:
+    def get_shot(self, project_id: str, scene_id: str, shot_id: str) -> Shot:
         self.get_scene(project_id, scene_id)
         _validate_id(shot_id, "镜头")
+        with get_connection(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT id, project_id, scene_id, shot_number, order_index, shot_type, camera, characters, action, lighting, dialogue, duration, prompt, created_at, updated_at"
+                " FROM shots WHERE id = ? AND scene_id = ? AND deleted_at IS NULL",
+                (shot_id, scene_id),
+            ).fetchone()
+        if row is None:
+            raise AppError(404, "shot_not_found", f"镜头不存在: {shot_id}")
+        return _row_to_shot(row)
+
+    def update_shot(
+        self,
+        project_id: str,
+        scene_id: str,
+        shot_id: str,
+        data: ShotUpdate,
+    ) -> Shot:
+        shot = self.get_shot(project_id, scene_id, shot_id)
+        payload = data.model_dump(exclude_unset=True)
+        shot_type = (
+            payload["shot_type"].strip() if "shot_type" in payload else shot.shot_type
+        )
+        camera = payload["camera"].strip() if "camera" in payload else shot.camera
+        characters = (
+            payload["characters"].strip()
+            if "characters" in payload
+            else shot.characters
+        )
+        action = payload["action"].strip() if "action" in payload else shot.action
+        lighting = (
+            payload["lighting"].strip() if "lighting" in payload else shot.lighting
+        )
+        dialogue = (
+            payload["dialogue"].strip() if "dialogue" in payload else shot.dialogue
+        )
+        duration = payload["duration"] if "duration" in payload else shot.duration
+        prompt = payload["prompt"].strip() if "prompt" in payload else shot.prompt
+        with get_connection(self.db_path) as conn:
+            conn.execute(
+                "UPDATE shots SET shot_type = ?, camera = ?, characters = ?, action = ?, lighting = ?, dialogue = ?, duration = ?, prompt = ?, updated_at = ? WHERE id = ?",
+                (
+                    shot_type,
+                    camera,
+                    characters,
+                    action,
+                    lighting,
+                    dialogue,
+                    duration,
+                    prompt,
+                    _now_iso(),
+                    shot_id,
+                ),
+            )
+        return self.get_shot(project_id, scene_id, shot_id)
+
+    def soft_delete_shot(self, project_id: str, scene_id: str, shot_id: str) -> None:
+        self.get_shot(project_id, scene_id, shot_id)
         with get_connection(self.db_path) as conn:
             conn.execute(
                 "UPDATE shots SET deleted_at = ?, updated_at = ? WHERE id = ? AND scene_id = ?",

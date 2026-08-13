@@ -3,7 +3,9 @@ import type {
   AiShotsResult,
   Episode,
   EpisodeDetail,
+  Scene,
   SceneDetail,
+  Shot,
 } from "../types/script";
 import { request } from "./client";
 
@@ -99,5 +101,59 @@ export function saveSceneShots(
       method: "POST",
       body: JSON.stringify(payload),
     },
+  );
+}
+
+export function updateScene(
+  projectId: string,
+  sceneId: string,
+  input: {
+    title?: string;
+    slugline?: string;
+    action?: string;
+    dialogue?: string;
+  },
+): Promise<Scene> {
+  return request<Scene>(
+    `/projects/${projectId}/script/scenes/${sceneId}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(input),
+    },
+  );
+}
+
+export function updateShot(
+  projectId: string,
+  sceneId: string,
+  shotId: string,
+  input: {
+    shot_type?: string;
+    camera?: string;
+    characters?: string;
+    action?: string;
+    lighting?: string;
+    dialogue?: string;
+    duration?: number;
+    prompt?: string;
+  },
+): Promise<Shot> {
+  return request<Shot>(
+    `/projects/${projectId}/script/scenes/${sceneId}/shots/${shotId}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(input),
+    },
+  );
+}
+
+export function deleteShot(
+  projectId: string,
+  sceneId: string,
+  shotId: string,
+): Promise<void> {
+  return request<void>(
+    `/projects/${projectId}/script/scenes/${sceneId}/shots/${shotId}`,
+    { method: "DELETE" },
   );
 }

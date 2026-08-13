@@ -9,8 +9,11 @@ import {
   getEpisodeDetail,
   getSceneDetail,
   listEpisodes,
+  deleteShot,
   saveEpisodeScript,
   saveSceneShots,
+  updateScene,
+  updateShot,
 } from "../api/script";
 import type { Model } from "../types/provider";
 import type { Chapter, Novel } from "../types/novel";
@@ -20,7 +23,9 @@ import type {
   AiShotsResult,
   Episode,
   EpisodeDetail,
+  Scene,
   SceneDetail,
+  Shot,
 } from "../types/script";
 
 // 虽然分类为 llm，但这些模型不是「文本创作」模型，不用于剧本生成
@@ -68,6 +73,17 @@ export function ScriptPage({ active }: { active: boolean }) {
   const [shotInstruction, setShotInstruction] = useState("");
   const [shotPreview, setShotPreview] = useState<AiShotsResult | null>(null);
   const [shotBusy, setShotBusy] = useState(false);
+  const [editingSceneId, setEditingSceneId] = useState<string | null>(null);
+  const [sceneDraft, setSceneDraft] = useState<{
+    slugline: string;
+    action: string;
+    dialogue: string;
+  } | null>(null);
+  const [editingShotId, setEditingShotId] = useState<string | null>(null);
+  const [shotDraft, setShotDraft] = useState<Shot | null>(null);
+  const [confirmShotDeleteId, setConfirmShotDeleteId] = useState<string | null>(
+    null,
+  );
 
   useEffect(() => {
     if (!active) return;
@@ -219,6 +235,73 @@ export function ScriptPage({ active }: { active: boolean }) {
     }
   }
 
+  function startEditScene(scene: Scene) {
+    setEditingSceneId(scene.id);
+    setSceneDraft({
+      slugline: scene.slugline,
+      action: scene.action,
+      dialogue: scene.dialogue,
+    });
+  }
+
+  async function saveSceneEdit(sceneId: string) {
+    if (!projectId || !sceneDraft || !selectedEpisodeId) return;
+    setError("");
+    try {
+      await updateScene(projectId, sceneId, sceneDraft);
+      await loadEpisodeDetail(selectedEpisodeId);
+      setEditingSceneId(null);
+      setSceneDraft(null);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  function startEditShot(shot: Shot) {
+    setEditingShotId(shot.id);
+    setShotDraft({ ...shot });
+  }
+
+  async function saveShotEdit(sceneId: string, shotId: string) {
+    if (!projectId || !shotDraft) return;
+    setError("");
+    try {
+      await updateShot(projectId, sceneId, shotId, {
+        shot_type: shotDraft.shot_type,
+        camera: shotDraft.camera,
+        characters: shotDraft.characters,
+        action: shotDraft.action,
+        lighting: shotDraft.lighting,
+        dialogue: shotDraft.dialogue,
+        duration: shotDraft.duration,
+        prompt: shotDraft.prompt,
+      });
+      const detail = await getSceneDetail(projectId, sceneId);
+      setSceneDetails((prev) => ({ ...prev, [sceneId]: detail }));
+      setEditingShotId(null);
+      setShotDraft(null);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  async function handleDeleteShot(sceneId: string, shotId: string) {
+    if (!projectId) return;
+    if (confirmShotDeleteId !== shotId) {
+      setConfirmShotDeleteId(shotId);
+      return;
+    }
+    setConfirmShotDeleteId(null);
+    setError("");
+    try {
+      await deleteShot(projectId, sceneId, shotId);
+      const detail = await getSceneDetail(projectId, sceneId);
+      setSceneDetails((prev) => ({ ...prev, [sceneId]: detail }));
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
   return (
     <div className="page script-page">
       {error && <p className="error">{error}</p>}
@@ -316,11 +399,84 @@ export function ScriptPage({ active }: { active: boolean }) {
                           >
                             生成分镜
                           </button>
+                          {editingSceneId === scene.id ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingSceneId(null);
+                                setSceneDraft(null);
+                              }}
+                            >
+                              取消
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => startEditScene(scene)}
+                            >
+                              编辑
+                            </button>
+                          )}
                         </div>
                       </div>
-                      {scene.action && <p className="muted">{scene.action}</p>}
-                      {scene.dialogue && (
-                        <pre className="scene-dialogue">{scene.dialogue}</pre>
+                      {editingSceneId === scene.id && sceneDraft ? (
+                        <div className="wizard-preview">
+                          <label>
+                            场景标题（slugline）
+                            <input
+                              value={sceneDraft.slugline}
+                              onChange={(e) =>
+                                setSceneDraft({
+                                  ...sceneDraft,
+                                  slugline: e.target.value,
+                                })
+                              }
+                              placeholder="室内·地点·日/夜"
+                            />
+                          </label>
+                          <label>
+                            动作
+                            <textarea
+                              value={sceneDraft.action}
+                              onChange={(e) =>
+                                setSceneDraft({
+                                  ...sceneDraft,
+                                  action: e.target.value,
+                                })
+                              }
+                              rows={3}
+                            />
+                          </label>
+                          <label>
+                            台词
+                            <textarea
+                              value={sceneDraft.dialogue}
+                              onChange={(e) =>
+                                setSceneDraft({
+                                  ...sceneDraft,
+                                  dialogue: e.target.value,
+                                })
+                              }
+                              rows={3}
+                            />
+                          </label>
+                          <div className="toolbar">
+                            <button
+                              type="button"
+                              className="btn-primary"
+                              onClick={() => saveSceneEdit(scene.id)}
+                            >
+                              保存
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          {scene.action && <p className="muted">{scene.action}</p>}
+                          {scene.dialogue && (
+                            <pre className="scene-dialogue">{scene.dialogue}</pre>
+                          )}
+                        </>
                       )}
                       {shotPreview && shotSceneId === scene.id && (
                         <div className="shots-preview">
@@ -364,14 +520,190 @@ export function ScriptPage({ active }: { active: boolean }) {
                         <ol className="shot-list">
                           {shots.map((shot) => (
                             <li key={shot.id}>
-                              <strong>
-                                {shot.shot_type || `镜头 ${shot.shot_number}`}
-                                {shot.duration ? ` · ${shot.duration}s` : ""}
-                              </strong>
-                              {shot.camera && <span> · {shot.camera}</span>}
-                              <p className="muted">{shot.action}</p>
-                              {shot.dialogue && (
-                                <p className="shot-dialogue">{shot.dialogue}</p>
+                              {editingShotId === shot.id && shotDraft ? (
+                                <div className="wizard-preview">
+                                  <label>
+                                    景别
+                                    <input
+                                      value={shotDraft.shot_type}
+                                      onChange={(e) =>
+                                        setShotDraft({
+                                          ...shotDraft,
+                                          shot_type: e.target.value,
+                                        })
+                                      }
+                                      placeholder="wide / medium / close-up"
+                                    />
+                                  </label>
+                                  <label>
+                                    运镜
+                                    <input
+                                      value={shotDraft.camera}
+                                      onChange={(e) =>
+                                        setShotDraft({
+                                          ...shotDraft,
+                                          camera: e.target.value,
+                                        })
+                                      }
+                                    />
+                                  </label>
+                                  <label>
+                                    角色
+                                    <input
+                                      value={shotDraft.characters}
+                                      onChange={(e) =>
+                                        setShotDraft({
+                                          ...shotDraft,
+                                          characters: e.target.value,
+                                        })
+                                      }
+                                    />
+                                  </label>
+                                  <label>
+                                    动作
+                                    <textarea
+                                      value={shotDraft.action}
+                                      onChange={(e) =>
+                                        setShotDraft({
+                                          ...shotDraft,
+                                          action: e.target.value,
+                                        })
+                                      }
+                                      rows={2}
+                                    />
+                                  </label>
+                                  <label>
+                                    光影
+                                    <input
+                                      value={shotDraft.lighting}
+                                      onChange={(e) =>
+                                        setShotDraft({
+                                          ...shotDraft,
+                                          lighting: e.target.value,
+                                        })
+                                      }
+                                    />
+                                  </label>
+                                  <label>
+                                    台词
+                                    <textarea
+                                      value={shotDraft.dialogue}
+                                      onChange={(e) =>
+                                        setShotDraft({
+                                          ...shotDraft,
+                                          dialogue: e.target.value,
+                                        })
+                                      }
+                                      rows={2}
+                                    />
+                                  </label>
+                                  <label>
+                                    时长（秒）
+                                    <input
+                                      type="number"
+                                      min={0.5}
+                                      max={120}
+                                      step={0.5}
+                                      value={shotDraft.duration}
+                                      onChange={(e) =>
+                                        setShotDraft({
+                                          ...shotDraft,
+                                          duration: Number(e.target.value) || 0,
+                                        })
+                                      }
+                                    />
+                                  </label>
+                                  <div className="toolbar">
+                                    <button
+                                      type="button"
+                                      className="btn-primary"
+                                      onClick={() =>
+                                        saveShotEdit(scene.id, shot.id)
+                                      }
+                                    >
+                                      保存
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setEditingShotId(null);
+                                        setShotDraft(null);
+                                      }}
+                                    >
+                                      取消
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <>
+                                  <div className="scene-head">
+                                    <strong>
+                                      {shot.shot_type ||
+                                        `镜头 ${shot.shot_number}`}
+                                      {shot.duration
+                                        ? ` · ${shot.duration}s`
+                                        : ""}
+                                    </strong>
+                                    <div className="toolbar">
+                                      <button
+                                        type="button"
+                                        onClick={() => startEditShot(shot)}
+                                      >
+                                        编辑
+                                      </button>
+                                      {confirmShotDeleteId === shot.id ? (
+                                        <>
+                                          <button
+                                            type="button"
+                                            className="button-danger"
+                                            onClick={() =>
+                                              handleDeleteShot(scene.id, shot.id)
+                                            }
+                                          >
+                                            确认
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              setConfirmShotDeleteId(null)
+                                            }
+                                          >
+                                            取消
+                                          </button>
+                                        </>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          className="button-danger button-ghost"
+                                          onClick={() =>
+                                            handleDeleteShot(scene.id, shot.id)
+                                          }
+                                        >
+                                          删除
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                  {shot.camera && (
+                                    <p className="muted">运镜：{shot.camera}</p>
+                                  )}
+                                  {shot.characters && (
+                                    <p className="muted">
+                                      角色：{shot.characters}
+                                    </p>
+                                  )}
+                                  {shot.lighting && (
+                                    <p className="muted">光影：{shot.lighting}</p>
+                                  )}
+                                  {shot.action && (
+                                    <p className="muted">{shot.action}</p>
+                                  )}
+                                  {shot.dialogue && (
+                                    <p className="shot-dialogue">
+                                      {shot.dialogue}
+                                    </p>
+                                  )}
+                                </>
                               )}
                             </li>
                           ))}

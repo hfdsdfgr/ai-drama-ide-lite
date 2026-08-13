@@ -213,3 +213,66 @@ def test_save_scene_shots(client):
     )
     assert response.status_code == 201
     assert response.json()["shots"][0]["shot_number"] == 1
+
+
+def test_update_scene_and_shot(client):
+    project_id, novel_id = _create_project_with_novel(client)
+    saved = client.post(
+        f"/api/projects/{project_id}/script/save-episode-script",
+        json={
+            "novel_id": novel_id,
+            "chapter_index": 0,
+            "episode": {"title": "第一集", "summary": "s"},
+            "scenes": [
+                {
+                    "title": "大殿",
+                    "slugline": "室内·大殿·夜",
+                    "action": "对峙",
+                    "dialogue": "长老：来吧。",
+                }
+            ],
+        },
+    ).json()
+    scene_id = saved["scenes"][0]["id"]
+    updated_scene = client.put(
+        f"/api/projects/{project_id}/script/scenes/{scene_id}",
+        json={"slugline": "室外·山门·日", "action": "两人拔剑对峙"},
+    )
+    assert updated_scene.status_code == 200
+    assert updated_scene.json()["slugline"] == "室外·山门·日"
+    assert updated_scene.json()["action"] == "两人拔剑对峙"
+
+    saved_shots = client.post(
+        f"/api/projects/{project_id}/script/scenes/{scene_id}/save-shots",
+        json={
+            "shots": [
+                {
+                    "shot_type": "close-up",
+                    "camera": "推近",
+                    "characters": "林凡",
+                    "action": "抬头",
+                    "lighting": "烛光",
+                    "dialogue": "",
+                    "duration": 3,
+                    "prompt": "特写。",
+                }
+            ]
+        },
+    ).json()
+    shot_id = saved_shots["shots"][0]["id"]
+    updated_shot = client.put(
+        f"/api/projects/{project_id}/script/scenes/{scene_id}/shots/{shot_id}",
+        json={"shot_type": "wide", "duration": 6},
+    )
+    assert updated_shot.status_code == 200
+    assert updated_shot.json()["shot_type"] == "wide"
+    assert updated_shot.json()["duration"] == 6
+
+    deleted = client.delete(
+        f"/api/projects/{project_id}/script/scenes/{scene_id}/shots/{shot_id}"
+    )
+    assert deleted.status_code == 204
+    detail = client.get(
+        f"/api/projects/{project_id}/script/scenes/{scene_id}"
+    ).json()
+    assert detail["shots"] == []
