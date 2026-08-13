@@ -135,7 +135,6 @@ export function NovelPage() {
   }, [projectId, refreshNovels]);
 
   useEffect(() => {
-    if (!projectId) return;
     listModels({ model_type: "llm", enabled_only: true })
       .then((models) => {
         const usable = models.filter(isChatModel);
@@ -145,7 +144,7 @@ export function NovelPage() {
         );
       })
       .catch((e) => setError((e as Error).message));
-  }, [projectId]);
+  }, []);
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
