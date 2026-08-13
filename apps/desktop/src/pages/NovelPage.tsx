@@ -809,7 +809,9 @@ export function NovelPage() {
                   onChange={(e) => setNewNovelTitle(e.target.value)}
                   placeholder="新小说标题"
                 />
-                <button type="submit">创建</button>
+              <button type="submit" className="btn-primary">
+                创建
+              </button>
               </form>
 
               <div className="sidebar-block">
@@ -1144,7 +1146,11 @@ export function NovelPage() {
                     />
                   </label>
                   <div className="toolbar">
-                    <button type="submit" disabled={wizBusy || !aiModelId}>
+                    <button
+                      type="submit"
+                      className="btn-primary"
+                      disabled={wizBusy || !aiModelId}
+                    >
                       {wizBusy ? "生成中…" : "生成大纲"}
                     </button>
                   </div>
@@ -1198,6 +1204,7 @@ export function NovelPage() {
                     </button>
                     <button
                       type="button"
+                      className="btn-primary"
                       disabled={wizBusy || wiz.outline.length === 0}
                       onClick={startWriting}
                     >
@@ -1266,6 +1273,7 @@ export function NovelPage() {
                       <div className="toolbar">
                         <button
                           type="button"
+                          className="btn-primary"
                           disabled={wizBusy || !detail || wiz.streaming}
                           onClick={savePreviewChapter}
                         >
@@ -1303,6 +1311,7 @@ export function NovelPage() {
                     <div className="toolbar">
                       <button
                         type="button"
+                        className="btn-primary"
                         disabled={wizBusy || !aiModelId}
                         onClick={genChapterPreview}
                       >

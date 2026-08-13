@@ -559,7 +559,9 @@ export function SettingsPage() {
             </p>
           )}
 
-          <button type="submit">{editing ? "保存" : "添加并拉取模型"}</button>
+          <button type="submit" className="btn-primary">
+            {editing ? "保存" : "添加并拉取模型"}
+          </button>
         </form>
       )}
 

@@ -272,7 +272,12 @@ export function ProjectPage() {
                 />
               </label>
               <div className="actions">
-                <button type="button" onClick={handleSave} disabled={saving}>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={handleSave}
+                  disabled={saving}
+                >
                   {saving ? "保存中…" : "保存"}
                 </button>
                 <button type="button" onClick={handleExport}>
@@ -331,7 +336,9 @@ export function ProjectPage() {
                   rows={3}
                 />
               </label>
-              <button type="submit">创建</button>
+              <button type="submit" className="btn-primary">
+                创建
+              </button>
             </form>
           )}
         </section>

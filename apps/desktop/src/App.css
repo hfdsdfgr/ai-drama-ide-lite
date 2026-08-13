@@ -68,9 +68,9 @@
 
 .module-nav button.nav-active,
 .app-actions button.nav-active {
-  background: var(--accent-bg);
-  border-color: var(--accent-border);
-  color: var(--accent);
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
   font-weight: 600;
 }
 
@@ -133,7 +133,7 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #2c9a5f;
+  background: var(--success);
   display: inline-block;
 }
 
@@ -155,8 +155,9 @@
 }
 
 .card {
-  border: 1px solid #ddd;
-  border-radius: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-panel);
   padding: 1rem 1.25rem;
   display: flex;
   flex-direction: column;
@@ -178,18 +179,39 @@ input,
 textarea,
 select {
   padding: 0.45rem 0.6rem;
-  border: 1px solid #ccc;
-  border-radius: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel);
+  color: var(--text-h);
   font: inherit;
 }
 
 button {
   padding: 0.45rem 1rem;
-  border-radius: 6px;
-  border: 1px solid #646cff;
-  background: #646cff;
-  color: #fff;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--text-h);
   cursor: pointer;
+  font-size: 0.9rem;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+}
+
+/* 页面主操作：唯一的强调色实心按钮 */
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent);
+  border-color: var(--accent);
+  filter: brightness(1.1);
 }
 
 button:disabled {
@@ -199,17 +221,31 @@ button:disabled {
 
 .button-like {
   padding: 0.45rem 1rem;
-  border-radius: 6px;
-  border: 1px solid #646cff;
-  background: #646cff;
-  color: #fff;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--text-h);
   cursor: pointer;
   font-size: 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.button-like:hover {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
 }
 
 .button-danger {
-  background: #d33;
-  border-color: #d33;
+  background: var(--danger-bg);
+  border-color: var(--danger-border);
+  color: var(--danger);
+}
+
+.button-danger:hover:not(:disabled) {
+  background: var(--danger-bg);
+  border-color: var(--danger);
 }
 
 .actions {
@@ -248,9 +284,9 @@ button:disabled {
 .novel-tools {
   flex-wrap: wrap;
   padding: 0.75rem 1rem;
-  border: 1px solid #ddd;
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: #fafafa;
+  background: var(--bg-elevated);
 }
 
 .novel-workspace {
@@ -269,8 +305,9 @@ button:disabled {
 }
 
 .sidebar-block {
-  border: 1px solid #ddd;
-  border-radius: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-panel);
   padding: 0.75rem 0.9rem;
   display: flex;
   flex-direction: column;
@@ -313,7 +350,7 @@ button:disabled {
 }
 
 .stats-list span {
-  color: #777;
+  color: var(--text-secondary);
 }
 
 .stats-list b {
@@ -340,13 +377,13 @@ button:disabled {
 /* 弱化破坏性操作：默认幽灵样式，确认时才醒目 */
 .button-ghost {
   background: transparent;
-  color: #d33;
+  color: var(--danger);
   border-color: transparent;
 }
 
 .button-ghost:hover {
-  background: rgba(221, 51, 51, 0.08);
-  border-color: rgba(221, 51, 51, 0.4);
+  background: var(--danger-bg);
+  border-color: var(--danger-border);
 }
 
 .novel-list {
@@ -367,8 +404,8 @@ button:disabled {
 }
 
 .project-item.active {
-  border-color: #646cff;
-  background: rgba(100, 108, 255, 0.12);
+  border-color: var(--accent);
+  background: var(--accent-bg);
 }
 
 .chapter-tree {
@@ -394,13 +431,14 @@ button:disabled {
 }
 
 .chapter-item.active {
-  border-color: #646cff;
-  background: rgba(100, 108, 255, 0.12);
+  border-color: var(--accent);
+  background: var(--accent-bg);
 }
 
 .novel-main {
-  border: 1px solid #ddd;
-  border-radius: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-panel);
   padding: 1rem 1.25rem;
   display: flex;
   flex-direction: column;
@@ -447,7 +485,7 @@ button:disabled {
 .tabs {
   display: flex;
   gap: 0.25rem;
-  border-bottom: 1px solid #ddd;
+  border-bottom: 1px solid var(--border);
 }
 
 .tab {
@@ -461,9 +499,9 @@ button:disabled {
 }
 
 .tab.active {
-  border-color: #ddd;
-  background: #fff;
-  color: #646cff;
+  border-color: var(--border);
+  background: var(--bg);
+  color: var(--accent);
   font-weight: 600;
 }
 
@@ -485,7 +523,7 @@ button:disabled {
 }
 
 .ai-placeholder {
-  background: #fafafa;
+  background: var(--bg-elevated);
 }
 
 .ai-placeholder button:disabled {
@@ -500,7 +538,7 @@ button:disabled {
 }
 
 .provider-card {
-  border: 1px solid #ddd;
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 0.85rem 1rem;
   display: flex;
@@ -524,13 +562,13 @@ button:disabled {
   padding: 0.1rem 0.5rem;
   border-radius: 10px;
   font-size: 0.72rem;
-  border: 1px solid #ccc;
-  background: #f5f5f5;
+  border: 1px solid var(--border);
+  background: var(--bg-panel);
 }
 
 .badge-image {
-  border-color: #2c9a5f;
-  color: #2c9a5f;
+  border-color: var(--success);
+  color: var(--success);
 }
 
 .badge-video {
@@ -544,9 +582,9 @@ button:disabled {
 }
 
 .badge-default {
-  border-color: #c98a12;
-  color: #c98a12;
-  background: #fff7e5;
+  border-color: var(--warning);
+  color: var(--warning);
+  background: var(--warning-bg);
 }
 
 .models {
@@ -559,7 +597,7 @@ button:disabled {
   align-items: center;
   gap: 0.6rem;
   padding: 0.4rem 0;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid var(--border);
   flex-wrap: wrap;
 }
 
@@ -573,7 +611,7 @@ button:disabled {
   flex-direction: column;
   gap: 0.4rem;
   padding: 0.5rem 0;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid var(--border);
 }
 
 .model-head {
@@ -594,19 +632,19 @@ button:disabled {
   font-size: 0.7rem;
   padding: 0.08rem 0.4rem;
   border-radius: 8px;
-  border: 1px solid #ccc;
+  border: 1px solid var(--border);
   white-space: nowrap;
 }
 
 .cap-badge.cap-on {
-  border-color: #2c9a5f;
-  color: #2c9a5f;
-  background: #f0faf4;
+  border-color: var(--success);
+  color: var(--success);
+  background: var(--success-bg);
 }
 
 .cap-badge.cap-off {
-  color: #aaa;
-  background: #f7f7f7;
+  color: var(--text-faint);
+  background: var(--bg-panel);
 }
 
 .cap-edit-form {
@@ -628,11 +666,11 @@ button:disabled {
   flex-wrap: wrap;
   align-items: flex-end;
   gap: 0.6rem;
-  border: 1px solid #eee;
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 0.7rem 0.9rem;
   margin-bottom: 0.5rem;
-  background: #fafafa;
+  background: var(--bg-elevated);
 }
 
 .gen-result {
@@ -646,7 +684,7 @@ button:disabled {
   max-width: 280px;
   max-height: 280px;
   border-radius: 8px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--border);
 }
 
 .gen-error {
@@ -655,7 +693,7 @@ button:disabled {
 }
 
 .test-result {
-  border: 1px solid #eee;
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 0.6rem 0.8rem;
   display: flex;
@@ -697,19 +735,19 @@ button:disabled {
 }
 
 .check-ok {
-  color: #2c9a5f;
+  color: var(--success);
 }
 
 .check-fail {
-  color: #d33;
+  color: var(--danger);
 }
 
 .check-skipped {
-  color: #888;
+  color: var(--text-secondary);
 }
 
 .ok {
-  color: #2c9a5f;
+  color: var(--success);
 }
 
 .checkbox-row {
@@ -719,7 +757,7 @@ button:disabled {
 }
 
 .builtin-section {
-  border-top: 1px solid #eee;
+  border-top: 1px solid var(--border);
   padding-top: 0.6rem;
   display: flex;
   flex-direction: column;
@@ -741,7 +779,7 @@ button:disabled {
 }
 
 .ai-result {
-  border-top: 1px solid #eee;
+  border-top: 1px solid var(--border);
   padding-top: 0.6rem;
   display: flex;
   flex-direction: column;
@@ -755,7 +793,7 @@ button:disabled {
 }
 
 .bible-section {
-  border-top: 1px solid #eee;
+  border-top: 1px solid var(--border);
   padding-top: 0.5rem;
 }
 
@@ -807,7 +845,7 @@ button:disabled {
   display: inline-flex;
   align-items: center;
   margin-left: 0.35rem;
-  color: #888;
+  color: var(--text-secondary);
   cursor: help;
 }
 
@@ -873,8 +911,8 @@ button:disabled {
 }
 
 .project-row.active .project-item {
-  border-color: #646cff;
-  background: rgba(100, 108, 255, 0.12);
+  border-color: var(--accent);
+  background: var(--accent-bg);
 }
 
 .project-actions {
@@ -891,7 +929,7 @@ button:disabled {
   gap: 1rem;
   background: transparent;
   color: inherit;
-  border: 1px solid #ddd;
+  border: 1px solid var(--border);
 }
 
 .project-name {
@@ -899,11 +937,11 @@ button:disabled {
 }
 
 .muted {
-  color: #777;
+  color: var(--text-secondary);
   font-size: 0.85rem;
 }
 
 .error {
-  color: #d33;
+  color: var(--danger);
   margin: 0;
 }
