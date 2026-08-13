@@ -18,9 +18,15 @@ def test_presets_listed(client):
     assert response.status_code == 200
     presets = {p["key"]: p for p in response.json()}
     assert "openai" in presets and "ollama" in presets and "bailian" in presets
+    assert "bailian-intl" in presets
     assert presets["openai"]["discoverable"] is True
     # 百炼国际站实测支持 OpenAI 兼容 /models（2026-08-13）
     assert presets["bailian"]["discoverable"] is True
+    assert presets["bailian"]["base_url"] == "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    assert (
+        presets["bailian-intl"]["base_url"]
+        == "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+    )
 
 
 def test_create_provider_with_preset(client):
@@ -41,6 +47,19 @@ def test_duplicate_preset_provider_rejected(client):
     dup = _create_provider(client)
     assert dup.status_code == 409
     assert dup.json()["error"]["code"] == "provider_already_exists"
+
+
+def test_bailian_cn_and_intl_coexist(client):
+    cn = client.post(
+        "/api/providers", json={"preset_key": "bailian", "api_key": "sk-cn"}
+    )
+    intl = client.post(
+        "/api/providers", json={"preset_key": "bailian-intl", "api_key": "sk-intl"}
+    )
+    assert cn.status_code == 201
+    assert intl.status_code == 201
+    assert cn.json()["api_base_url"].startswith("https://dashscope.aliyuncs.com")
+    assert intl.json()["api_base_url"].startswith("https://dashscope-intl.aliyuncs.com")
 
 
 class _FailingSecretStore:
@@ -241,6 +260,12 @@ def test_preset_models_endpoint(client):
     assert any(m["id"] == "qwen-plus" and m["type"] == "llm" for m in items)
     assert any(m["id"] == "wan2.1-t2v" and m["type"] == "video" for m in items)
     assert client.get("/api/providers/presets/unknown/models").status_code == 422
+
+
+def test_preset_models_shared_between_bailian_sites(client):
+    cn = client.get("/api/providers/presets/bailian/models").json()
+    intl = client.get("/api/providers/presets/bailian-intl/models").json()
+    assert {m["id"] for m in cn} == {m["id"] for m in intl}
 
 
 def test_bulk_add_models_with_types(client):

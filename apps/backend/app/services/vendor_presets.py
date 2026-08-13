@@ -9,10 +9,26 @@ class VendorPreset:
     name: str
     base_url: str
     needs_key: bool
-    # 是否支持自动拉取模型列表（OpenAI 兼容 /models；实测百炼不支持）
+    # 是否支持自动拉取模型列表（OpenAI 兼容 /models）
     discoverable: bool = True
+    # 内置模型目录复用另一个 preset 的目录（如 bailian-intl 复用 bailian）
+    catalog_key: str = ""
     # (模型 ID 片段, 类型) 有序规则，先匹配先得；未匹配默认 llm
     type_rules: tuple[tuple[str, str], ...] = ()
+
+
+_BAILIAN_TYPE_RULES: tuple[tuple[str, str], ...] = (
+    ("qwen-image", "image"),
+    ("wanx", "image"),
+    ("wan2.1-t2v", "video"),
+    ("wan2.2-t2v", "video"),
+    ("wan-video", "video"),
+    ("qwen-video", "video"),
+    ("z-image", "image"),
+    ("image", "image"),
+    ("qwen", "llm"),
+    ("text-embedding", "llm"),
+)
 
 
 PRESETS: dict[str, VendorPreset] = {
@@ -53,22 +69,20 @@ PRESETS: dict[str, VendorPreset] = {
     ),
     "bailian": VendorPreset(
         key="bailian",
-        name="阿里云百炼",
+        name="阿里云百炼（国内站）",
         base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
         needs_key=True,
         discoverable=True,
-        type_rules=(
-            ("qwen-image", "image"),
-            ("wanx", "image"),
-            ("wan2.1-t2v", "video"),
-            ("wan2.2-t2v", "video"),
-            ("wan-video", "video"),
-            ("qwen-video", "video"),
-            ("z-image", "image"),
-            ("image", "image"),
-            ("qwen", "llm"),
-            ("text-embedding", "llm"),
-        ),
+        type_rules=_BAILIAN_TYPE_RULES,
+    ),
+    "bailian-intl": VendorPreset(
+        key="bailian-intl",
+        name="阿里云百炼（国际站）",
+        base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+        needs_key=True,
+        discoverable=True,
+        catalog_key="bailian",
+        type_rules=_BAILIAN_TYPE_RULES,
     ),
     "zhipu": VendorPreset(
         key="zhipu",

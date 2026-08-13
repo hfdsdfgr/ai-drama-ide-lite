@@ -3,6 +3,8 @@
 import json
 from pathlib import Path
 
+from app.services.vendor_presets import get_preset
+
 _CATALOG_PATH = Path(__file__).with_name("vendor_models.json")
 
 
@@ -13,7 +15,9 @@ def load_catalog() -> dict:
 
 def get_builtin_models(preset_key: str) -> list[dict]:
     catalog = load_catalog()
-    return catalog.get(preset_key, [])
+    preset = get_preset(preset_key)
+    key = preset.catalog_key if preset and preset.catalog_key else preset_key
+    return catalog.get(key, [])
 
 
 def get_builtin_capabilities(preset_key: str, model_id: str) -> list[str] | None:

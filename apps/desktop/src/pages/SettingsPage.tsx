@@ -61,6 +61,10 @@ export function SettingsPage() {
     modelId: string;
     caps: CapabilityKey[];
   } | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<{
+    kind: "provider" | "model";
+    id: string;
+  } | null>(null);
 
   const [formPreset, setFormPreset] = useState("");
   const [formName, setFormName] = useState("");
@@ -210,9 +214,11 @@ export function SettingsPage() {
   }
 
   async function handleDeleteProvider(provider: Provider) {
-    if (!window.confirm(`确定删除 Provider「${provider.name}」？其下模型将一并删除。`)) {
+    if (confirmDelete?.kind !== "provider" || confirmDelete.id !== provider.id) {
+      setConfirmDelete({ kind: "provider", id: provider.id });
       return;
     }
+    setConfirmDelete(null);
     setError("");
     try {
       await deleteProvider(provider.id);
@@ -250,7 +256,11 @@ export function SettingsPage() {
   }
 
   async function handleDeleteModel(model: Model) {
-    if (!window.confirm(`确定删除模型「${model.model_id}」？`)) return;
+    if (confirmDelete?.kind !== "model" || confirmDelete.id !== model.id) {
+      setConfirmDelete({ kind: "model", id: model.id });
+      return;
+    }
+    setConfirmDelete(null);
     setError("");
     try {
       await deleteModel(model.id);
@@ -431,9 +441,14 @@ export function SettingsPage() {
           )}
           {!editing && !isCustom && selectedPreset?.key === "bailian" && (
             <p className="muted">
-              阿里云百炼分国内站 / 国际站：国内 Key 用{" "}
-              dashscope.aliyuncs.com，国际 Key 用 dashscope-intl.aliyuncs.com。
-              保存后可编辑 Base URL 切换站点。
+              国内站 Key 在百炼控制台（国内）获取；国际站 Key 请选择
+              「阿里云百炼（国际站）」预设。
+            </p>
+          )}
+          {!editing && !isCustom && selectedPreset?.key === "bailian-intl" && (
+            <p className="muted">
+              国际站 Key 在阿里云国际站百炼控制台获取；国内站 Key 请选择
+              「阿里云百炼（国内站）」预设。
             </p>
           )}
           {!editing && !isCustom && selectedPreset && !selectedPreset.discoverable && (
@@ -456,7 +471,12 @@ export function SettingsPage() {
               <div key={provider.id} className="provider-card">
                 <div className="provider-head">
                   <strong>{provider.name}</strong>
-                  <span className="badge">{provider.preset_key ?? "自定义"}</span>
+                  <span className="badge">
+                    {provider.preset_key
+                      ? presets.find((p) => p.key === provider.preset_key)?.name ??
+                        provider.preset_key
+                      : "自定义"}
+                  </span>
                   <span className="muted">
                     {provider.has_api_key ? "密钥已配置" : "密钥未配置"}
                   </span>
@@ -489,13 +509,32 @@ export function SettingsPage() {
                   >
                     {testingId === provider.id ? "测试中…" : "测试连接"}
                   </button>
-                  <button
-                    type="button"
-                    className="button-danger"
-                    onClick={() => handleDeleteProvider(provider)}
-                  >
-                    删除
-                  </button>
+                  {confirmDelete?.kind === "provider" &&
+                  confirmDelete.id === provider.id ? (
+                    <>
+                      <button
+                        type="button"
+                        className="button-danger"
+                        onClick={() => handleDeleteProvider(provider)}
+                      >
+                        确认删除
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDelete(null)}
+                      >
+                        取消
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      className="button-danger"
+                      onClick={() => handleDeleteProvider(provider)}
+                    >
+                      删除
+                    </button>
+                  )}
                 </div>
 
                 {testResults[provider.id] && (
@@ -626,13 +665,32 @@ export function SettingsPage() {
                                 编辑能力
                               </button>
                             ))}
-                          <button
-                            type="button"
-                            className="button-danger"
-                            onClick={() => handleDeleteModel(model)}
-                          >
-                            删除
-                          </button>
+                          {confirmDelete?.kind === "model" &&
+                          confirmDelete.id === model.id ? (
+                            <>
+                              <button
+                                type="button"
+                                className="button-danger"
+                                onClick={() => handleDeleteModel(model)}
+                              >
+                                确认删除
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDelete(null)}
+                              >
+                                取消
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              type="button"
+                              className="button-danger"
+                              onClick={() => handleDeleteModel(model)}
+                            >
+                              删除
+                            </button>
+                          )}
                         </div>
                       </div>
                     ))}
