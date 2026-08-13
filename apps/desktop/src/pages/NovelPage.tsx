@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { InfoTip } from "../components/InfoTip";
 import {
@@ -351,6 +351,13 @@ export function NovelPage() {
   const selectedChapter: Chapter | undefined =
     detail?.chapters.find((c) => c.id === chapterId) ?? undefined;
   const currentNovelId = detail?.novel.id;
+  const totalWords = useMemo(
+    () =>
+      detail
+        ? detail.chapters.reduce((sum, c) => sum + c.content.length, 0)
+        : 0,
+    [detail],
+  );
 
   useEffect(() => {
     if (!currentNovelId) return;
@@ -658,60 +665,45 @@ export function NovelPage() {
   return (
     <div className="page novel-page">
       <div className="novel-topbar">
-        <div className="page-head">
-          <h2>小说</h2>
-          {projects.length === 0 ? (
-            <p className="muted">还没有项目，请先在「主页」创建。</p>
-          ) : (
-            <label className="project-picker">
-              项目
-              <select value={projectId} onChange={(e) => setProjectId(e.target.value)}>
-                <option value="">选择项目</option>
-                {projects.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-        </div>
+        {projects.length === 0 && (
+          <p className="muted">还没有项目，请先在「主页」创建。</p>
+        )}
         {error && <p className="error">{error}</p>}
         {projectId && (
-          <div className="toolbar novel-tools">
-            <form onSubmit={handleSearch} className="toolbar">
-              <input
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-                placeholder="搜索小说 / 章节内容"
-              />
-              <button type="submit">搜索</button>
-            </form>
-            <form onSubmit={handleCreate} className="toolbar">
-              <input
-                value={newNovelTitle}
-                onChange={(e) => setNewNovelTitle(e.target.value)}
-                placeholder="新小说标题"
-              />
-              <button type="submit">新建</button>
-            </form>
+          <form onSubmit={handleSearch} className="toolbar search-form">
             <input
-              type="file"
-              id="novel-import-input"
-              accept=".txt,.md,.markdown,.docx"
-              style={{ display: "none" }}
-              onChange={handleImport}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="搜索小说 / 章节内容"
             />
-            <label htmlFor="novel-import-input" className="button-like">
-              导入 TXT/MD/DOCX
-            </label>
-          </div>
+            <button type="submit">搜索</button>
+          </form>
         )}
       </div>
 
       {projectId && (
         <div className="novel-workspace">
           <aside className="novel-sidebar">
+            {projects.length > 0 && (
+              <div className="sidebar-block">
+                <div className="sidebar-head">
+                  <h3>项目</h3>
+                </div>
+                <select
+                  className="project-select"
+                  value={projectId}
+                  onChange={(e) => setProjectId(e.target.value)}
+                >
+                  <option value="">选择项目</option>
+                  {projects.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <div className="sidebar-block">
               <h3>小说</h3>
             {loading ? (
@@ -743,29 +735,44 @@ export function NovelPage() {
             )}
             </div>
 
-          {detail && (
-            <div className="sidebar-block">
-              <div className="sidebar-head">
-                <h3>章节</h3>
-                <button type="button" onClick={handleAddChapter}>
-                  + 新章节
-                </button>
+            {detail && (
+              <div className="sidebar-block">
+                <div className="sidebar-head">
+                  <h3>章节</h3>
+                  <button type="button" onClick={handleAddChapter}>
+                    + 新章节
+                  </button>
+                </div>
+                <ul className="chapter-tree">
+                  {detail.chapters.map((c) => (
+                    <li key={c.id}>
+                      <button
+                        type="button"
+                        className={
+                          c.id === chapterId ? "chapter-item active" : "chapter-item"
+                        }
+                        onClick={() => selectChapter(c.id)}
+                      >
+                        {c.title || "未命名章节"}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
               </div>
-              <ul className="chapter-tree">
-                {detail.chapters.map((c) => (
-                  <li key={c.id}>
-                    <button
-                      type="button"
-                      className={
-                        c.id === chapterId ? "chapter-item active" : "chapter-item"
-                      }
-                      onClick={() => selectChapter(c.id)}
-                    >
-                      {c.title || "未命名章节"}
-                    </button>
-                  </li>
-                ))}
-              </ul>
+            )}
+
+            <div className="sidebar-block">
+              <h3>导入与管理</h3>
+              <input
+                type="file"
+                id="novel-import-input"
+                accept=".txt,.md,.markdown,.docx"
+                style={{ display: "none" }}
+                onChange={handleImport}
+              />
+              <label htmlFor="novel-import-input" className="button-like">
+                导入 TXT/MD/DOCX
+              </label>
               {confirmDelete === "novel" ? (
                 <div className="actions">
                   <button
@@ -782,17 +789,48 @@ export function NovelPage() {
                     取消
                   </button>
                 </div>
-              ) : (
+              ) : detail ? (
                 <button
                   type="button"
-                  className="button-danger"
+                  className="button-danger button-ghost"
                   onClick={handleDeleteNovel}
                 >
                   删除小说
                 </button>
-              )}
+              ) : null}
             </div>
-          )}
+
+            <form className="sidebar-block" onSubmit={handleCreate}>
+              <h3>新建小说</h3>
+              <input
+                value={newNovelTitle}
+                onChange={(e) => setNewNovelTitle(e.target.value)}
+                placeholder="新小说标题"
+              />
+              <button type="submit">创建</button>
+            </form>
+
+            <div className="sidebar-block">
+              <h3>项目统计</h3>
+              <ul className="stats-list">
+                <li>
+                  <span>章节</span>
+                  <b>{detail?.chapters.length ?? 0}</b>
+                </li>
+                <li>
+                  <span>字数</span>
+                  <b>{totalWords}</b>
+                </li>
+                <li>
+                  <span>角色</span>
+                  <b>{bible?.characters.length ?? 0}</b>
+                </li>
+                <li>
+                  <span>场景</span>
+                  <b>{bible?.locations.length ?? 0}</b>
+                </li>
+              </ul>
+            </div>
         </aside>
 
         <section className="novel-main">
@@ -894,6 +932,25 @@ export function NovelPage() {
             <div className="inspector-body">
               {inspectorTab === "ai" ? (
                 <>
+                <div className="card inspector-card assistant-head">
+                  <h3>AI 助手</h3>
+                  <p className="muted">
+                    负责创意、大纲、续写、扩写、重写与整本小说生成。
+                  </p>
+                </div>
+                {selectedChapter && (
+                  <div className="card inspector-card context-card">
+                    <h4>当前上下文</h4>
+                    <p className="muted">
+                      {selectedChapter.title || "未命名章节"} · 已写{" "}
+                      {selectedChapter.content.length} 字
+                    </p>
+                    <p className="muted">
+                      下一步：用下方「AI 创作」续写 / 扩写 / 重写本章，或用「AI
+                      撰写」生成整本小说。
+                    </p>
+                  </div>
+                )}
                 <div className="card inspector-card">
                   <h3>AI 创作</h3>
                   {llmModels.length === 0 ? (
@@ -1251,6 +1308,14 @@ export function NovelPage() {
             </div>
               </>
               ) : (
+                <>
+                <div className="card inspector-card assistant-head">
+                  <h3>Story Bible</h3>
+                  <p className="muted">
+                    项目长期设定：世界观、人物、地点、时间线。AI
+                    写作会以它为设定依据。
+                  </p>
+                </div>
                 <div className="card inspector-card">
                   <h3>故事分析（Story Bible）</h3>
               {llmModels.length === 0 ? (
@@ -1382,6 +1447,7 @@ export function NovelPage() {
                 </>
               )}
             </div>
+                </>
               )}
             </div>
           </aside>

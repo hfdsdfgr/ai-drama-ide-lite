@@ -226,7 +226,16 @@ button:disabled {
 .novel-topbar {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.5rem;
+}
+
+.novel-topbar .search-form {
+  align-self: flex-end;
+  gap: 0.4rem;
+}
+
+.novel-topbar .search-form input {
+  width: 240px;
 }
 
 .project-picker {
@@ -255,6 +264,8 @@ button:disabled {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  max-height: calc(100vh - 180px);
+  overflow-y: auto;
 }
 
 .sidebar-block {
@@ -279,6 +290,63 @@ button:disabled {
 
 .sidebar-head h3 {
   margin: 0;
+}
+
+.project-select {
+  width: 100%;
+}
+
+.stats-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.35rem 1rem;
+}
+
+.stats-list li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  font-size: 0.82rem;
+}
+
+.stats-list span {
+  color: #777;
+}
+
+.stats-list b {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-h);
+}
+
+.assistant-head h3 {
+  margin: 0;
+}
+
+.assistant-head p {
+  margin: 0;
+}
+
+.context-card h4 {
+  margin: 0 0 0.35rem;
+}
+
+.context-card p {
+  margin: 0 0 0.25rem;
+}
+
+/* 弱化破坏性操作：默认幽灵样式，确认时才醒目 */
+.button-ghost {
+  background: transparent;
+  color: #d33;
+  border-color: transparent;
+}
+
+.button-ghost:hover {
+  background: rgba(221, 51, 51, 0.08);
+  border-color: rgba(221, 51, 51, 0.4);
 }
 
 .novel-list {
