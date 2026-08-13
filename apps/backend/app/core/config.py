@@ -34,8 +34,13 @@ class Settings(BaseSettings):
 
     @property
     def projects_dir(self) -> Path:
-        """Phase 0 项目存储目录（JSON 文件，Phase 1 迁移到 SQLite）。"""
+        """项目存储根目录（每个项目一个子目录，大文件落盘）。"""
         return self.data_dir / "projects"
+
+    @property
+    def db_path(self) -> Path:
+        """SQLite 数据库文件路径（Phase 1 起为结构化数据唯一事实源）。"""
+        return self.data_dir / "ai_drama_ide.db"
 
 
 @lru_cache

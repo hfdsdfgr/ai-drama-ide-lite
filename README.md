@@ -163,6 +163,14 @@ Create Project
 - Tauri 2 桌面壳：已初始化并通过编译验证（Rust GNU 工具链 + MinGW）
 - **注意**：MinGW 工具链无法处理含空格的构建路径（`G:\Vibe Coding\AICV`），桌面构建必须通过无空格 junction 路径，见下方「桌面模式」。
 
+**Phase 1（Project System）已完成**：
+
+- SQLite 结构化存储（基线 schema 覆盖 Novel/Story/Characters/Locations/Props/Episodes/Scenes/Shots/Assets/Jobs/Versions）
+- Project CRUD（软删除）+ 自动保存 + 重启恢复
+- 项目导入 / 导出（zip + manifest，含 zip-slip 防护）
+- Phase 0 JSON 项目自动迁移归档；Asset ID / Project ID 规范
+- 测试：后端 pytest 16 项、前端 Vitest 5 项；lint / build 通过；端到端验证通过
+
 ## 快速开始
 
 环境要求：Python 3.12+、Node.js 20+、Git。

@@ -55,16 +55,16 @@ Phase 1 — Project System
 建立整个项目的数据基础。
 
 Tasks
- SQLite
- Project Model
- Project CRUD
- Local File Storage
- Asset ID
- Project ID
- 自动保存
- 项目恢复
- Project Import
- Project Export
+- [x] SQLite（基线 schema：projects/novels/stories/characters/locations/props/episodes/scenes/shots/assets/jobs/versions）
+- [x] Project Model
+- [x] Project CRUD（含软删除）
+- [x] Local File Storage（项目目录 + 子目录结构）
+- [x] Asset ID（asset_type_slug_seq 规范）
+- [x] Project ID（proj_ 前缀）
+- [x] 自动保存（前端 800ms 防抖）
+- [x] 项目恢复（重启后数据完整；Phase 0 JSON 自动迁移归档）
+- [x] Project Import（zip + manifest，防 zip-slip）
+- [x] Project Export（zip）
 数据结构
 Project
 ├── Novel

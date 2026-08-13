@@ -7,6 +7,8 @@ from app.api.routes import health, projects
 from app.core.config import Settings, get_settings
 from app.core.errors import register_exception_handlers
 from app.core.logging import get_logger, setup_logging
+from app.db.database import init_db
+from app.services.project_repo import migrate_legacy_json_projects
 
 logger = get_logger("main")
 
@@ -14,6 +16,8 @@ logger = get_logger("main")
 def create_app(settings: Settings | None = None) -> FastAPI:
     config = settings or get_settings()
     setup_logging(level=config.log_level, log_dir=config.data_dir / "logs")
+    init_db(config.db_path)
+    migrate_legacy_json_projects(config.db_path, config.projects_dir)
 
     app = FastAPI(title=config.app_name, version="0.1.0")
     app.state.settings = config

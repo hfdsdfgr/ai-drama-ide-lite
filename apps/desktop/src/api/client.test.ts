@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { request } from "./client";
+import { request, requestBlob } from "./client";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -50,5 +50,32 @@ describe("request", () => {
     const error = await request("/projects/x").catch((e: unknown) => e);
     expect((error as { status: number }).status).toBe(502);
     expect((error as { message: string }).message).toContain("502");
+  });
+
+  it("returns undefined on a 204 response", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(null, { status: 204 })),
+    );
+
+    const result = await request("/projects/x", { method: "DELETE" });
+    expect(result).toBeUndefined();
+  });
+
+  it("requestBlob returns the response body as a blob", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response("zipdata", {
+            status: 200,
+            headers: { "Content-Type": "application/zip" },
+          }),
+      ),
+    );
+
+    const blob = await requestBlob("/projects/x/export");
+    expect(blob).toBeInstanceOf(Blob);
+    expect(await blob.text()).toBe("zipdata");
   });
 });

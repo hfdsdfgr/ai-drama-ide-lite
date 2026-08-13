@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 
-import { createProject, listProjects, updateProject } from "../api/projects";
+import {
+  createProject,
+  deleteProject,
+  exportProject,
+  importProject,
+  listProjects,
+  updateProject,
+} from "../api/projects";
 import type { Project } from "../types/project";
 
 export function ProjectPage() {
@@ -12,6 +19,9 @@ export function ProjectPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [saveState, setSaveState] = useState<
+    "idle" | "saving" | "saved" | "error"
+  >("idle");
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -28,6 +38,26 @@ export function ProjectPage() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  // 自动保存：描述编辑停止 800ms 后自动保存
+  useEffect(() => {
+    if (!selected || draft === selected.description) return;
+    setSaveState("saving");
+    const timer = setTimeout(async () => {
+      try {
+        const updated = await updateProject(selected.id, { description: draft });
+        setSelected(updated);
+        setProjects((prev) =>
+          prev.map((p) => (p.id === updated.id ? updated : p)),
+        );
+        setSaveState("saved");
+      } catch (err) {
+        setSaveState("error");
+        setError((err as Error).message);
+      }
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [draft, selected]);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -57,6 +87,7 @@ export function ProjectPage() {
     try {
       const updated = await updateProject(selected.id, { description: draft });
       setSelected(updated);
+      setSaveState("saved");
       setProjects((prev) =>
         prev.map((p) => (p.id === updated.id ? updated : p)),
       );
@@ -67,9 +98,65 @@ export function ProjectPage() {
     }
   }
 
+  async function handleDelete() {
+    if (!selected) return;
+    if (!window.confirm(`确定删除项目「${selected.name}」？此操作不可撤销。`)) {
+      return;
+    }
+    setError("");
+    try {
+      await deleteProject(selected.id);
+      setProjects((prev) => prev.filter((p) => p.id !== selected.id));
+      setSelected(null);
+      setDraft("");
+      setSaveState("idle");
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setError("");
+    try {
+      const project = await importProject(file);
+      setProjects((prev) => [project, ...prev]);
+      setSelected(project);
+      setDraft(project.description);
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  async function handleExport() {
+    if (!selected) return;
+    setError("");
+    try {
+      await exportProject(selected.id);
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
   return (
     <div className="page">
-      <h2>项目</h2>
+      <div className="page-head">
+        <h2>项目</h2>
+        <div className="toolbar">
+          <input
+            type="file"
+            id="project-import-input"
+            accept=".zip"
+            style={{ display: "none" }}
+            onChange={handleImport}
+          />
+          <label htmlFor="project-import-input" className="button-like">
+            导入项目
+          </label>
+        </div>
+      </div>
 
       <form className="card" onSubmit={handleCreate}>
         <h3>新建项目</h3>
@@ -137,6 +224,23 @@ export function ProjectPage() {
           <button type="button" onClick={handleSave} disabled={saving}>
             {saving ? "保存中…" : "保存"}
           </button>
+          <div className="actions">
+            <button type="button" onClick={handleExport}>
+              导出项目
+            </button>
+            <button
+              type="button"
+              className="button-danger"
+              onClick={handleDelete}
+            >
+              删除项目
+            </button>
+            <span className="muted save-status">
+              {saveState === "saving" && "自动保存中…"}
+              {saveState === "saved" && "已保存"}
+              {saveState === "error" && "保存失败"}
+            </span>
+          </div>
         </div>
       )}
     </div>

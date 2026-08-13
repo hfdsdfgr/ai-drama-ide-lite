@@ -52,3 +52,12 @@ def test_validation_error_message(client):
     response = client.post("/api/projects", json={"name": ""})
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "validation_error"
+
+
+def test_delete_project_soft(client):
+    created = client.post("/api/projects", json={"name": "待删除"}).json()
+    response = client.delete(f"/api/projects/{created['id']}")
+    assert response.status_code == 204
+    # 软删除后不可见、不可打开，但数据仍在库中
+    assert client.get(f"/api/projects/{created['id']}").status_code == 404
+    assert client.get("/api/projects").json() == []

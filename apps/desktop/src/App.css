@@ -37,6 +37,17 @@
   gap: 1rem;
 }
 
+.page-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.toolbar {
+  display: flex;
+  gap: 0.5rem;
+}
+
 .card {
   border: 1px solid #ddd;
   border-radius: 8px;
@@ -77,6 +88,31 @@ button {
 button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.button-like {
+  padding: 0.45rem 1rem;
+  border-radius: 6px;
+  border: 1px solid #646cff;
+  background: #646cff;
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.button-danger {
+  background: #d33;
+  border-color: #d33;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.save-status {
+  margin-left: auto;
 }
 
 .project-list {

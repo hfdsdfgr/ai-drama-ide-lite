@@ -80,6 +80,7 @@
 - 打补丁时中文上下文必须与文件真实内容（UTF-8）一致，不能粘贴乱码显示内容，否则匹配失败。
 - 本机 black 缓存损坏会挂起：运行前先设置 `$env:BLACK_CACHE_DIR = "$env:TEMP\black_cache_qn"`。
 - API 返回的 UTF-8 中文在 PowerShell 控制台显示成乱码（如 `äº”ç²®æ¶²`）是**控制台编码误读**，不是数据问题；用 `Invoke-RestMethod | ConvertTo-Json` 或写文件验证时注意区分。
+- **PowerShell 命令里的中文字面量可能编码不一致**：脚本参数中的中文常量与 API 返回（UTF-8 解析）比较会得到 False（如 `$x.name -eq '中文'`），属脚本传输编码问题，不是数据问题；验证中文数据用 Python 查库或「解析值对解析值」比较。
 - Python 规范：Black 格式化 + Pylint 检查（`pylint -E api python_engine` 应为 0 错误）+ pytest；提交遵循 Conventional Commits（feat:/fix:/refactor:/docs:）。
 - PowerShell 5.1 字符串插值陷阱：`"$var?name=foo"` 会把 `$var?` 解析成特殊变量，结果变成 `=foo`（URL 里的 `?` 后内容全部丢失）。带查询参数的 URL 拼接必须用 `$var + '?name=foo'` 或 `${var}?name=foo`，否则 curl/Invoke-RestMethod 拿到畸形 URL（curl 报 `URL rejected: Bad hostname`）。
 - **PowerShell 5.1 发中文 JSON body 变 `?`**：`Invoke-RestMethod -Method Patch -Body $jsonString` 默认按 ASCII 编码发送，所有中文变成问号（GitHub 仓库 description、Release 说明都中过招）。必须先把 body 转成 UTF-8 字节数组再发：`$bytes = [Text.Encoding]::UTF8.GetBytes($json); Invoke-RestMethod ... -ContentType 'application/json; charset=utf-8' -Body $bytes`；Topics 等纯英文字段不受影响。
