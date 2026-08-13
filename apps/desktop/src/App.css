@@ -533,6 +533,45 @@ button:disabled {
   text-overflow: ellipsis;
 }
 
+.chapter-row {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.chapter-row .chapter-item {
+  flex: 1;
+  width: auto;
+}
+
+.chapter-delete {
+  border: none;
+  background: transparent;
+  color: var(--text-faint);
+  padding: 0.1rem 0.4rem;
+  font-size: 0.9rem;
+  line-height: 1;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+
+.chapter-delete:hover {
+  color: var(--danger);
+  background: var(--danger-bg);
+}
+
+.chapter-row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  flex-shrink: 0;
+}
+
+.chapter-row-actions button {
+  padding: 0.15rem 0.45rem;
+  font-size: 0.75rem;
+}
+
 .chapter-item.active {
   border-color: var(--accent);
   background: var(--accent-bg);

@@ -87,6 +87,7 @@ export function NovelPage() {
   const [confirmDelete, setConfirmDelete] = useState<
     "chapter" | "novel" | null
   >(null);
+  const [deleteChapterId, setDeleteChapterId] = useState<string | null>(null);
   const [llmModels, setLlmModels] = useState<Model[]>([]);
   const [aiModelId, setAiModelId] = useState("");
   const [aiBusy, setAiBusy] = useState(false);
@@ -207,16 +208,16 @@ export function NovelPage() {
     }
   }
 
-  async function handleDeleteChapter() {
-    if (!detail || !chapterId) return;
-    if (confirmDelete !== "chapter") {
-      setConfirmDelete("chapter");
+  async function handleDeleteChapter(id: string) {
+    if (!detail) return;
+    if (deleteChapterId !== id) {
+      setDeleteChapterId(id);
       return;
     }
-    setConfirmDelete(null);
+    setDeleteChapterId(null);
     setError("");
     try {
-      await deleteChapter(projectId, detail.novel.id, chapterId);
+      await deleteChapter(projectId, detail.novel.id, id);
       const loaded = await getNovel(projectId, detail.novel.id);
       setDetail(loaded);
       const first = loaded.chapters[0] ?? null;
@@ -606,6 +607,7 @@ export function NovelPage() {
 
   useEffect(() => {
     setConfirmDelete(null);
+    setDeleteChapterId(null);
   }, [chapterId, detail?.novel.id]);
 
   // AI 撰写向导步骤：1 情节复杂度 → 2 初步想法 → 3 章节大纲 → 4 内容生成
@@ -702,15 +704,45 @@ export function NovelPage() {
                 <ul className="chapter-tree">
                   {detail.chapters.map((c) => (
                     <li key={c.id}>
-                      <button
-                        type="button"
-                        className={
-                          c.id === chapterId ? "chapter-item active" : "chapter-item"
-                        }
-                        onClick={() => selectChapter(c.id)}
-                      >
-                        {c.title || "未命名章节"}
-                      </button>
+                      <div className="chapter-row">
+                        <button
+                          type="button"
+                          className={
+                            c.id === chapterId
+                              ? "chapter-item active"
+                              : "chapter-item"
+                          }
+                          onClick={() => selectChapter(c.id)}
+                        >
+                          {c.title || "未命名章节"}
+                        </button>
+                        {deleteChapterId === c.id ? (
+                          <span className="chapter-row-actions">
+                            <button
+                              type="button"
+                              className="button-danger"
+                              onClick={() => handleDeleteChapter(c.id)}
+                            >
+                              确认
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDeleteChapterId(null)}
+                            >
+                              取消
+                            </button>
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            className="chapter-delete"
+                            title="删除本章"
+                            onClick={() => handleDeleteChapter(c.id)}
+                          >
+                            ×
+                          </button>
+                        )}
+                      </div>
                     </li>
                   ))}
                 </ul>
@@ -845,18 +877,18 @@ export function NovelPage() {
                         {chapterSave === "saved" && "已保存"}
                         {chapterSave === "error" && "保存失败"}
                       </span>
-                      {confirmDelete === "chapter" ? (
+                      {deleteChapterId === chapterId ? (
                         <>
                           <button
                             type="button"
                             className="button-danger"
-                            onClick={handleDeleteChapter}
+                            onClick={() => handleDeleteChapter(chapterId!)}
                           >
                             确认删除
                           </button>
                           <button
                             type="button"
-                            onClick={() => setConfirmDelete(null)}
+                            onClick={() => setDeleteChapterId(null)}
                           >
                             取消
                           </button>
@@ -865,7 +897,7 @@ export function NovelPage() {
                         <button
                           type="button"
                           className="button-danger button-ghost"
-                          onClick={handleDeleteChapter}
+                          onClick={() => handleDeleteChapter(chapterId!)}
                         >
                           删除章节
                         </button>
