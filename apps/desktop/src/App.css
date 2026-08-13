@@ -1,34 +1,140 @@
 .app {
-  max-width: 1280px;
+  display: flex;
+  flex-direction: column;
+  min-height: 100svh;
+  max-width: 1680px;
   margin: 0 auto;
-  padding: 1.5rem;
 }
 
 .app-header {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 0.6rem 1.5rem;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  position: sticky;
+  top: 0;
+  z-index: 30;
 }
 
-.app-header nav {
+.app-brand {
   display: flex;
-  gap: 0.5rem;
+  align-items: baseline;
+  gap: 0.4rem;
+  white-space: nowrap;
 }
 
-.app-header nav button {
-  padding: 0.4rem 1rem;
-  border: 1px solid #888;
+.app-logo {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-h);
+  letter-spacing: -0.2px;
+}
+
+.app-version {
+  font-size: 0.68rem;
+  padding: 0.08rem 0.45rem;
+  border-radius: 999px;
+  border: 1px solid var(--accent-border);
+  color: var(--accent);
+}
+
+.module-nav {
+  display: flex;
+  gap: 0.25rem;
+  flex: 1;
+  justify-content: center;
+  min-width: 0;
+}
+
+.module-nav button,
+.app-actions button {
+  padding: 0.35rem 0.85rem;
+  border: 1px solid transparent;
   border-radius: 6px;
   background: transparent;
+  color: var(--text);
   cursor: pointer;
+  font-size: 0.9rem;
+  white-space: nowrap;
 }
 
-.app-header nav button.nav-active {
-  background: #646cff;
-  border-color: #646cff;
-  color: #fff;
+.module-nav button:hover:not(:disabled),
+.app-actions button:hover {
+  background: var(--accent-bg);
+  color: var(--text-h);
+}
+
+.module-nav button.nav-active,
+.app-actions button.nav-active {
+  background: var(--accent-bg);
+  border-color: var(--accent-border);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.module-nav button:disabled {
+  opacity: 0.75;
+  cursor: not-allowed;
+}
+
+.nav-soon {
+  margin-left: 0.35rem;
+  font-size: 0.62rem;
+  color: var(--text);
+  opacity: 0.75;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.02rem 0.3rem;
+}
+
+.app-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  white-space: nowrap;
+}
+
+.app-main {
+  flex: 1;
+  min-height: 0;
+  padding: 1.25rem 1.5rem;
+  overflow: auto;
+}
+
+/* ---- 底部状态栏 ---- */
+.statusbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.3rem 1.5rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.75rem;
+  color: var(--text);
+  background: var(--bg);
+}
+
+.statusbar-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.statusbar-spacer {
+  flex: 1;
+}
+
+.statusbar-muted {
+  opacity: 0.7;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #2c9a5f;
+  display: inline-block;
 }
 
 .page {
