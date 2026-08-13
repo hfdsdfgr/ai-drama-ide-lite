@@ -45,16 +45,82 @@ class BibleCharacter(BaseModel):
     aliases: list[str] = Field(default_factory=list)
     summary: str = Field(default="", max_length=2000)
     role_hint: str = Field(default="", max_length=50)
+    # Phase 8 视觉资产卡：固定人设描述，后续生图/生视频必须复用 reference_prompt
+    identity: str = Field(default="", max_length=500)  # 身份标签：身份/年龄/阵营
+    appearance: str = Field(default="", max_length=1000)  # 面部特征：脸型/五官/瞳色/肤色
+    hairstyle: str = Field(default="", max_length=300)  # 发型发色
+    costume: str = Field(default="", max_length=1000)  # 服装配饰
+    build: str = Field(default="", max_length=300)  # 体型姿态
+    marks: str = Field(default="", max_length=300)  # 特殊标记：泪痣/耳钉/疤痕/纹身
+    personality: str = Field(default="", max_length=500)  # 性格标签
+    style: str = Field(default="", max_length=300)  # 风格参考：写实/动漫/国风/赛博
+    reference_prompt: str = Field(default="", max_length=4000)
+    asset_id: str = Field(default="", max_length=100)
 
 
 class BibleLocation(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     description: str = Field(default="", max_length=2000)
+    # Phase 8 视觉资产卡
+    environment: str = Field(default="", max_length=1000)  # 环境描述
+    time: str = Field(default="", max_length=200)  # 时间段
+    lighting: str = Field(default="", max_length=500)  # 光线
+    style: str = Field(default="", max_length=300)  # 视觉风格
+    reference_prompt: str = Field(default="", max_length=4000)
+    asset_id: str = Field(default="", max_length=100)
 
 
 class BibleProp(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     description: str = Field(default="", max_length=2000)
+    # Phase 8 视觉资产卡
+    material: str = Field(default="", max_length=500)  # 材质
+    reference: str = Field(default="", max_length=1000)  # 参考/用途
+    reference_prompt: str = Field(default="", max_length=4000)
+    asset_id: str = Field(default="", max_length=100)
+
+
+class AssetCardOut(BaseModel):
+    """资产卡输出：Bible 实体 + 固定图片规格（同类型资产图片格式固定）。"""
+
+    asset_type: str
+    asset_id: str
+    name: str
+    image_spec: dict
+    reference_prompt: str = ""
+    fields: dict
+
+
+class AssetUpdateRequest(BaseModel):
+    asset_type: str
+    name: str = Field(min_length=1, max_length=100)
+    patch: dict
+
+
+class AssetDeleteRequest(BaseModel):
+    asset_type: str
+    name: str = Field(min_length=1, max_length=100)
+
+
+class AssetGenerateRequest(BaseModel):
+    model_id: str
+
+
+class AssetGenerateJobOut(BaseModel):
+    job_id: str
+    status: Literal["queued", "running", "completed", "failed", "cancelled"]
+    progress: float | None = None
+    detail: str = ""
+    error: str | None = None
+    created_at: datetime
+
+
+class AssetGenerateResult(BaseModel):
+    """LLM 补全输出：按 name 匹配 Bible 实体，缺字段不覆盖。"""
+
+    characters: list[BibleCharacter] = Field(default_factory=list)
+    locations: list[BibleLocation] = Field(default_factory=list)
+    props: list[BibleProp] = Field(default_factory=list)
 
 
 class BibleEvent(BaseModel):

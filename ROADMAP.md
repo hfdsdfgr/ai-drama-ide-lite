@@ -348,22 +348,28 @@ Phase 8 — Asset Engine
 
 Tasks
 Character
- Character Extraction
- Character Profile
- Appearance Specification
- Costume
- Personality
- Reference Prompt
+- [x] Character Extraction
+- [x] Character Profile（identity / appearance / hairstyle / costume / build / marks / personality / style）
+- [x] Appearance Specification
+- [x] Costume
+- [x] Personality
+- [x] Reference Prompt（固定人设提示词，生图/生视频复用保证一致性）
 Location
- Location Extraction
- Environment Description
- Time
- Lighting
- Style
+- [x] Location Extraction
+- [x] Environment Description
+- [x] Time
+- [x] Lighting
+- [x] Style
 Props
- Prop Extraction
- Prop Description
- Reference
+- [x] Prop Extraction
+- [x] Prop Description
+- [x] Reference（材质 / 用途）
+ Asset ID
+- [x] 资产卡同步 assets 表，稳定 Asset ID（asset_type_slug_seq，按 project+type+name 复用）
+- [x] 旧数据懒回填 Asset ID（读取时自动补全）
+ Image Spec
+- [x] 同类型资产图片固定格式：角色 2:3（1024×1536）/ 场景 16:9（1280×720）/ 道具 1:1（1024×1024）
+- [x] 资产页三栏工作台（分类列表 / 资产卡编辑+规格预览 / AI 补全向导）
 完成标准
 
 系统能够自动生成：

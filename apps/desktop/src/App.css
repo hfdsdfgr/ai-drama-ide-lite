@@ -1026,6 +1026,62 @@ button:disabled {
   gap: 0.25rem;
 }
 
+/* ---- 资产页（Phase 8 Asset Engine） ---- */
+.asset-count {
+  margin-left: 0.35rem;
+  font-size: 0.68rem;
+  color: var(--text-secondary);
+}
+
+.asset-item-name {
+  display: block;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.asset-item-id {
+  display: block;
+  font-size: 0.68rem;
+  color: var(--text-faint);
+  font-family: Consolas, monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.asset-spec-card {
+  display: flex;
+  justify-content: center;
+  padding: 0.5rem 0;
+}
+
+.asset-spec-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  max-width: 240px;
+  width: 100%;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  text-align: center;
+  padding: 0.75rem;
+  box-sizing: border-box;
+}
+
+.asset-spec-label {
+  font-size: 0.85rem;
+  color: var(--text-h);
+}
+
+.asset-spec-meta {
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
 .wizard-form {
   display: flex;
   flex-direction: column;

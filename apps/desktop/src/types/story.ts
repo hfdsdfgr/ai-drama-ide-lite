@@ -11,16 +11,36 @@ export interface BibleCharacter {
   aliases: string[];
   summary: string;
   role_hint: string;
+  identity: string;
+  appearance: string;
+  hairstyle: string;
+  costume: string;
+  build: string;
+  marks: string;
+  personality: string;
+  style: string;
+  reference_prompt: string;
+  asset_id: string;
 }
 
 export interface BibleLocation {
   name: string;
   description: string;
+  environment: string;
+  time: string;
+  lighting: string;
+  style: string;
+  reference_prompt: string;
+  asset_id: string;
 }
 
 export interface BibleProp {
   name: string;
   description: string;
+  material: string;
+  reference: string;
+  reference_prompt: string;
+  asset_id: string;
 }
 
 export interface BibleEvent {
@@ -42,6 +62,33 @@ export interface StoryBible {
 }
 
 export interface AnalysisJob {
+  job_id: string;
+  status: AnalysisStatus;
+  progress: number | null;
+  detail: string;
+  error: string | null;
+  created_at: string;
+}
+
+export type AssetType = "character" | "location" | "prop";
+
+export interface AssetImageSpec {
+  aspect_ratio: string;
+  width: number;
+  height: number;
+  label: string;
+}
+
+export interface AssetCard {
+  asset_type: AssetType;
+  asset_id: string;
+  name: string;
+  image_spec: AssetImageSpec;
+  reference_prompt: string;
+  fields: BibleCharacter | BibleLocation | BibleProp;
+}
+
+export interface AssetGenerateJob {
   job_id: string;
   status: AnalysisStatus;
   progress: number | null;

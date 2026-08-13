@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { StatusBar } from "./components/StatusBar";
+import { AssetPage } from "./pages/AssetPage";
 import { NovelPage } from "./pages/NovelPage";
 import { ProjectPage } from "./pages/ProjectPage";
 import { ScriptPage } from "./pages/ScriptPage";
@@ -8,7 +9,7 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { StoryBiblePage } from "./pages/StoryBiblePage";
 import "./App.css";
 
-type View = "project" | "novel" | "bible" | "script" | "settings";
+type View = "project" | "novel" | "bible" | "script" | "assets" | "settings";
 
 interface ModuleDef {
   key: string;
@@ -22,8 +23,7 @@ const CREATION_MODULES: ModuleDef[] = [
   { key: "novel", label: "小说", ready: true },
   { key: "bible", label: "故事圣经", ready: true },
   { key: "script", label: "剧本", ready: true },
-  { key: "character", label: "角色", ready: false },
-  { key: "scene", label: "场景", ready: false },
+  { key: "assets", label: "资产", ready: true },
   { key: "storyboard", label: "分镜", ready: false },
   { key: "generation", label: "生成中心", ready: false },
 ];
@@ -77,6 +77,9 @@ function App() {
         </div>
         <div className={view === "script" ? "view-pane active" : "view-pane"}>
           <ScriptPage active={view === "script"} />
+        </div>
+        <div className={view === "assets" ? "view-pane active" : "view-pane"}>
+          <AssetPage active={view === "assets"} />
         </div>
         <div className={view === "settings" ? "view-pane active" : "view-pane"}>
           <SettingsPage />
