@@ -38,6 +38,9 @@ export function NovelPage() {
   const [error, setError] = useState("");
   const [novelSave, setNovelSave] = useState<SaveState>("idle");
   const [chapterSave, setChapterSave] = useState<SaveState>("idle");
+  const [confirmDelete, setConfirmDelete] = useState<
+    "chapter" | "novel" | null
+  >(null);
   const [llmModels, setLlmModels] = useState<Model[]>([]);
   const [aiModelId, setAiModelId] = useState("");
   const [aiBusy, setAiBusy] = useState(false);
@@ -160,7 +163,11 @@ export function NovelPage() {
 
   async function handleDeleteChapter() {
     if (!detail || !chapterId) return;
-    if (!window.confirm("确定删除当前章节？")) return;
+    if (confirmDelete !== "chapter") {
+      setConfirmDelete("chapter");
+      return;
+    }
+    setConfirmDelete(null);
     setError("");
     try {
       await deleteChapter(projectId, detail.novel.id, chapterId);
@@ -175,7 +182,11 @@ export function NovelPage() {
 
   async function handleDeleteNovel() {
     if (!detail) return;
-    if (!window.confirm(`确定删除小说「${detail.novel.title}」？`)) return;
+    if (confirmDelete !== "novel") {
+      setConfirmDelete("novel");
+      return;
+    }
+    setConfirmDelete(null);
     setError("");
     try {
       await deleteNovel(projectId, detail.novel.id);
@@ -281,6 +292,10 @@ export function NovelPage() {
   const selectedChapter: Chapter | undefined =
     detail?.chapters.find((c) => c.id === chapterId) ?? undefined;
 
+  useEffect(() => {
+    setConfirmDelete(null);
+  }, [chapterId, detail?.novel.id]);
+
   return (
     <div className="page">
       <div className="page-head">
@@ -385,9 +400,31 @@ export function NovelPage() {
                     </li>
                   ))}
                 </ul>
-                <button type="button" className="button-danger" onClick={handleDeleteNovel}>
-                  删除小说
-                </button>
+                {confirmDelete === "novel" ? (
+                  <>
+                    <button
+                      type="button"
+                      className="button-danger"
+                      onClick={handleDeleteNovel}
+                    >
+                      确认删除
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDelete(null)}
+                    >
+                      取消
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    className="button-danger"
+                    onClick={handleDeleteNovel}
+                  >
+                    删除小说
+                  </button>
+                )}
               </aside>
 
               <section className="chapter-edit">
@@ -427,13 +464,31 @@ export function NovelPage() {
                         {chapterSave === "saved" && "已保存"}
                         {chapterSave === "error" && "保存失败"}
                       </span>
-                      <button
-                        type="button"
-                        className="button-danger"
-                        onClick={handleDeleteChapter}
-                      >
-                        删除章节
-                      </button>
+                      {confirmDelete === "chapter" ? (
+                        <>
+                          <button
+                            type="button"
+                            className="button-danger"
+                            onClick={handleDeleteChapter}
+                          >
+                            确认删除
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDelete(null)}
+                          >
+                            取消
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          className="button-danger"
+                          onClick={handleDeleteChapter}
+                        >
+                          删除章节
+                        </button>
+                      )}
                     </div>
                   </>
                 ) : (

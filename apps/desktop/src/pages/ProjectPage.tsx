@@ -19,6 +19,7 @@ export function ProjectPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [saveState, setSaveState] = useState<
     "idle" | "saving" | "saved" | "error"
   >("idle");
@@ -100,9 +101,11 @@ export function ProjectPage() {
 
   async function handleDelete() {
     if (!selected) return;
-    if (!window.confirm(`确定删除项目「${selected.name}」？此操作不可撤销。`)) {
+    if (!confirmDelete) {
+      setConfirmDelete(true);
       return;
     }
+    setConfirmDelete(false);
     setError("");
     try {
       await deleteProject(selected.id);
@@ -228,13 +231,28 @@ export function ProjectPage() {
             <button type="button" onClick={handleExport}>
               导出项目
             </button>
-            <button
-              type="button"
-              className="button-danger"
-              onClick={handleDelete}
-            >
-              删除项目
-            </button>
+            {confirmDelete ? (
+              <>
+                <button
+                  type="button"
+                  className="button-danger"
+                  onClick={handleDelete}
+                >
+                  确认删除
+                </button>
+                <button type="button" onClick={() => setConfirmDelete(false)}>
+                  取消
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                className="button-danger"
+                onClick={handleDelete}
+              >
+                删除项目
+              </button>
+            )}
             <span className="muted save-status">
               {saveState === "saving" && "自动保存中…"}
               {saveState === "saved" && "已保存"}
