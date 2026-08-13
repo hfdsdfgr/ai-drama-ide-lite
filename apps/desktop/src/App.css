@@ -358,11 +358,20 @@ button:disabled {
   color: var(--text-h);
 }
 
-.assistant-head h3 {
-  margin: 0;
+.panel-head {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.2rem 0.1rem;
 }
 
-.assistant-head p {
+.panel-head h3 {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--text-h);
+}
+
+.panel-head p {
   margin: 0;
 }
 

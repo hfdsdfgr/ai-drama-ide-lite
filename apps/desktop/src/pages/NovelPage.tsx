@@ -941,7 +941,7 @@ export function NovelPage() {
             <div className="inspector-body">
               {inspectorTab === "ai" ? (
                 <>
-                <div className="card inspector-card assistant-head">
+                <div className="panel-head">
                   <h3>AI 助手</h3>
                   <p className="muted">
                     负责创意、大纲、续写、扩写、重写与整本小说生成。
@@ -1325,7 +1325,7 @@ export function NovelPage() {
               </>
               ) : (
                 <>
-                <div className="card inspector-card assistant-head">
+                <div className="panel-head">
                   <h3>Story Bible</h3>
                   <p className="muted">
                     项目长期设定：世界观、人物、地点、时间线。AI
