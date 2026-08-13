@@ -54,6 +54,9 @@ export function SettingsPage() {
   const [testResults, setTestResults] = useState<
     Record<string, ProviderTestResult>
   >({});
+  const [collapsedTests, setCollapsedTests] = useState<Record<string, boolean>>(
+    {},
+  );
   const [builtin, setBuiltin] = useState<Record<string, BuiltinModel[]>>({});
   const [builtinOpen, setBuiltinOpen] = useState<string | null>(null);
   const [builtinBusy, setBuiltinBusy] = useState<string | null>(null);
@@ -125,6 +128,7 @@ export function SettingsPage() {
     try {
       const result = await testProvider(provider.id);
       setTestResults((prev) => ({ ...prev, [provider.id]: result }));
+      setCollapsedTests((prev) => ({ ...prev, [provider.id]: false }));
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -539,27 +543,49 @@ export function SettingsPage() {
 
                 {testResults[provider.id] && (
                   <div className="test-result">
-                    <p className={testResults[provider.id].ok ? "ok" : "error"}>
-                      {testResults[provider.id].ok
-                        ? "连接测试通过"
-                        : "连接测试未通过"}
-                    </p>
-                    <ul className="check-list">
-                      {testResults[provider.id].checks.map((c, i) => (
-                        <li key={i} className={`check-${c.status}`}>
-                          <span className="check-mark">
-                            {c.status === "ok" ? "✓" : c.status === "fail" ? "✕" : "–"}
-                          </span>
-                          {c.label}：{c.detail}
-                        </li>
-                      ))}
-                      {testResults[provider.id].model_checks.map((m) => (
-                        <li key={m.model_id} className={m.ok ? "check-ok" : "check-fail"}>
-                          <span className="check-mark">{m.ok ? "✓" : "✕"}</span>
-                          {m.model_id}：{m.detail}
-                        </li>
-                      ))}
-                    </ul>
+                    <div className="test-result-head">
+                      <p className={testResults[provider.id].ok ? "ok" : "error"}>
+                        {testResults[provider.id].ok
+                          ? "连接测试通过"
+                          : "连接测试未通过"}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setCollapsedTests((prev) => ({
+                            ...prev,
+                            [provider.id]: !prev[provider.id],
+                          }))
+                        }
+                      >
+                        {collapsedTests[provider.id] ? "展开" : "收起"}
+                      </button>
+                    </div>
+                    {!collapsedTests[provider.id] && (
+                      <ul className="check-list">
+                        {testResults[provider.id].checks.map((c, i) => (
+                          <li key={i} className={`check-${c.status}`}>
+                            <span className="check-mark">
+                              {c.status === "ok"
+                                ? "✓"
+                                : c.status === "fail"
+                                  ? "✕"
+                                  : "–"}
+                            </span>
+                            {c.label}：{c.detail}
+                          </li>
+                        ))}
+                        {testResults[provider.id].model_checks.map((m) => (
+                          <li
+                            key={m.model_id}
+                            className={m.ok ? "check-ok" : "check-fail"}
+                          >
+                            <span className="check-mark">{m.ok ? "✓" : "✕"}</span>
+                            {m.model_id}：{m.detail}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
                 )}
 
