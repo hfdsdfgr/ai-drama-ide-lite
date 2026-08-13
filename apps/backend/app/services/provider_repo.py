@@ -86,27 +86,51 @@ class ProviderRepository:
 
         base_url = preset.base_url if preset else data.api_base_url.strip()
         needs_key = preset.needs_key if preset else data.needs_key
+
+        # 同一厂商预设不允许重复添加（避免"加了 3 个阿里云"）
+        if preset is not None:
+            with get_connection(self.db_path) as conn:
+                exists = conn.execute(
+                    "SELECT 1 FROM providers WHERE preset_key = ? AND deleted_at IS NULL",
+                    (preset.key,),
+                ).fetchone()
+            if exists:
+                raise AppError(
+                    409,
+                    "provider_already_exists",
+                    f"已存在该厂商的 Provider：{preset.name}，可直接编辑它",
+                )
+
         provider_id = _new_id("prov")
         key_ref = f"provider:{provider_id}" if (needs_key or data.api_key) else None
         now = _now_iso()
 
-        with get_connection(self.db_path) as conn:
-            conn.execute(
-                "INSERT INTO providers (id, name, preset_key, api_base_url, needs_key, enabled, key_ref, created_at, updated_at, deleted_at)"
-                " VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, NULL)",
-                (
-                    provider_id,
-                    name.strip(),
-                    preset.key if preset else None,
-                    base_url,
-                    1 if needs_key else 0,
-                    key_ref,
-                    now,
-                    now,
-                ),
-            )
+        # 先写密钥再入库：密钥写入失败时不留下空 Provider 记录
         if data.api_key:
             self.secret_store.set(key_ref, data.api_key)
+        try:
+            with get_connection(self.db_path) as conn:
+                conn.execute(
+                    "INSERT INTO providers (id, name, preset_key, api_base_url, needs_key, enabled, key_ref, created_at, updated_at, deleted_at)"
+                    " VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, NULL)",
+                    (
+                        provider_id,
+                        name.strip(),
+                        preset.key if preset else None,
+                        base_url,
+                        1 if needs_key else 0,
+                        key_ref,
+                        now,
+                        now,
+                    ),
+                )
+        except Exception:
+            if key_ref:
+                try:
+                    self.secret_store.delete(key_ref)
+                except Exception:
+                    pass
+            raise
         return self.get_provider(provider_id)
 
     def update_provider(self, provider_id: str, data: ProviderUpdate) -> ProviderOut:

@@ -34,6 +34,43 @@ def test_create_provider_with_preset(client):
     assert "sk-test-123" not in response.text
 
 
+def test_duplicate_preset_provider_rejected(client):
+    first = _create_provider(client)
+    assert first.status_code == 201
+    dup = _create_provider(client)
+    assert dup.status_code == 409
+    assert dup.json()["error"]["code"] == "provider_already_exists"
+
+
+class _FailingSecretStore:
+    def set(self, username, value):
+        raise RuntimeError("secret store boom")
+
+    def get(self, username):
+        return None
+
+    def delete(self, username):
+        return None
+
+
+def test_provider_create_rolls_back_on_secret_failure(tmp_path):
+    from app.core.config import Settings
+    from app.main import create_app
+
+    settings = Settings(data_dir=tmp_path, log_level="ERROR")
+    client = TestClient(
+        create_app(settings=settings, secret_store=_FailingSecretStore()),
+        raise_server_exceptions=False,
+    )
+    response = client.post(
+        "/api/providers", json={"preset_key": "openai", "api_key": "sk-x"}
+    )
+    assert response.status_code == 500
+    # 密钥写入失败时不应留下 Provider 记录
+    assert client.get("/api/providers").json() == []
+    client.close()
+
+
 def test_create_custom_provider_requires_base_url(client):
     response = client.post("/api/providers", json={"name": "自定义"})
     assert response.status_code == 422
