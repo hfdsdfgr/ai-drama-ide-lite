@@ -91,6 +91,11 @@ def generate_shots(
     )
 
 
+@router.get("/scenes/{scene_id}", response_model=SceneDetail)
+def get_scene(project_id: str, scene_id: str, request: Request) -> SceneDetail:
+    return _repo(request).get_scene_detail(project_id, scene_id)
+
+
 @router.post("/scenes/{scene_id}/save-shots", response_model=SceneDetail, status_code=201)
 def save_scene_shots(
     project_id: str, scene_id: str, payload: dict, request: Request

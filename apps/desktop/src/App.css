@@ -495,6 +495,57 @@ button:disabled {
   margin: 0 0 0.25rem;
 }
 
+/* ---- 剧本页 ---- */
+.scene-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.scene-dialogue {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  white-space: pre-wrap;
+  font-family: inherit;
+  font-size: 0.85rem;
+  color: var(--text);
+}
+
+.shot-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.shot-list li {
+  border-left: 2px solid var(--accent-border);
+  padding-left: 0.6rem;
+}
+
+.shot-dialogue {
+  color: var(--text);
+  font-size: 0.82rem;
+}
+
+.shots-preview {
+  border-top: 1px dashed var(--border);
+  padding-top: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.shots-preview h4 {
+  margin: 0;
+}
+
 /* 弱化破坏性操作：默认幽灵样式，确认时才醒目 */
 .button-ghost {
   background: transparent;
