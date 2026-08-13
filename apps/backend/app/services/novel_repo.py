@@ -108,7 +108,7 @@ class NovelRepository:
         with get_connection(self.db_path) as conn:
             rows = conn.execute(
                 """
-                SELECT DISTINCT n.id, n.project_id, n.title, n.source_type, n.created_at, n.updated_at,
+                SELECT DISTINCT n.id, n.project_id, n.title, n.source_type, n.ai_brief, n.created_at, n.updated_at,
                        (SELECT COUNT(*) FROM chapters c
                          WHERE c.novel_id = n.id AND c.deleted_at IS NULL) AS chapter_count
                 FROM novels n
@@ -126,7 +126,7 @@ class NovelRepository:
         _validate_id(novel_id, "小说")
         with get_connection(self.db_path) as conn:
             row = conn.execute(
-                "SELECT n.id, n.project_id, n.title, n.source_type, n.created_at, n.updated_at,"
+                "SELECT n.id, n.project_id, n.title, n.source_type, n.ai_brief, n.created_at, n.updated_at,"
                 " (SELECT COUNT(*) FROM chapters c WHERE c.novel_id = n.id AND c.deleted_at IS NULL) AS chapter_count"
                 " FROM novels n WHERE n.id = ? AND n.project_id = ? AND n.deleted_at IS NULL",
                 (novel_id, project_id),
@@ -143,13 +143,18 @@ class NovelRepository:
             chapters=[_row_to_chapter(r) for r in chapter_rows],
         )
 
-    def update_title(self, project_id: str, novel_id: str, data: NovelUpdate) -> Novel:
+    def update(self, project_id: str, novel_id: str, data: NovelUpdate) -> Novel:
         detail = self.get(project_id, novel_id)
         title = data.title.strip() if data.title is not None else detail.novel.title
+        ai_brief = (
+            data.ai_brief.strip()
+            if data.ai_brief is not None
+            else detail.novel.ai_brief
+        )
         with get_connection(self.db_path) as conn:
             conn.execute(
-                "UPDATE novels SET title = ?, updated_at = ? WHERE id = ?",
-                (title, _now_iso(), novel_id),
+                "UPDATE novels SET title = ?, ai_brief = ?, updated_at = ? WHERE id = ?",
+                (title, ai_brief, _now_iso(), novel_id),
             )
         return self.get(project_id, novel_id).novel
 
@@ -263,6 +268,7 @@ def _row_to_novel(row) -> Novel:
         project_id=row["project_id"],
         title=row["title"],
         source_type=row["source_type"],
+        ai_brief=row["ai_brief"] or "",
         chapter_count=row["chapter_count"],
         created_at=row["created_at"],
         updated_at=row["updated_at"],

@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS novels (
     title       TEXT NOT NULL,
     content     TEXT NOT NULL DEFAULT '',
     source_type TEXT NOT NULL DEFAULT 'original',
+    ai_brief    TEXT NOT NULL DEFAULT '',
     deleted_at  TEXT,
     created_at  TEXT NOT NULL,
     updated_at  TEXT NOT NULL

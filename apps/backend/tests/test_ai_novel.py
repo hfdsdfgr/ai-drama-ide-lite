@@ -2,6 +2,10 @@
 
 import json
 
+import pytest
+
+from app.core.errors import AppError
+from app.schemas.story import AiNovelBrief
 from app.services.adapters.manager import ProviderManager
 from app.services.story_repo import StoryRepository
 from app.schemas.story import StoryBible
@@ -72,6 +76,55 @@ def test_ai_outline_endpoint(client, monkeypatch):
     assert "青少年" in user
     assert "5/10" in user
     assert "穿越到异世界" in user
+
+
+def test_continue_stream_no_chapters(client):
+    project_id = _create_project(client)
+    novel_id = client.post(
+        f"/api/projects/{project_id}/novels", json={"title": "续写测试"}
+    ).json()["id"]
+    service = client.app.state.ai_novel_service
+    with pytest.raises(AppError) as exc:
+        list(
+            service.continue_chapter_stream(
+                project_id, novel_id, "model_1", AiNovelBrief(**_brief()), "", 3
+            )
+        )
+    assert exc.value.code == "ai_continue_no_chapters"
+
+
+def test_continue_stream_with_chapters(client, monkeypatch):
+    project_id = _create_project(client)
+    novel_id = client.post(
+        f"/api/projects/{project_id}/novels", json={"title": "续写测试"}
+    ).json()["id"]
+    client.post(
+        f"/api/projects/{project_id}/novels/{novel_id}/chapters",
+        json={"title": "第一章", "content": "林凡出场，踏上修行之路。"},
+    )
+    box = {"messages": []}
+
+    def fake_stream(self, model_id, messages, temperature=0.9, timeout=300):
+        box["messages"].append(messages)
+        yield "第一段。"
+        yield "第二段。"
+
+    monkeypatch.setattr(ProviderManager, "chat_stream", fake_stream)
+    service = client.app.state.ai_novel_service
+    deltas = list(
+        service.continue_chapter_stream(
+            project_id,
+            novel_id,
+            "model_1",
+            AiNovelBrief(**_brief()),
+            "加快节奏",
+            3,
+        )
+    )
+    assert deltas == ["第一段。", "第二段。"]
+    user = box["messages"][0][1]["content"]
+    assert "林凡出场" in user
+    assert "加快节奏" in user
 
 
 def test_ai_outline_count_mismatch(client, monkeypatch):

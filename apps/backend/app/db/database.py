@@ -47,6 +47,7 @@ def _apply_safe_migrations(conn: sqlite3.Connection) -> None:
     """幂等加列迁移：旧库补列，已存在则静默跳过（见 DEVELOPMENT_PITFALLS.md）。"""
     statements = [
         "ALTER TABLE novels ADD COLUMN deleted_at TEXT",
+        "ALTER TABLE novels ADD COLUMN ai_brief TEXT NOT NULL DEFAULT ''",
         "ALTER TABLE chapters ADD COLUMN deleted_at TEXT",
         "ALTER TABLE models ADD COLUMN capabilities TEXT NOT NULL DEFAULT ''",
         "ALTER TABLE models ADD COLUMN capability_source TEXT NOT NULL DEFAULT 'auto'",

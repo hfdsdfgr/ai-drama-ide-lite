@@ -1,8 +1,10 @@
 """Novel / Chapter endpoints（Phase 2 — Novel Studio）。"""
 
+import json
 from pathlib import Path
 
 from fastapi import APIRouter, Query, Request
+from fastapi.responses import StreamingResponse
 from typing import Literal
 
 from app.core.errors import AppError
@@ -17,6 +19,7 @@ from app.schemas.novel import (
     NovelAiResult,
     NovelUpdate,
 )
+from app.schemas.story import AiContinueRequest
 from app.services.novel_repo import NovelRepository
 from app.services.story_repo import bible_context_text
 from app.services.text_import import parse_novel_file
@@ -86,7 +89,7 @@ def get_novel(project_id: str, novel_id: str, request: Request) -> NovelDetail:
 def update_novel(
     project_id: str, novel_id: str, payload: NovelUpdate, request: Request
 ) -> Novel:
-    return _repo(request).update_title(project_id, novel_id, payload)
+    return _repo(request).update(project_id, novel_id, payload)
 
 
 @router.delete("/{novel_id}", status_code=204)
@@ -137,3 +140,31 @@ def ai_writing(
     )
     text = request.app.state.provider_manager.chat(payload.model_id, messages)
     return NovelAiResult(text=text)
+
+
+@router.post("/{novel_id}/ai/continue-stream")
+def ai_continue_stream(
+    project_id: str,
+    novel_id: str,
+    payload: AiContinueRequest,
+    request: Request,
+) -> StreamingResponse:
+    """续写下一章（SSE）：以小说已有章节为前文，流式生成正文。"""
+    service = request.app.state.ai_novel_service
+
+    def event_source():
+        try:
+            for delta in service.continue_chapter_stream(
+                project_id,
+                novel_id,
+                payload.model_id,
+                payload.brief,
+                payload.user_instruction,
+                payload.context_chapter_count,
+            ):
+                yield f"data: {json.dumps({'delta': delta}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'done': True}, ensure_ascii=False)}\n\n"
+        except Exception as exc:  # noqa: BLE001 - 错误以 SSE 事件返回，前端内联展示
+            yield f"data: {json.dumps({'error': str(exc)}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(event_source(), media_type="text/event-stream")

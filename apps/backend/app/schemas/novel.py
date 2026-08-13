@@ -11,6 +11,7 @@ class NovelCreate(BaseModel):
 
 class NovelUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=300)
+    ai_brief: str | None = Field(default=None, max_length=5000)
 
 
 class Novel(BaseModel):
@@ -18,6 +19,7 @@ class Novel(BaseModel):
     project_id: str
     title: str
     source_type: str = "original"
+    ai_brief: str = ""
     chapter_count: int = 0
     created_at: datetime
     updated_at: datetime

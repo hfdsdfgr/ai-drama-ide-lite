@@ -129,6 +129,13 @@ class AiChapterRequest(BaseModel):
     previous_summaries: list[str] = Field(default_factory=list, max_length=100)
 
 
+class AiContinueRequest(BaseModel):
+    model_id: str
+    brief: AiNovelBrief
+    user_instruction: str = Field(default="", max_length=2000)
+    context_chapter_count: int = Field(default=3, ge=1, le=10)
+
+
 class AiChapterOut(BaseModel):
     title: str
     content: str
