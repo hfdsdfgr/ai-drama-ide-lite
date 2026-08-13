@@ -140,15 +140,18 @@ Phase 3 — AI Provider 基础系统
 让用户能够自己填写 AI API。
 
 Tasks
-- [ ] Provider 数据结构（providers 表）
-- [ ] Model 独立数据实体（models 表，Provider 一对多，含 type: llm/image/video）
-- [ ] Provider Manager（添加 / 编辑 / 删除 / 启用 / 禁用）
-- [ ] Model Registry（添加 / 编辑 / 删除 / 启用 / 禁用）
-- [ ] Image Model 与 Video Model 明确区分
-- [ ] API Key Storage（系统安全存储，不落项目文件）
-- [ ] API Base URL / Model ID
-- [ ] 默认 Image Model / 默认 Video Model（可配置，生成界面默认选中）
-- [ ] Settings UI：Provider → Model 分层管理
+- [x] Provider 数据结构（providers 表）
+- [x] Model 独立数据实体（models 表，Provider 一对多，含 type: llm/image/video；显示名 = 模型 ID）
+- [x] Provider Manager（添加 / 编辑 / 删除 / 启用 / 禁用）
+- [x] Model Registry（添加 / 编辑 / 删除 / 启用 / 禁用）
+- [x] Image Model 与 Video Model 明确区分
+- [x] API Key Storage（keyring → 系统凭据管理器，不落项目文件/日志/DB）
+- [x] API Base URL / Model ID（内置厂商预设：OpenAI / OpenRouter / DeepSeek / 阿里云百炼 / 智谱 / 硅基流动 / Ollama）
+- [x] 默认 Image Model / 默认 Video Model（可配置，同一类型全局唯一默认）
+- [x] Settings UI：选厂商 + 填 Key → 自动拉取模型；Provider → Model 分层管理
+- [x] 动态模型发现（OpenAI 兼容 /models，按预设规则归类 llm/image/video）
+- [x] 生成界面模型下拉的数据源接口（/api/models?model_type=&enabled_only=true）
+- [x] 表单字段 InfoTip 悬停说明（API 在哪找等）
 
 > 本阶段**不实现自动 Model Router**（属 P1 / Phase 17）；MVP 生成流程由用户手动选择单一模型。
 API 类型

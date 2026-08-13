@@ -179,6 +179,16 @@ Create Project
 - AI 续写 / 扩写 / 重写入口已占位（Phase 3 接入 AI Provider 后启用）
 - 测试：后端 pytest 26 项、前端 Vitest 6 项；lint / build 通过；端到端验证通过
 
+**Phase 3（AI Provider 基础系统）已完成**：
+
+- 内置厂商预设（OpenAI / OpenRouter / DeepSeek / 阿里云百炼 / 智谱 / 硅基流动 / Ollama）：选厂商 + 填 API Key 即可
+- 自动拉取模型列表（OpenAI 兼容 /models），按预设规则归类 LLM / Image / Video；模型显示名 = 模型 ID，不支持取名
+- Provider / Model 管理（增删改、启用/禁用、软删除）；默认 Image / Video 模型（同类型全局唯一）
+- API Key 安全存储：keyring → 系统凭据管理器，不落数据库 / 日志 / 项目文件
+- 模型下拉数据源接口：`/api/models?model_type=image&enabled_only=true`
+- 表单字段带 InfoTip 悬停说明（API 在哪找等）；能力检测留 Phase 4
+- 测试：后端 pytest 41 项、前端 Vitest 8 项；lint / build 通过；端到端验证通过
+
 ## 快速开始
 
 环境要求：Python 3.12+、Node.js 20+、Git。

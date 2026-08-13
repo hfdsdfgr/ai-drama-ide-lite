@@ -136,6 +136,33 @@ CREATE TABLE IF NOT EXISTS versions (
     created_at  TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS providers (
+    id            TEXT PRIMARY KEY,
+    name          TEXT NOT NULL,
+    preset_key    TEXT,
+    api_base_url  TEXT NOT NULL DEFAULT '',
+    needs_key     INTEGER NOT NULL DEFAULT 1,
+    enabled       INTEGER NOT NULL DEFAULT 1,
+    key_ref       TEXT,
+    created_at    TEXT NOT NULL,
+    updated_at    TEXT NOT NULL,
+    deleted_at    TEXT
+);
+
+CREATE TABLE IF NOT EXISTS models (
+    id               TEXT PRIMARY KEY,
+    provider_id      TEXT NOT NULL REFERENCES providers(id) ON DELETE CASCADE,
+    model_id         TEXT NOT NULL,
+    model_type       TEXT NOT NULL DEFAULT 'llm' CHECK (model_type IN ('llm', 'image', 'video')),
+    enabled          INTEGER NOT NULL DEFAULT 1,
+    is_default_image INTEGER NOT NULL DEFAULT 0,
+    is_default_video INTEGER NOT NULL DEFAULT 0,
+    created_at       TEXT NOT NULL,
+    updated_at       TEXT NOT NULL,
+    deleted_at       TEXT,
+    UNIQUE (provider_id, model_id)
+);
+
 CREATE TABLE IF NOT EXISTS schema_migrations (
     version    INTEGER PRIMARY KEY,
     applied_at TEXT NOT NULL
@@ -153,3 +180,5 @@ CREATE INDEX IF NOT EXISTS idx_shots_project ON shots(project_id);
 CREATE INDEX IF NOT EXISTS idx_assets_project ON assets(project_id);
 CREATE INDEX IF NOT EXISTS idx_jobs_project ON jobs(project_id);
 CREATE INDEX IF NOT EXISTS idx_versions_project ON versions(project_id);
+CREATE INDEX IF NOT EXISTS idx_models_provider ON models(provider_id);
+CREATE INDEX IF NOT EXISTS idx_models_type ON models(model_type);

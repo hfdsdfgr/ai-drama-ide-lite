@@ -1,0 +1,207 @@
+"""Provider / Model 测试（Phase 3 — AI Provider 基础系统）。"""
+
+from fastapi.testclient import TestClient
+
+from app.core.config import Settings
+from app.main import create_app
+from app.services.secret_store import MemorySecretStore
+from app.services.vendor_presets import classify_model
+
+
+def _create_provider(client, **kwargs):
+    payload = {"preset_key": "openai", "api_key": "sk-test-123", **kwargs}
+    return client.post("/api/providers", json=payload)
+
+
+def test_presets_listed(client):
+    response = client.get("/api/providers/presets")
+    assert response.status_code == 200
+    keys = [p["key"] for p in response.json()]
+    assert "openai" in keys and "ollama" in keys and "bailian" in keys
+
+
+def test_create_provider_with_preset(client):
+    response = _create_provider(client)
+    assert response.status_code == 201
+    body = response.json()
+    assert body["name"] == "OpenAI"
+    assert body["api_base_url"] == "https://api.openai.com/v1"
+    assert body["needs_key"] is True
+    assert body["has_api_key"] is True
+    assert body["preset_key"] == "openai"
+    assert "sk-test-123" not in response.text
+
+
+def test_create_custom_provider_requires_base_url(client):
+    response = client.post("/api/providers", json={"name": "自定义"})
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "base_url_required"
+
+
+def test_create_custom_provider(client):
+    response = client.post(
+        "/api/providers",
+        json={
+            "name": "我的API",
+            "api_base_url": "https://example.com/v1",
+            "needs_key": False,
+        },
+    )
+    assert response.status_code == 201
+    assert response.json()["has_api_key"] is False
+
+
+def test_provider_without_key(client):
+    response = client.post("/api/providers", json={"preset_key": "openai"})
+    assert response.status_code == 201
+    assert response.json()["has_api_key"] is False
+
+
+def test_update_provider_key_overwrite(client):
+    provider = _create_provider(client, api_key="sk-old").json()
+    store = client.app.state.secret_store
+    assert store.get(f"provider:{provider['id']}") == "sk-old"
+    response = client.put(
+        f"/api/providers/{provider['id']}", json={"api_key": "sk-new"}
+    )
+    assert response.status_code == 200
+    assert store.get(f"provider:{provider['id']}") == "sk-new"
+
+
+def test_provider_soft_delete_removes_secret(client):
+    provider = _create_provider(client).json()
+    store = client.app.state.secret_store
+    assert client.delete(f"/api/providers/{provider['id']}").status_code == 204
+    assert store.get(f"provider:{provider['id']}") is None
+    assert client.get("/api/providers").json() == []
+
+
+def test_secret_not_in_database_or_api(client, tmp_path):
+    _create_provider(client, api_key="sk-super-secret-xyz")
+    db_bytes = (tmp_path / "ai_drama_ide.db").read_bytes()
+    assert b"sk-super-secret-xyz" not in db_bytes
+    response = client.get("/api/providers")
+    assert "sk-super-secret-xyz" not in response.text
+
+
+def test_model_crud_and_duplicate(client):
+    provider = _create_provider(client).json()
+    pid = provider["id"]
+    created = client.post(
+        "/api/models",
+        json={"provider_id": pid, "model_id": "gpt-4o", "model_type": "llm"},
+    )
+    assert created.status_code == 201
+    body = created.json()
+    assert body["model_id"] == "gpt-4o"
+    assert body["provider_name"] == "OpenAI"
+
+    dup = client.post(
+        "/api/models",
+        json={"provider_id": pid, "model_id": "gpt-4o", "model_type": "llm"},
+    )
+    assert dup.status_code == 409
+
+    bad = client.post(
+        "/api/models",
+        json={"provider_id": pid, "model_id": "x", "model_type": "audio"},
+    )
+    assert bad.status_code == 422
+
+    mid = body["id"]
+    assert client.delete(f"/api/models/{mid}").status_code == 204
+    assert client.get(f"/api/models/{mid}").status_code == 404
+
+
+def test_default_uniqueness(client):
+    provider = _create_provider(client).json()
+    pid = provider["id"]
+    m1 = client.post(
+        "/api/models", json={"provider_id": pid, "model_id": "img-a", "model_type": "image"}
+    ).json()
+    m2 = client.post(
+        "/api/models", json={"provider_id": pid, "model_id": "img-b", "model_type": "image"}
+    ).json()
+    client.post(f"/api/models/{m1['id']}/default", json={"model_type": "image"})
+    client.post(f"/api/models/{m2['id']}/default", json={"model_type": "image"})
+    models = client.get("/api/models", params={"provider_id": pid}).json()
+    flags = {m["model_id"]: m["is_default_image"] for m in models}
+    assert flags == {"img-a": False, "img-b": True}
+
+
+def test_aggregation_filters(client):
+    p1 = _create_provider(client).json()["id"]
+    p2 = client.post(
+        "/api/providers",
+        json={"name": "本地", "api_base_url": "http://127.0.0.1:1/v1", "needs_key": False},
+    ).json()["id"]
+    client.post("/api/models", json={"provider_id": p1, "model_id": "gpt-4o", "model_type": "llm"})
+    client.post("/api/models", json={"provider_id": p1, "model_id": "gpt-image-1", "model_type": "image"})
+    client.post(
+        "/api/models",
+        json={"provider_id": p2, "model_id": "sdxl", "model_type": "image", "enabled": False},
+    )
+    response = client.get("/api/models", params={"model_type": "image", "enabled_only": True})
+    assert response.status_code == 200
+    ids = [m["model_id"] for m in response.json()]
+    assert ids == ["gpt-image-1"]
+
+
+def test_discover_models_classification(client, monkeypatch):
+    provider = client.post(
+        "/api/providers",
+        json={"preset_key": "bailian", "api_key": "sk-bailian"},
+    ).json()
+    pid = provider["id"]
+
+    import app.api.routes.providers as routes
+
+    monkeypatch.setattr(
+        routes, "fetch_model_ids", lambda base_url, api_key: ["qwen-plus", "qwen-image-plus", "wan2.1-t2v"]
+    )
+    response = client.post(f"/api/providers/{pid}/discover-models")
+    assert response.status_code == 200
+    types = {m["model_id"]: m["model_type"] for m in response.json()}
+    assert types == {
+        "qwen-plus": "llm",
+        "qwen-image-plus": "image",
+        "wan2.1-t2v": "video",
+    }
+    # 幂等：再次拉取不产生重复
+    client.post(f"/api/providers/{pid}/discover-models")
+    assert len(client.get("/api/models", params={"provider_id": pid}).json()) == 3
+
+
+def test_discover_requires_key(client):
+    provider = client.post("/api/providers", json={"preset_key": "openai"}).json()
+    response = client.post(f"/api/providers/{provider['id']}/discover-models")
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "api_key_required"
+
+
+def test_persistence_across_restart(tmp_path):
+    store = MemorySecretStore()
+    settings = Settings(data_dir=tmp_path, log_level="ERROR")
+    client1 = TestClient(create_app(settings=settings, secret_store=store))
+    provider = _create_provider(client1).json()
+    client1.post(
+        "/api/models",
+        json={"provider_id": provider["id"], "model_id": "gpt-4o"},
+    )
+    client1.close()
+
+    client2 = TestClient(create_app(settings=settings, secret_store=store))
+    providers = client2.get("/api/providers").json()
+    assert providers[0]["id"] == provider["id"]
+    assert providers[0]["has_api_key"] is True
+    models = client2.get("/api/models", params={"provider_id": provider["id"]}).json()
+    assert [m["model_id"] for m in models] == ["gpt-4o"]
+    client2.close()
+
+
+def test_classify_rules():
+    assert classify_model("openai", "gpt-image-1") == "image"
+    assert classify_model("openai", "gpt-4o") == "llm"
+    assert classify_model("bailian", "wanx2.1-t2i") == "image"
+    assert classify_model("bailian", "wan2.1-t2v") == "video"
+    assert classify_model(None, "anything") == "llm"
