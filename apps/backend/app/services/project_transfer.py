@@ -123,4 +123,6 @@ def import_project_zip(raw: bytes, repo: ProjectRepository) -> object:
     except AppError:
         raise
     except Exception as exc:
-        raise AppError(500, "import_failed", "导入失败") from exc
+        raise AppError(
+            500, "import_failed", "导入失败，请查看后端日志后重试"
+        ) from exc

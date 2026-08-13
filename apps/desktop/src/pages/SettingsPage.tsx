@@ -366,6 +366,13 @@ export function SettingsPage() {
   }
 
   async function handleToggleModel(model: Model) {
+    const provider = providers.find((p) => p.id === model.provider_id);
+    if (!model.enabled && provider && !provider.enabled) {
+      setError(
+        `无法启用模型：Provider「${provider.name}」当前已禁用，请先启用该 Provider`,
+      );
+      return;
+    }
     setError("");
     try {
       await updateModel(model.id, { enabled: !model.enabled });
@@ -681,6 +688,12 @@ export function SettingsPage() {
                 )}
 
                 <div className="models">
+                  {!provider.enabled && (
+                    <p className="muted provider-disabled-tip">
+                      此 Provider 已禁用，其模型不会出现在生成 / 创作界面。
+                      启用 Provider 后即可使用。
+                    </p>
+                  )}
                   {models
                     .filter((m) => m.provider_id === provider.id)
                     .map((model) => (
@@ -728,7 +741,7 @@ export function SettingsPage() {
                               type="button"
                               onClick={() => handleToggleModel(model)}
                             >
-                              {model.enabled ? "启用" : "禁用"}
+                              {model.enabled ? "禁用" : "启用"}
                             </button>
                             {model.model_type !== "llm" && (
                               <button type="button" onClick={() => handleDefault(model)}>

@@ -33,6 +33,23 @@ def test_novel_crud(client):
     assert client.get(f"/api/projects/{pid}/novels/{novel_id}").status_code == 404
 
 
+def test_create_novel_empty_title_clear_message(client):
+    pid = _create_project(client)
+    empty = client.post(f"/api/projects/{pid}/novels", json={"title": ""})
+    assert empty.status_code == 422
+    body = empty.json()["error"]
+    assert body["code"] == "validation_error"
+    assert "标题" in body["message"]
+    assert "不能为空" in body["message"]
+
+    missing = client.post(f"/api/projects/{pid}/novels", json={})
+    assert missing.status_code == 422
+    body = missing.json()["error"]
+    assert body["code"] == "validation_error"
+    assert "缺少参数" in body["message"]
+    assert "标题" in body["message"]
+
+
 def test_chapter_crud(client):
     pid = _create_project(client)
     novel_id = client.post(

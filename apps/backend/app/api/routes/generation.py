@@ -36,7 +36,11 @@ def get_generation_job(job_id: str, request: Request) -> dict:
 @router.get("/files/{filename}")
 def generation_file(filename: str, request: Request) -> FileResponse:
     if not _FILENAME_PATTERN.fullmatch(filename):
-        raise AppError(400, "invalid_filename", "文件名不合法")
+        raise AppError(
+            400,
+            "invalid_filename",
+            "文件名不合法：仅允许字母、数字、点、下划线、短横线，最长 120 字符",
+        )
     path = Path(request.app.state.settings.data_dir) / "generation_tests" / filename
     if not path.is_file():
         raise AppError(404, "file_not_found", "生成文件不存在")

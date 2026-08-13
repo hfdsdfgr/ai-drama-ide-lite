@@ -32,7 +32,8 @@ async function parseErrorResponse(response: Response): Promise<ApiError> {
     // 响应体不是 JSON 时忽略，使用兜底信息
   }
   const message =
-    payload?.error?.message ?? `请求失败（HTTP ${response.status}）`;
+    payload?.error?.message ??
+    `请求失败（HTTP ${response.status}），请稍后重试或检查服务是否已启动`;
   return new ApiError(
     response.status,
     payload?.error?.code ?? "unknown_error",
