@@ -1,6 +1,6 @@
 """AI 写作接口测试（LLM 调用，单模型单次调用）。"""
 
-from app.api.routes import novels as novels_routes
+from app.services.adapters.manager import ProviderManager
 
 
 def _provider_with_model(client, model_type="llm", enabled=True, needs_key=False):
@@ -35,12 +35,12 @@ def _provider_with_model(client, model_type="llm", enabled=True, needs_key=False
 def test_ai_continue(client, monkeypatch):
     captured = {}
 
-    def fake_chat(base_url, api_key, model, messages):
-        captured["model"] = model
+    def fake_chat(self, model_id, messages):
+        captured["model"] = model_id
         captured["content"] = messages[1]["content"]
         return "续写的正文"
 
-    monkeypatch.setattr(novels_routes, "chat_completion", fake_chat)
+    monkeypatch.setattr(ProviderManager, "chat", fake_chat)
     pid, nid, cid, mid = _provider_with_model(client)
     response = client.post(
         f"/api/projects/{pid}/novels/{nid}/ai/continue",
@@ -48,7 +48,7 @@ def test_ai_continue(client, monkeypatch):
     )
     assert response.status_code == 200
     assert response.json()["text"] == "续写的正文"
-    assert captured["model"] == "test-llm"
+    assert captured["model"] == mid
     assert "第一章" in captured["content"]
 
 

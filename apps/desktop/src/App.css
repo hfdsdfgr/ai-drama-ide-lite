@@ -299,6 +299,32 @@ button:disabled {
   gap: 0.25rem 0.9rem;
 }
 
+.gen-test-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.6rem;
+  border: 1px solid #eee;
+  border-radius: 8px;
+  padding: 0.7rem 0.9rem;
+  margin-bottom: 0.5rem;
+  background: #fafafa;
+}
+
+.gen-result {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.gen-media {
+  max-width: 280px;
+  max-height: 280px;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+}
+
 .test-result {
   border: 1px solid #eee;
   border-radius: 8px;

@@ -231,17 +231,15 @@ Phase 5 — Provider Adapter System
 解决不同 AI API 的调用方式完全不同的问题。
 
 Tasks
- Provider Interface
- Image Provider Interface
- Video Provider Interface
- LLM Provider Interface
- Adapter Interface
- Request Normalization
- Response Normalization
- Error Normalization
- Polling
- Webhook
- Async Job Support
+- [x] Provider Interface / ProviderManager（按能力解析 Adapter，业务层零厂商耦合）
+- [x] LLM Provider Interface（OpenAI 兼容 chat，小说 AI 写作已改走 Adapter）
+- [x] Image Provider Interface（text_to_image / image_to_image / reference_image）
+- [x] Video Provider Interface（text_to_video / image_to_video）
+- [x] Adapter Interface（能力级统一契约 + ProviderContext）
+- [x] Request Normalization / Response Normalization / Error Normalization
+- [x] Polling（提交→轮询→取结果，状态来自厂商真实返回）
+- [x] Async Job Support（内存 Job 注册表 + /api/generation/jobs；Phase 10 持久化）
+- [ ] Webhook（Phase 10 Job 系统按需扩展，当前只做轮询）
 核心结构
 Generation Request
         ↓
@@ -267,6 +265,13 @@ API
 并证明：
 
 更换模型不需要修改业务层代码。
+
+已接入两种调用形态：
+
+- OpenAI 兼容（chat + 图片同步）— openai / deepseek / siliconflow / openrouter / zhipu / ollama / 百炼兼容端点
+- 阿里云百炼原生（视频异步任务：video-synthesis → 轮询 /api/v1/tasks/{id}）
+
+验证入口：设置页模型「生成测试」（L3，含费用确认）；小说页 AI 创作走 ProviderManager。
 
 Phase 6 — LLM Story Engine
 

@@ -228,7 +228,8 @@ class ProviderRepository:
         with get_connection(self.db_path) as conn:
             rows = conn.execute(
                 f"""
-                SELECT m.*, p.name AS provider_name, p.api_base_url AS provider_base_url,
+                SELECT m.*, p.name AS provider_name, p.preset_key AS provider_preset_key,
+                       p.enabled AS provider_enabled, p.api_base_url AS provider_base_url,
                        p.needs_key AS provider_needs_key, p.key_ref AS provider_key_ref
                 FROM models m
                 JOIN providers p ON p.id = m.provider_id
@@ -244,7 +245,8 @@ class ProviderRepository:
         with get_connection(self.db_path) as conn:
             row = conn.execute(
                 """
-                SELECT m.*, p.name AS provider_name, p.api_base_url AS provider_base_url,
+                SELECT m.*, p.name AS provider_name, p.preset_key AS provider_preset_key,
+                       p.enabled AS provider_enabled, p.api_base_url AS provider_base_url,
                        p.needs_key AS provider_needs_key, p.key_ref AS provider_key_ref
                 FROM models m
                 JOIN providers p ON p.id = m.provider_id
@@ -429,6 +431,8 @@ def _model_out(row, secret_store: SecretStore) -> ModelOut:
         id=row["id"],
         provider_id=row["provider_id"],
         provider_name=row["provider_name"],
+        provider_preset_key=row["provider_preset_key"],
+        provider_enabled=bool(row["provider_enabled"]),
         provider_base_url=row["provider_base_url"],
         provider_needs_key=bool(row["provider_needs_key"]),
         provider_has_api_key=has_key,

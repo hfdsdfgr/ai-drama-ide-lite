@@ -90,6 +90,8 @@ class ModelOut(BaseModel):
     id: str
     provider_id: str
     provider_name: str
+    provider_preset_key: str | None = None
+    provider_enabled: bool = True
     provider_base_url: str = ""
     provider_needs_key: bool = True
     provider_has_api_key: bool = False

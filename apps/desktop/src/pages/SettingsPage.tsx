@@ -1,6 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 
 import { InfoTip } from "../components/InfoTip";
+import {
+  createGenerationJob,
+  getGenerationJob,
+} from "../api/generation";
 import {
   bulkAddModels,
   createModel,
@@ -27,6 +31,7 @@ import type {
   Provider,
   ProviderTestResult,
 } from "../types/provider";
+import type { GenerationJob } from "../types/generation";
 import {
   CAPABILITY_LABELS,
   IMAGE_CAPABILITIES,
@@ -40,6 +45,18 @@ const TYPE_LABEL: Record<ModelType, string> = {
   image: "图片模型",
   video: "视频模型",
 };
+
+const GEN_STATUS_LABEL: Record<GenerationJob["status"], string> = {
+  queued: "排队中…",
+  running: "生成中…",
+  completed: "已完成",
+  failed: "失败",
+  cancelled: "已取消",
+};
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 export function SettingsPage() {
   const [presets, setPresets] = useState<Preset[]>([]);
@@ -68,6 +85,14 @@ export function SettingsPage() {
     kind: "provider" | "model";
     id: string;
   } | null>(null);
+  const [genPanel, setGenPanel] = useState<{
+    modelId: string;
+    prompt: string;
+    capability: string;
+  } | null>(null);
+  const [genJobs, setGenJobs] = useState<Record<string, GenerationJob>>({});
+  const [genBusy, setGenBusy] = useState(false);
+  const genPollRef = useRef<string | null>(null);
 
   const [formPreset, setFormPreset] = useState("");
   const [formName, setFormName] = useState("");
@@ -168,6 +193,59 @@ export function SettingsPage() {
         : prev.caps.filter((c) => c !== cap);
       return { ...prev, caps };
     });
+  }
+
+  function openGenPanel(model: Model) {
+    const defaultCap =
+      model.model_type === "video" ? "text_to_video" : "text_to_image";
+    setGenPanel({
+      modelId: model.id,
+      prompt: "一只小猫在月光下奔跑",
+      capability: model.capabilities.includes(defaultCap as CapabilityKey)
+        ? defaultCap
+        : model.capabilities[0] ?? "",
+    });
+    setGenJobs((prev) => {
+      const next = { ...prev };
+      delete next[model.id];
+      return next;
+    });
+  }
+
+  function closeGenPanel() {
+    genPollRef.current = null;
+    setGenPanel(null);
+  }
+
+  async function startGenTest(e: React.FormEvent) {
+    e.preventDefault();
+    if (!genPanel) return;
+    setGenBusy(true);
+    setError("");
+    try {
+      const job = await createGenerationJob({
+        model_id: genPanel.modelId,
+        capability: genPanel.capability,
+        prompt: genPanel.prompt.trim(),
+      });
+      setGenJobs((prev) => ({ ...prev, [genPanel.modelId]: job }));
+      genPollRef.current = job.job_id;
+      while (genPollRef.current === job.job_id) {
+        await sleep(3000);
+        if (genPollRef.current !== job.job_id) break;
+        const updated = await getGenerationJob(job.job_id);
+        setGenJobs((prev) => ({ ...prev, [genPanel.modelId]: updated }));
+        if (["completed", "failed", "cancelled"].includes(updated.status)) {
+          genPollRef.current = null;
+          break;
+        }
+      }
+    } catch (err) {
+      setError((err as Error).message);
+      genPollRef.current = null;
+    } finally {
+      setGenBusy(false);
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -593,7 +671,8 @@ export function SettingsPage() {
                   {models
                     .filter((m) => m.provider_id === provider.id)
                     .map((model) => (
-                      <div key={model.id} className="model-row">
+                      <Fragment key={model.id}>
+                      <div className="model-row">
                         <span className="model-name">{model.model_id}</span>
                         <span className={`badge badge-${model.model_type}`}>
                           {TYPE_LABEL[model.model_type]}
@@ -639,6 +718,11 @@ export function SettingsPage() {
                           {model.model_type !== "llm" && (
                             <button type="button" onClick={() => handleDefault(model)}>
                               设默认
+                            </button>
+                          )}
+                          {model.model_type !== "llm" && (
+                            <button type="button" onClick={() => openGenPanel(model)}>
+                              生成测试
                             </button>
                           )}
                           {model.model_type !== "llm" &&
@@ -719,6 +803,74 @@ export function SettingsPage() {
                           )}
                         </div>
                       </div>
+                      {genPanel?.modelId === model.id && (
+                        <form className="gen-test-panel" onSubmit={startGenTest}>
+                          <label>
+                            提示词
+                            <input
+                              value={genPanel.prompt}
+                              onChange={(e) =>
+                                setGenPanel({ ...genPanel, prompt: e.target.value })
+                              }
+                              placeholder="描述要生成的内容"
+                              required
+                            />
+                          </label>
+                          <label>
+                            能力
+                            <select
+                              value={genPanel.capability}
+                              onChange={(e) =>
+                                setGenPanel({ ...genPanel, capability: e.target.value })
+                              }
+                            >
+                              {model.capabilities.map((cap) => (
+                                <option key={cap} value={cap}>
+                                  {CAPABILITY_LABELS[cap as CapabilityKey]}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <button type="submit" disabled={genBusy}>
+                            {genBusy ? "提交中…" : "确认生成（会产生真实费用）"}
+                          </button>
+                          <button type="button" onClick={closeGenPanel}>
+                            关闭
+                          </button>
+                          {genJobs[model.id] && (
+                            <div className="gen-result">
+                              <p className="muted">
+                                状态：{GEN_STATUS_LABEL[genJobs[model.id].status]}
+                              </p>
+                              {genJobs[model.id].error && (
+                                <p className="error">{genJobs[model.id].error}</p>
+                              )}
+                              {genJobs[model.id].result?.urls.map((u, i) => {
+                                const isVideo =
+                                  genJobs[model.id].capability === "text_to_video" ||
+                                  genJobs[model.id].capability === "image_to_video" ||
+                                  /\.(mp4|webm|mov)(\?|$)/i.test(u);
+                                return isVideo ? (
+                                  <video
+                                    key={i}
+                                    src={u}
+                                    controls
+                                    className="gen-media"
+                                  />
+                                ) : (
+                                  <img
+                                    key={i}
+                                    src={u}
+                                    alt="生成结果"
+                                    className="gen-media"
+                                  />
+                                );
+                              })}
+                            </div>
+                          )}
+                        </form>
+                      )}
+                      </Fragment>
                     ))}
                 </div>
 

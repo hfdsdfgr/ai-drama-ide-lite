@@ -18,8 +18,6 @@ from app.schemas.novel import (
     NovelUpdate,
 )
 from app.services.novel_repo import NovelRepository
-from app.services.llm_client import chat_completion
-from app.services.provider_repo import ProviderRepository
 from app.services.text_import import parse_novel_file
 
 router = APIRouter(prefix="/api/projects/{project_id}/novels", tags=["novels"])
@@ -27,11 +25,6 @@ router = APIRouter(prefix="/api/projects/{project_id}/novels", tags=["novels"])
 
 def _repo(request: Request) -> NovelRepository:
     return NovelRepository(request.app.state.settings.db_path)
-
-
-def _provider_repo(request: Request) -> ProviderRepository:
-    settings = request.app.state.settings
-    return ProviderRepository(settings.db_path, request.app.state.secret_store)
 
 
 def _build_ai_messages(action: str, chapter_title: str, content: str) -> list[dict]:
@@ -124,20 +117,6 @@ def ai_writing(
 ) -> NovelAiResult:
     novel_repo = _repo(request)
     chapter = novel_repo.get_chapter(novel_id, payload.chapter_id)
-
-    model = _provider_repo(request).get_model(payload.model_id)
-    if model.model_type != "llm":
-        raise AppError(422, "not_llm_model", "请选择文本模型（LLM）")
-    if not model.enabled:
-        raise AppError(422, "model_disabled", "该模型已禁用，请先在设置中启用")
-    if model.provider_needs_key and not model.provider_has_api_key:
-        raise AppError(422, "api_key_required", "该模型的 Provider 未配置 API Key")
-
-    api_key = (
-        request.app.state.secret_store.get(f"provider:{model.provider_id}")
-        if model.provider_needs_key
-        else None
-    )
     messages = _build_ai_messages(action, chapter.title, chapter.content)
-    text = chat_completion(model.provider_base_url, api_key, model.model_id, messages)
+    text = request.app.state.provider_manager.chat(payload.model_id, messages)
     return NovelAiResult(text=text)
