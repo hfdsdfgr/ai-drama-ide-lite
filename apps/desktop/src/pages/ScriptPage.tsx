@@ -382,6 +382,34 @@ export function ScriptPage({ active }: { active: boolean }) {
                 })
               )}
             </>
+          ) : scriptPreview ? (
+            <>
+              <div className="panel-head">
+                <h3>
+                  {scriptPreview.episode.title}
+                  <span className="badge badge-default">待保存</span>
+                </h3>
+                <p className="muted">{scriptPreview.episode.summary}</p>
+              </div>
+              <p className="muted">
+                这是 AI 生成的剧本预览，确认后点右侧「保存剧本」写入项目。
+              </p>
+              {scriptPreview.scenes.length === 0 ? (
+                <p className="muted">本分集还没有场景。</p>
+              ) : (
+                scriptPreview.scenes.map((scene, i) => (
+                  <div className="card" key={i}>
+                    <div className="scene-head">
+                      <strong>{scene.slugline || scene.title}</strong>
+                    </div>
+                    {scene.action && <p className="muted">{scene.action}</p>}
+                    {scene.dialogue && (
+                      <pre className="scene-dialogue">{scene.dialogue}</pre>
+                    )}
+                  </div>
+                ))
+              )}
+            </>
           ) : (
             <div className="novel-empty">
               <p className="muted">
