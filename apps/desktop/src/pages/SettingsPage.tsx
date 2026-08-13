@@ -633,7 +633,7 @@ export function SettingsPage() {
                   ) : (
                     <button
                       type="button"
-                      className="button-danger"
+                      className="button-danger button-ghost"
                       onClick={() => handleDeleteProvider(provider)}
                     >
                       删除
@@ -790,7 +790,7 @@ export function SettingsPage() {
                             ) : (
                               <button
                                 type="button"
-                                className="button-danger"
+                                className="button-danger button-ghost"
                                 onClick={() => handleDeleteModel(model)}
                               >
                                 删除

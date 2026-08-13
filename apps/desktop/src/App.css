@@ -291,7 +291,7 @@ button:disabled {
 
 .novel-workspace {
   display: grid;
-  grid-template-columns: 250px minmax(0, 1fr) 340px;
+  grid-template-columns: 250px minmax(0, 1fr) 400px;
   gap: 1rem;
   align-items: start;
 }
@@ -356,6 +356,84 @@ button:disabled {
 .stats-list b {
   font-variant-numeric: tabular-nums;
   color: var(--text-h);
+}
+
+.stats-wide {
+  grid-column: 1 / -1;
+}
+
+.stats-wide b {
+  font-weight: 500;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+/* ---- Stepper（AI 撰写向导步骤条） ---- */
+.stepper {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+  padding: 0.5rem 0.6rem;
+}
+
+.step {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex: 0 1 auto;
+  color: var(--text-faint);
+  font-size: 0.7rem;
+  white-space: nowrap;
+}
+
+.step + .step::before {
+  content: "";
+  flex: 1 0 auto;
+  height: 1px;
+  background: var(--border);
+  margin: 0 0.25rem;
+  min-width: 2px;
+}
+
+.step-label {
+  flex-shrink: 0;
+}
+
+.step-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.6rem;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-panel);
+  flex-shrink: 0;
+}
+
+.step.current {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.step.current .step-dot {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.step.done {
+  color: var(--success);
+}
+
+.step.done .step-dot {
+  border-color: var(--success);
+  background: var(--success-bg);
 }
 
 .panel-head {

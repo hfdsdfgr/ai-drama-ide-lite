@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { InfoTip } from "../components/InfoTip";
+import { Stepper } from "../components/Stepper";
 import {
   addChapter,
   createNovel,
@@ -607,6 +608,16 @@ export function NovelPage() {
     setConfirmDelete(null);
   }, [chapterId, detail?.novel.id]);
 
+  // AI 撰写向导步骤：1 情节复杂度 → 2 初步想法 → 3 章节大纲 → 4 内容生成
+  const wizardSteps = ["情节复杂度", "初步想法", "章节大纲", "内容生成"];
+  const wizardStep = (() => {
+    if (!wiz) return { current: 0, doneSteps: 0 };
+    if (wiz.done) return { current: 4, doneSteps: 4 };
+    if (wiz.outline === null) return { current: 1, doneSteps: 0 };
+    if (!wiz.writing) return { current: 3, doneSteps: 2 };
+    return { current: 4, doneSteps: 3 };
+  })();
+
   return (
     <div className="page novel-page">
       <div className="novel-topbar">
@@ -770,6 +781,23 @@ export function NovelPage() {
                     <span>字数</span>
                     <b>{totalWords}</b>
                   </li>
+                  {detail && (
+                    <li className="stats-wide">
+                      <span>更新时间</span>
+                      <b>
+                        {new Date(detail.novel.updated_at).toLocaleString(
+                          "zh-CN",
+                          {
+                            hour12: false,
+                            month: "2-digit",
+                            day: "2-digit",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          },
+                        )}
+                      </b>
+                    </li>
+                  )}
                 </ul>
               </div>
               </>
@@ -836,7 +864,7 @@ export function NovelPage() {
                       ) : (
                         <button
                           type="button"
-                          className="button-danger"
+                          className="button-danger button-ghost"
                           onClick={handleDeleteChapter}
                         >
                           删除章节
@@ -967,6 +995,13 @@ export function NovelPage() {
                   </button>
                 )}
               </div>
+              {wiz && (
+                <Stepper
+                  steps={wizardSteps}
+                  current={wizardStep.current}
+                  doneSteps={wizardStep.doneSteps}
+                />
+              )}
               {!wiz ? (
                 <div className="toolbar">
                   <button type="button" onClick={startWizard}>
