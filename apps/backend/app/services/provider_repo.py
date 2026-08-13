@@ -221,6 +221,7 @@ class ProviderRepository:
             params.append(model_type)
         if enabled_only:
             conditions.append("m.enabled = 1")
+            conditions.append("p.enabled = 1")
         if capability:
             conditions.append("m.capabilities LIKE ?")
             params.append(f'%"{capability}"%')
@@ -238,7 +239,15 @@ class ProviderRepository:
                 """,
                 params,
             ).fetchall()
-        return [_model_out(row, self.secret_store) for row in rows]
+        models = [_model_out(row, self.secret_store) for row in rows]
+        if enabled_only:
+            # 需要 Key 但实际未配置密钥的模型不可用，不进入生成/创作选择器
+            models = [
+                m
+                for m in models
+                if not (m.provider_needs_key and not m.provider_has_api_key)
+            ]
+        return models
 
     def get_model(self, model_id: str) -> ModelOut:
         _validate_id(model_id, "Model")

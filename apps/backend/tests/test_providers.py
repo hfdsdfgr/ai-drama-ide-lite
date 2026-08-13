@@ -206,6 +206,69 @@ def test_aggregation_filters(client):
     assert ids == ["gpt-image-1"]
 
 
+def test_enabled_only_excludes_disabled_provider_and_keyless(client):
+    # Provider 未配 Key（needs_key=True）→ 模型即使启用也不该出现在 enabled_only
+    keyless = client.post(
+        "/api/providers",
+        json={
+            "name": "无Key",
+            "api_base_url": "http://127.0.0.1:1/v1",
+            "needs_key": True,
+        },
+    ).json()
+    client.post(
+        "/api/models",
+        json={
+            "provider_id": keyless["id"],
+            "model_id": "no-key-llm",
+            "model_type": "llm",
+        },
+    )
+
+    # Provider 被禁用 → 模型即使启用也不该出现在 enabled_only
+    disabled = client.post(
+        "/api/providers",
+        json={
+            "name": "被禁用",
+            "api_base_url": "http://127.0.0.1:1/v1",
+            "needs_key": False,
+        },
+    ).json()
+    client.post(
+        "/api/models",
+        json={
+            "provider_id": disabled["id"],
+            "model_id": "disabled-provider-llm",
+            "model_type": "llm",
+        },
+    )
+    client.put(f"/api/providers/{disabled['id']}", json={"enabled": False})
+
+    # 正常可用的对照
+    ok = client.post(
+        "/api/providers",
+        json={
+            "name": "可用",
+            "api_base_url": "http://127.0.0.1:1/v1",
+            "needs_key": False,
+        },
+    ).json()
+    client.post(
+        "/api/models",
+        json={
+            "provider_id": ok["id"],
+            "model_id": "ok-llm",
+            "model_type": "llm",
+        },
+    )
+
+    response = client.get("/api/models", params={"model_type": "llm", "enabled_only": True})
+    ids = [m["model_id"] for m in response.json()]
+    assert "no-key-llm" not in ids
+    assert "disabled-provider-llm" not in ids
+    assert "ok-llm" in ids
+
+
 def test_discover_models_classification(client, monkeypatch):
     provider = client.post(
         "/api/providers",

@@ -22,6 +22,27 @@ import type { Project } from "../types/project";
 type SaveState = "idle" | "saving" | "saved" | "error";
 type AiAction = "continue" | "expand" | "rewrite";
 
+// 虽然分类为 llm，但这些模型不是「文本创作」模型，不出现在小说 AI 下拉中
+const NON_CHAT_LLM_FRAGMENTS = [
+  "text-embedding",
+  "embedding",
+  "-tts-",
+  "-asr-",
+  "-ocr-",
+  "-realtime",
+  "livetranslate",
+  "qwen-mt",
+  "-omni-",
+  "s2s",
+  "captioner",
+  "slp",
+];
+
+function isChatModel(model: Model): boolean {
+  const id = model.model_id.toLowerCase();
+  return !NON_CHAT_LLM_FRAGMENTS.some((fragment) => id.includes(fragment));
+}
+
 export function NovelPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState("");
@@ -80,9 +101,10 @@ export function NovelPage() {
     if (!projectId) return;
     listModels({ model_type: "llm", enabled_only: true })
       .then((models) => {
-        setLlmModels(models);
+        const usable = models.filter(isChatModel);
+        setLlmModels(usable);
         setAiModelId((prev) =>
-          models.some((m) => m.id === prev) ? prev : (models[0]?.id ?? ""),
+          usable.some((m) => m.id === prev) ? prev : (usable[0]?.id ?? ""),
         );
       })
       .catch((e) => setError((e as Error).message));
