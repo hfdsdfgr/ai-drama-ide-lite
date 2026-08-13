@@ -10,14 +10,20 @@ from app.schemas.story import (
     AssetGenerateRequest,
     AssetUpdateRequest,
 )
-from app.services.asset_service import ASSET_IMAGE_SPECS
+from app.services.asset_service import (
+    ART_STYLE_OPTIONS,
+    ASPECT_RATIO_OPTIONS,
+    ASSET_DEFAULT_SPECS,
+    resolve_image_spec,
+)
 from app.services.story_repo import ASSET_TYPES, StoryRepository
 
 router = APIRouter(prefix="/api/projects/{project_id}/assets", tags=["assets"])
 
 
 def _with_spec(asset: dict) -> dict:
-    spec = ASSET_IMAGE_SPECS[asset["asset_type"]]
+    fields = asset["fields"]
+    spec = resolve_image_spec(asset["asset_type"], fields.get("aspect_ratio", ""))
     return {
         "asset_type": asset["asset_type"],
         "asset_id": asset["asset_id"],
@@ -36,7 +42,11 @@ def list_assets(project_id: str, request: Request) -> list[dict]:
 
 @router.get("/specs")
 def asset_specs(project_id: str) -> dict:
-    return {"specs": ASSET_IMAGE_SPECS}
+    return {
+        "defaults": ASSET_DEFAULT_SPECS,
+        "aspect_ratios": ASPECT_RATIO_OPTIONS,
+        "art_styles": ART_STYLE_OPTIONS,
+    }
 
 
 @router.put("", response_model=AssetCardOut)

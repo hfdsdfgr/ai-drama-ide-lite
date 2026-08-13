@@ -6,7 +6,7 @@ import time
 from app.db.database import get_connection
 from app.schemas.story import StoryBible
 from app.services.adapters.manager import ProviderManager
-from app.services.asset_service import ASSET_IMAGE_SPECS, AssetGenerationService
+from app.services.asset_service import AssetGenerationService
 from app.services.story_repo import StoryRepository
 
 
@@ -110,17 +110,45 @@ def test_save_bible_assigns_stable_asset_ids(client):
     assert count == 3
 
 
-def test_asset_specs_are_fixed_format(client):
+def test_asset_specs_defaults_and_options(client):
     project_id = _create_project_with_bible(client)
     response = client.get(f"/api/projects/{project_id}/assets/specs")
     assert response.status_code == 200
-    specs = response.json()["specs"]
-    assert specs["character"]["aspect_ratio"] == "2:3"
-    assert specs["character"]["width"] == 1024
-    assert specs["character"]["height"] == 1536
-    assert specs["location"]["aspect_ratio"] == "16:9"
-    assert specs["prop"]["aspect_ratio"] == "1:1"
-    assert ASSET_IMAGE_SPECS == specs
+    body = response.json()
+    defaults = body["defaults"]
+    assert defaults["character"]["aspect_ratio"] == "2:3"
+    assert defaults["character"]["width"] == 1024
+    assert defaults["character"]["height"] == 1536
+    assert defaults["location"]["aspect_ratio"] == "16:9"
+    assert defaults["prop"]["aspect_ratio"] == "1:1"
+    ratios = {r["value"] for r in body["aspect_ratios"]}
+    assert ratios == {"1:1", "2:3", "3:4", "4:3", "16:9", "9:16"}
+    styles = {s["value"] for s in body["art_styles"]}
+    assert "" in styles and "动漫" in styles and "水墨" in styles
+
+
+def test_custom_aspect_ratio_and_style_resolve_spec(client):
+    project_id = _create_project_with_bible(client)
+    response = client.put(
+        f"/api/projects/{project_id}/assets",
+        json={
+            "asset_type": "character",
+            "name": "林凡",
+            "patch": {"aspect_ratio": "16:9", "art_style": "动漫"},
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["image_spec"]["aspect_ratio"] == "16:9"
+    assert body["image_spec"]["width"] == 1280
+    assert body["image_spec"]["height"] == 720
+    assert body["fields"]["art_style"] == "动漫"
+    # 未自定义的道具仍回退类型默认
+    prop = next(
+        a for a in client.get(f"/api/projects/{project_id}/assets").json()
+        if a["asset_type"] == "prop"
+    )
+    assert prop["image_spec"]["aspect_ratio"] == "1:1"
 
 
 def test_list_assets_includes_spec(client):

@@ -132,3 +132,4 @@
 - **旧项目 Bible JSON 缺新字段（asset_id 为空）**：Phase 8 给 Bible 实体加 `asset_id` 后，老项目（存量 stories 表 JSON）里该字段为空，前端资产列表/标题徽标全部空白。修复：`list_assets` 读取时检测空 asset_id → 先 `save_bible` 落库分配稳定 ID（复用 `asset_type_slug_seq`）再返回；不要在 UI 层手补 ID。
 - **PowerShell `$pid` 是保留变量**：`foreach ($pid in $listeners)` 直接报 `Cannot overwrite variable PID`，导致 Stop-Process 循环没执行、后端没重启。遍历进程号时用 `$procId` 等自定义变量名。
 - **starlette TestClient.delete 不支持 `json=` 参数**：DELETE 带 body 的接口测试用 `client.delete(url, json=...)` 会抛 `TypeError`；改用 `client.request("DELETE", url, json=...)`。
+- **依赖 projectId 的数据加载写进了挂载 effect**：资产页把 `getAssetSpecs` 放在 `active` effect（挂载时跑一次）里，但此时项目还没选中，导致选中项目后规格选项一直为空（比例下拉只有「默认」、画风下拉空白）。凡「选中项目后才需要的数据」（如资产规格、列表）必须放在依赖 `projectId` 的 effect 里，与刷新列表同批触发。

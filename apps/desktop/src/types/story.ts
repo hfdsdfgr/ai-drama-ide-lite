@@ -19,6 +19,8 @@ export interface BibleCharacter {
   marks: string;
   personality: string;
   style: string;
+  aspect_ratio: string;
+  art_style: string;
   reference_prompt: string;
   asset_id: string;
 }
@@ -30,6 +32,8 @@ export interface BibleLocation {
   time: string;
   lighting: string;
   style: string;
+  aspect_ratio: string;
+  art_style: string;
   reference_prompt: string;
   asset_id: string;
 }
@@ -39,6 +43,8 @@ export interface BibleProp {
   description: string;
   material: string;
   reference: string;
+  aspect_ratio: string;
+  art_style: string;
   reference_prompt: string;
   asset_id: string;
 }
@@ -77,6 +83,24 @@ export interface AssetImageSpec {
   width: number;
   height: number;
   label: string;
+}
+
+export interface AssetImageSpecOption {
+  value: string;
+  label: string;
+  width: number;
+  height: number;
+}
+
+export interface AssetArtStyleOption {
+  value: string;
+  label: string;
+}
+
+export interface AssetSpecs {
+  defaults: Record<AssetType, AssetImageSpec>;
+  aspect_ratios: AssetImageSpecOption[];
+  art_styles: AssetArtStyleOption[];
 }
 
 export interface AssetCard {

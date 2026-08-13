@@ -1,7 +1,7 @@
 import type {
   AssetCard,
   AssetGenerateJob,
-  AssetImageSpec,
+  AssetSpecs,
   AssetType,
 } from "../types/story";
 import { request } from "./client";
@@ -12,10 +12,8 @@ export function listAssets(projectId: string): Promise<AssetCard[]> {
 
 export function getAssetSpecs(
   projectId: string,
-): Promise<{ specs: Record<AssetType, AssetImageSpec> }> {
-  return request<{ specs: Record<AssetType, AssetImageSpec> }>(
-    `/projects/${projectId}/assets/specs`,
-  );
+): Promise<AssetSpecs> {
+  return request<AssetSpecs>(`/projects/${projectId}/assets/specs`);
 }
 
 export function updateAsset(

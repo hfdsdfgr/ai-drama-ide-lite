@@ -19,7 +19,7 @@ from app.services.llm_json import parse_llm_json, trim
 from app.services.story_repo import StoryRepository
 
 
-ASSET_IMAGE_SPECS = {
+ASSET_DEFAULT_SPECS = {
     "character": {
         "aspect_ratio": "2:3",
         "width": 1024,
@@ -39,6 +39,43 @@ ASSET_IMAGE_SPECS = {
         "label": "道具参考图（方形）",
     },
 }
+
+ASPECT_RATIO_OPTIONS = [
+    {"value": "1:1", "label": "1:1 方形", "width": 1024, "height": 1024},
+    {"value": "2:3", "label": "2:3 竖版", "width": 1024, "height": 1536},
+    {"value": "3:4", "label": "3:4 竖版", "width": 768, "height": 1024},
+    {"value": "4:3", "label": "4:3 横版", "width": 1024, "height": 768},
+    {"value": "16:9", "label": "16:9 横版", "width": 1280, "height": 720},
+    {"value": "9:16", "label": "9:16 竖版", "width": 720, "height": 1280},
+]
+
+ART_STYLE_OPTIONS = [
+    {"value": "", "label": "默认（跟随资产卡风格）"},
+    {"value": "写实", "label": "写实"},
+    {"value": "动漫", "label": "动漫"},
+    {"value": "国风", "label": "国风"},
+    {"value": "赛博朋克", "label": "赛博朋克"},
+    {"value": "水墨", "label": "水墨"},
+    {"value": "像素", "label": "像素"},
+    {"value": "3D渲染", "label": "3D 渲染"},
+    {"value": "油画", "label": "油画"},
+]
+
+
+def resolve_image_spec(asset_type: str, aspect_ratio: str) -> dict:
+    """按资产自定义比例解析生图规格；未指定时回退到类型默认。"""
+    if aspect_ratio:
+        for option in ASPECT_RATIO_OPTIONS:
+            if option["value"] == aspect_ratio:
+                label = ASSET_DEFAULT_SPECS[asset_type]["label"]
+                return {
+                    "aspect_ratio": option["value"],
+                    "width": option["width"],
+                    "height": option["height"],
+                    "label": label,
+                }
+    return dict(ASSET_DEFAULT_SPECS[asset_type])
+
 
 MAX_BIBLE_CHARS = 30000
 

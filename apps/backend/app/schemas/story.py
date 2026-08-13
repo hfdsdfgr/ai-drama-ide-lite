@@ -54,6 +54,8 @@ class BibleCharacter(BaseModel):
     marks: str = Field(default="", max_length=300)  # 特殊标记：泪痣/耳钉/疤痕/纹身
     personality: str = Field(default="", max_length=500)  # 性格标签
     style: str = Field(default="", max_length=300)  # 风格参考：写实/动漫/国风/赛博
+    aspect_ratio: str = Field(default="", max_length=20)  # 生图比例，空 = 类型默认
+    art_style: str = Field(default="", max_length=50)  # 生图画风，空 = 跟随资产卡
     reference_prompt: str = Field(default="", max_length=4000)
     asset_id: str = Field(default="", max_length=100)
 
@@ -66,6 +68,8 @@ class BibleLocation(BaseModel):
     time: str = Field(default="", max_length=200)  # 时间段
     lighting: str = Field(default="", max_length=500)  # 光线
     style: str = Field(default="", max_length=300)  # 视觉风格
+    aspect_ratio: str = Field(default="", max_length=20)
+    art_style: str = Field(default="", max_length=50)
     reference_prompt: str = Field(default="", max_length=4000)
     asset_id: str = Field(default="", max_length=100)
 
@@ -76,6 +80,8 @@ class BibleProp(BaseModel):
     # Phase 8 视觉资产卡
     material: str = Field(default="", max_length=500)  # 材质
     reference: str = Field(default="", max_length=1000)  # 参考/用途
+    aspect_ratio: str = Field(default="", max_length=20)
+    art_style: str = Field(default="", max_length=50)
     reference_prompt: str = Field(default="", max_length=4000)
     asset_id: str = Field(default="", max_length=100)
 

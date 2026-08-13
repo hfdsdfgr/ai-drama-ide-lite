@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   deleteAsset,
   getAssetGeneration,
+  getAssetSpecs,
   listAssets,
   startAssetGeneration,
   updateAsset,
@@ -14,6 +15,7 @@ import type { Project } from "../types/project";
 import type {
   AssetCard,
   AssetGenerateJob,
+  AssetSpecs,
   AssetType,
 } from "../types/story";
 
@@ -140,6 +142,8 @@ function buildDraft(asset: AssetCard): Record<string, string> {
   const fields = asset.fields as unknown as Record<string, unknown>;
   const draft: Record<string, string> = {
     reference_prompt: asset.reference_prompt,
+    aspect_ratio: String(fields["aspect_ratio"] ?? ""),
+    art_style: String(fields["art_style"] ?? ""),
   };
   for (const field of FIELD_SETS[asset.asset_type]) {
     draft[field.key] = String(fields[field.key] ?? "");
@@ -158,6 +162,7 @@ export function AssetPage({ active }: { active: boolean }) {
   const [confirmDeleteName, setConfirmDeleteName] = useState<string | null>(null);
   const [llmModels, setLlmModels] = useState<Model[]>([]);
   const [aiModelId, setAiModelId] = useState("");
+  const [specs, setSpecs] = useState<AssetSpecs | null>(null);
   const [genJob, setGenJob] = useState<AssetGenerateJob | null>(null);
   const [genBusy, setGenBusy] = useState(false);
   const [error, setError] = useState("");
@@ -198,8 +203,12 @@ export function AssetPage({ active }: { active: boolean }) {
   useEffect(() => {
     if (!projectId) {
       setAssets([]);
+      setSpecs(null);
       return;
     }
+    getAssetSpecs(projectId)
+      .then(setSpecs)
+      .catch((e) => setError((e as Error).message));
     void refreshAssets(projectId);
   }, [projectId, refreshAssets]);
 
@@ -315,6 +324,14 @@ export function AssetPage({ active }: { active: boolean }) {
   }
 
   const spec = selected?.image_spec;
+  const activeRatio = draft?.aspect_ratio || spec?.aspect_ratio || "2:3";
+  const activeSpecOption =
+    specs?.aspect_ratios.find((r) => r.value === activeRatio) ?? null;
+  const previewSpec = {
+    aspect_ratio: activeSpecOption?.value ?? spec?.aspect_ratio ?? "2:3",
+    width: activeSpecOption?.width ?? spec?.width ?? 1024,
+    height: activeSpecOption?.height ?? spec?.height ?? 1536,
+  };
 
   return (
     <div className="page asset-page">
@@ -435,13 +452,60 @@ export function AssetPage({ active }: { active: boolean }) {
                 <div className="asset-spec-card">
                   <div
                     className="asset-spec-box"
-                    style={{ aspectRatio: spec.aspect_ratio }}
+                    style={{ aspectRatio: previewSpec.aspect_ratio }}
                   >
                     <span className="asset-spec-label">{spec.label}</span>
                     <span className="asset-spec-meta">
-                      {spec.aspect_ratio} · {spec.width}×{spec.height}
+                      {previewSpec.aspect_ratio} · {previewSpec.width}×
+                      {previewSpec.height}
                     </span>
                   </div>
+                  <div className="asset-spec-controls">
+                    <label>
+                      图片比例
+                      <select
+                        value={draft?.aspect_ratio ?? ""}
+                        onChange={(e) =>
+                          setDraft((prev) =>
+                            prev
+                              ? { ...prev, aspect_ratio: e.target.value }
+                              : prev,
+                          )
+                        }
+                      >
+                        <option value="">
+                          默认（{spec.aspect_ratio}）
+                        </option>
+                        {specs?.aspect_ratios.map((r) => (
+                          <option key={r.value} value={r.value}>
+                            {r.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      画风
+                      <select
+                        value={draft?.art_style ?? ""}
+                        onChange={(e) =>
+                          setDraft((prev) =>
+                            prev
+                              ? { ...prev, art_style: e.target.value }
+                              : prev,
+                          )
+                        }
+                      >
+                        {specs?.art_styles.map((s) => (
+                          <option key={s.value} value={s.value}>
+                            {s.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                  <p className="muted">
+                    生图时将按此比例与画风生成；「默认」使用当前类型的标准规格。
+                  </p>
                 </div>
               )}
 
