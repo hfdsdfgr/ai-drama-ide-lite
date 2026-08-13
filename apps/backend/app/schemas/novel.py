@@ -45,3 +45,12 @@ class Chapter(BaseModel):
 class NovelDetail(BaseModel):
     novel: Novel
     chapters: list[Chapter]
+
+
+class NovelAiRequest(BaseModel):
+    model_id: str
+    chapter_id: str
+
+
+class NovelAiResult(BaseModel):
+    text: str

@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 
+import { InfoTip } from "../components/InfoTip";
 import {
   addChapter,
   createNovel,
   deleteChapter,
   deleteNovel,
+  generateNovelText,
   getNovel,
   importNovel,
   listNovels,
@@ -12,10 +14,13 @@ import {
   updateNovel,
 } from "../api/novels";
 import { listProjects } from "../api/projects";
+import { listModels } from "../api/providers";
+import type { Model } from "../types/provider";
 import type { Chapter, Novel, NovelDetail } from "../types/novel";
 import type { Project } from "../types/project";
 
 type SaveState = "idle" | "saving" | "saved" | "error";
+type AiAction = "continue" | "expand" | "rewrite";
 
 export function NovelPage() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -33,6 +38,11 @@ export function NovelPage() {
   const [error, setError] = useState("");
   const [novelSave, setNovelSave] = useState<SaveState>("idle");
   const [chapterSave, setChapterSave] = useState<SaveState>("idle");
+  const [llmModels, setLlmModels] = useState<Model[]>([]);
+  const [aiModelId, setAiModelId] = useState("");
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiAction, setAiAction] = useState<AiAction | null>(null);
+  const [aiResult, setAiResult] = useState("");
 
   useEffect(() => {
     listProjects()
@@ -59,8 +69,21 @@ export function NovelPage() {
     if (!projectId) return;
     setDetail(null);
     setChapterId(null);
+    setAiResult("");
     void refreshNovels(projectId, "");
   }, [projectId, refreshNovels]);
+
+  useEffect(() => {
+    if (!projectId) return;
+    listModels({ model_type: "llm", enabled_only: true })
+      .then((models) => {
+        setLlmModels(models);
+        setAiModelId((prev) =>
+          models.some((m) => m.id === prev) ? prev : (models[0]?.id ?? ""),
+        );
+      })
+      .catch((e) => setError((e as Error).message));
+  }, [projectId]);
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
@@ -90,6 +113,7 @@ export function NovelPage() {
     setChapterTitle(chapter?.title ?? "");
     setChapterContent(chapter?.content ?? "");
     setChapterSave("idle");
+    setAiResult("");
   }
 
   async function handleCreate(e: React.FormEvent) {
@@ -161,6 +185,42 @@ export function NovelPage() {
     } catch (err) {
       setError((err as Error).message);
     }
+  }
+
+  async function runAi(action: AiAction) {
+    if (!detail || !chapterId) return;
+    setAiBusy(true);
+    setError("");
+    setAiAction(action);
+    try {
+      const result = await generateNovelText(
+        projectId,
+        detail.novel.id,
+        chapterId,
+        action,
+        aiModelId,
+      );
+      setAiResult(result.text);
+    } catch (err) {
+      setAiResult("");
+      setAiAction(null);
+      setError((err as Error).message);
+    } finally {
+      setAiBusy(false);
+    }
+  }
+
+  function applyAiResult() {
+    if (!aiResult) return;
+    if (aiAction === "continue") {
+      setChapterContent((prev) =>
+        prev.trim() ? `${prev}\n\n${aiResult}` : aiResult,
+      );
+    } else {
+      setChapterContent(aiResult);
+    }
+    setAiResult("");
+    setAiAction(null);
   }
 
   // 小说标题自动保存
@@ -382,20 +442,80 @@ export function NovelPage() {
 
                 <div className="card ai-placeholder">
                   <h3>AI 创作</h3>
-                  <p className="muted">
-                    AI 续写 / 扩写 / 重写将在 Phase 3（AI Provider 基础系统）后可用。
-                  </p>
-                  <div className="toolbar">
-                    <button type="button" disabled>
-                      AI 续写
-                    </button>
-                    <button type="button" disabled>
-                      AI 扩写
-                    </button>
-                    <button type="button" disabled>
-                      AI 重写
-                    </button>
-                  </div>
+                  {llmModels.length === 0 ? (
+                    <p className="muted">
+                      还没有可用的文本模型，请先在「设置」中配置并启用一个 LLM
+                      模型。
+                    </p>
+                  ) : (
+                    <>
+                      <label>
+                        文本模型
+                        <InfoTip text="从已配置并启用的文本模型中选择；可在「设置」中添加更多模型" />
+                        <select
+                          value={aiModelId}
+                          onChange={(e) => setAiModelId(e.target.value)}
+                        >
+                          {llmModels.map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.provider_name} / {m.model_id}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <div className="toolbar">
+                        <button
+                          type="button"
+                          disabled={!selectedChapter || aiBusy}
+                          onClick={() => runAi("continue")}
+                        >
+                          {aiBusy && aiAction === "continue" ? "生成中…" : "AI 续写"}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={!selectedChapter || aiBusy}
+                          onClick={() => runAi("expand")}
+                        >
+                          {aiBusy && aiAction === "expand" ? "生成中…" : "AI 扩写"}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={!selectedChapter || aiBusy}
+                          onClick={() => runAi("rewrite")}
+                        >
+                          {aiBusy && aiAction === "rewrite" ? "生成中…" : "AI 重写"}
+                        </button>
+                      </div>
+                    </>
+                  )}
+
+                  {aiResult && (
+                    <div className="ai-result">
+                      <label>
+                        AI 生成结果（预览）
+                        <textarea
+                          className="chapter-textarea"
+                          value={aiResult}
+                          readOnly
+                          rows={10}
+                        />
+                      </label>
+                      <div className="actions">
+                        <button type="button" onClick={applyAiResult}>
+                          {aiAction === "continue" ? "插入到结尾" : "替换正文"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAiResult("");
+                            setAiAction(null);
+                          }}
+                        >
+                          放弃
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </section>
             </div>
