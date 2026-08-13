@@ -15,7 +15,7 @@ from app.schemas.provider import (
 )
 from app.services.model_discovery import fetch_model_ids
 from app.services.provider_repo import ProviderRepository
-from app.services.vendor_presets import PRESETS
+from app.services.vendor_presets import PRESETS, get_preset
 
 router = APIRouter(prefix="/api/providers", tags=["providers"])
 models_router = APIRouter(prefix="/api/models", tags=["models"])
@@ -34,6 +34,7 @@ def list_presets() -> list[PresetOut]:
             name=p.name,
             base_url=p.base_url,
             needs_key=p.needs_key,
+            discoverable=p.discoverable,
         )
         for p in PRESETS.values()
     ]
@@ -71,6 +72,13 @@ def delete_provider(provider_id: str, request: Request) -> Response:
 def discover_models(provider_id: str, request: Request) -> list[ModelOut]:
     repo = _repo(request)
     provider = repo.get_provider(provider_id)
+    preset = get_preset(provider.preset_key) if provider.preset_key else None
+    if preset and not preset.discoverable:
+        raise AppError(
+            422,
+            "discovery_unsupported",
+            "该厂商不支持自动拉取模型列表，请手动添加模型（填模型 ID 即可）",
+        )
     if provider.needs_key and not provider.has_api_key:
         raise AppError(422, "api_key_required", "请先为该 Provider 配置 API Key")
     api_key = (

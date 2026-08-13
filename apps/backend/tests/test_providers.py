@@ -16,8 +16,10 @@ def _create_provider(client, **kwargs):
 def test_presets_listed(client):
     response = client.get("/api/providers/presets")
     assert response.status_code == 200
-    keys = [p["key"] for p in response.json()]
-    assert "openai" in keys and "ollama" in keys and "bailian" in keys
+    presets = {p["key"]: p for p in response.json()}
+    assert "openai" in presets and "ollama" in presets and "bailian" in presets
+    assert presets["openai"]["discoverable"] is True
+    assert presets["bailian"]["discoverable"] is False
 
 
 def test_create_provider_with_preset(client):
@@ -150,26 +152,35 @@ def test_aggregation_filters(client):
 def test_discover_models_classification(client, monkeypatch):
     provider = client.post(
         "/api/providers",
-        json={"preset_key": "bailian", "api_key": "sk-bailian"},
+        json={"preset_key": "openai", "api_key": "sk-openai"},
     ).json()
     pid = provider["id"]
 
     import app.api.routes.providers as routes
 
     monkeypatch.setattr(
-        routes, "fetch_model_ids", lambda base_url, api_key: ["qwen-plus", "qwen-image-plus", "wan2.1-t2v"]
+        routes, "fetch_model_ids", lambda base_url, api_key: ["gpt-4o", "gpt-image-1"]
     )
     response = client.post(f"/api/providers/{pid}/discover-models")
     assert response.status_code == 200
     types = {m["model_id"]: m["model_type"] for m in response.json()}
     assert types == {
-        "qwen-plus": "llm",
-        "qwen-image-plus": "image",
-        "wan2.1-t2v": "video",
+        "gpt-4o": "llm",
+        "gpt-image-1": "image",
     }
     # 幂等：再次拉取不产生重复
     client.post(f"/api/providers/{pid}/discover-models")
-    assert len(client.get("/api/models", params={"provider_id": pid}).json()) == 3
+    assert len(client.get("/api/models", params={"provider_id": pid}).json()) == 2
+
+
+def test_discover_bailian_unsupported(client):
+    provider = client.post(
+        "/api/providers",
+        json={"preset_key": "bailian", "api_key": "sk-bailian"},
+    ).json()
+    response = client.post(f"/api/providers/{provider['id']}/discover-models")
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "discovery_unsupported"
 
 
 def test_discover_requires_key(client):

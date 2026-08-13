@@ -5,6 +5,7 @@ export interface Preset {
   name: string;
   base_url: string;
   needs_key: boolean;
+  discoverable: boolean;
 }
 
 export interface Provider {

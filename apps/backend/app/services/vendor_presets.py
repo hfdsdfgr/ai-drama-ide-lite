@@ -9,24 +9,32 @@ class VendorPreset:
     name: str
     base_url: str
     needs_key: bool
+    # 是否支持自动拉取模型列表（OpenAI 兼容 /models；实测百炼不支持）
+    discoverable: bool = True
     # (模型 ID 片段, 类型) 有序规则，先匹配先得；未匹配默认 llm
     type_rules: tuple[tuple[str, str], ...] = ()
 
 
 PRESETS: dict[str, VendorPreset] = {
     "openai": VendorPreset(
-        "openai",
-        "OpenAI",
-        "https://api.openai.com/v1",
-        True,
-        (("gpt-image", "image"), ("dall-e", "image"), ("gpt", "llm"), ("o1", "llm"), ("o3", "llm")),
+        key="openai",
+        name="OpenAI",
+        base_url="https://api.openai.com/v1",
+        needs_key=True,
+        type_rules=(
+            ("gpt-image", "image"),
+            ("dall-e", "image"),
+            ("gpt", "llm"),
+            ("o1", "llm"),
+            ("o3", "llm"),
+        ),
     ),
     "openrouter": VendorPreset(
-        "openrouter",
-        "OpenRouter",
-        "https://openrouter.ai/api/v1",
-        True,
-        (
+        key="openrouter",
+        name="OpenRouter",
+        base_url="https://openrouter.ai/api/v1",
+        needs_key=True,
+        type_rules=(
             ("kling", "video"),
             ("veo", "video"),
             ("pika", "video"),
@@ -38,17 +46,18 @@ PRESETS: dict[str, VendorPreset] = {
         ),
     ),
     "deepseek": VendorPreset(
-        "deepseek",
-        "DeepSeek",
-        "https://api.deepseek.com/v1",
-        True,
+        key="deepseek",
+        name="DeepSeek",
+        base_url="https://api.deepseek.com/v1",
+        needs_key=True,
     ),
     "bailian": VendorPreset(
-        "bailian",
-        "阿里云百炼",
-        "https://dashscope.aliyuncs.com/compatible-mode/v1",
-        True,
-        (
+        key="bailian",
+        name="阿里云百炼",
+        base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+        needs_key=True,
+        discoverable=False,
+        type_rules=(
             ("qwen-image", "image"),
             ("wanx", "image"),
             ("wan2.1-t2v", "video"),
@@ -60,18 +69,23 @@ PRESETS: dict[str, VendorPreset] = {
         ),
     ),
     "zhipu": VendorPreset(
-        "zhipu",
-        "智谱",
-        "https://open.bigmodel.cn/api/paas/v4",
-        True,
-        (("cogvideox", "video"), ("cogview", "image"), ("glm", "llm"), ("embedding", "llm")),
+        key="zhipu",
+        name="智谱",
+        base_url="https://open.bigmodel.cn/api/paas/v4",
+        needs_key=True,
+        type_rules=(
+            ("cogvideox", "video"),
+            ("cogview", "image"),
+            ("glm", "llm"),
+            ("embedding", "llm"),
+        ),
     ),
     "siliconflow": VendorPreset(
-        "siliconflow",
-        "硅基流动",
-        "https://api.siliconflow.cn/v1",
-        True,
-        (
+        key="siliconflow",
+        name="硅基流动",
+        base_url="https://api.siliconflow.cn/v1",
+        needs_key=True,
+        type_rules=(
             ("wan2.2-t2v", "video"),
             ("wan2.1-t2v", "video"),
             ("wan-video", "video"),
@@ -88,10 +102,10 @@ PRESETS: dict[str, VendorPreset] = {
         ),
     ),
     "ollama": VendorPreset(
-        "ollama",
-        "Ollama（本地）",
-        "http://127.0.0.1:11434/v1",
-        False,
+        key="ollama",
+        name="Ollama（本地）",
+        base_url="http://127.0.0.1:11434/v1",
+        needs_key=False,
     ),
 }
 

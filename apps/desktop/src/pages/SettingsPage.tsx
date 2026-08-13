@@ -19,9 +19,9 @@ import type { Model, ModelType, Preset, Provider } from "../types/provider";
 const CUSTOM_KEY = "__custom__";
 
 const TYPE_LABEL: Record<ModelType, string> = {
-  llm: "LLM",
-  image: "Image",
-  video: "Video",
+  llm: "文本模型",
+  image: "图片模型",
+  video: "视频模型",
 };
 
 export function SettingsPage() {
@@ -325,6 +325,11 @@ export function SettingsPage() {
               {selectedPreset.needs_key ? "" : "（无需 API Key）"}
             </p>
           )}
+          {!editing && !isCustom && selectedPreset && !selectedPreset.discoverable && (
+            <p className="muted">
+              此厂商不支持自动拉取模型列表，保存后请手动添加模型（填模型 ID 即可）。
+            </p>
+          )}
 
           <button type="submit">{editing ? "保存" : "添加并拉取模型"}</button>
         </form>
@@ -433,9 +438,9 @@ export function SettingsPage() {
                         })
                       }
                     >
-                      <option value="llm">LLM</option>
-                      <option value="image">Image</option>
-                      <option value="video">Video</option>
+                      <option value="llm">文本模型（LLM）</option>
+                      <option value="image">图片模型（Image）</option>
+                      <option value="video">视频模型（Video）</option>
                     </select>
                     <button type="submit">添加</button>
                     <button

@@ -46,6 +46,7 @@ class PresetOut(BaseModel):
     name: str
     base_url: str
     needs_key: bool
+    discoverable: bool = True
 
 
 class ModelCreate(BaseModel):
