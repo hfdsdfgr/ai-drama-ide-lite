@@ -9,6 +9,21 @@
 > 4. 所有 AI 模型必须通过 Provider / Adapter 接入
 > 5. 用户始终拥有暂停、停止、修改、重做的权利
 > 6. 新增功能前优先研究 GitHub、官方 SDK、成熟开源项目
+> 7. 单模型生成：一次 Generation Job 只调用一个 Model / 一个 Provider，不做多模型并行
+
+# 产品约束 — 单模型生成（用户需求 2026-08-13）
+
+> AI Drama IDE Lite **不采用多模型并行生成**，以避免不必要的 API 成本。
+
+- Model 是**独立数据实体**，Provider 与 Model 分离（Provider 1 → N Model）。
+- 用户在 Settings 中可添加 / 编辑 / 删除任意数量的 Provider 与 Model。
+- Image Model 与 Video Model 必须明确区分（type / capabilities）。
+- 生图界面动态读取「已配置且通过能力检测」的 Image Model；生视频同理读取 Video Model。**Model 下拉列表不得写死具体模型名称**。
+- 用户可设置默认 Image Model 与默认 Video Model；生成界面可临时切换模型，无需进入 Settings。
+- 一次 Generation Job 只绑定一个 Model、只调用一个 Provider。
+- **不实现多模型并行生成。**
+- 不提前实现复杂的自动 Model Router；但保留 Provider → Model → Adapter 的扩展结构，以便未来增加模型。
+- 当前阶段（Phase 2）只需保证数据结构不阻碍以上设计，不提前实现完整 UI。
 
 ---
 
@@ -125,16 +140,17 @@ Phase 3 — AI Provider 基础系统
 让用户能够自己填写 AI API。
 
 Tasks
- Provider 数据结构
- Model 数据结构
- Provider Manager
- Model Registry
- API Key Storage
- API Base URL
- Model ID
- Provider Enable / Disable
- Provider Delete
- Provider Edit
+- [ ] Provider 数据结构（providers 表）
+- [ ] Model 独立数据实体（models 表，Provider 一对多，含 type: llm/image/video）
+- [ ] Provider Manager（添加 / 编辑 / 删除 / 启用 / 禁用）
+- [ ] Model Registry（添加 / 编辑 / 删除 / 启用 / 禁用）
+- [ ] Image Model 与 Video Model 明确区分
+- [ ] API Key Storage（系统安全存储，不落项目文件）
+- [ ] API Base URL / Model ID
+- [ ] 默认 Image Model / 默认 Video Model（可配置，生成界面默认选中）
+- [ ] Settings UI：Provider → Model 分层管理
+
+> 本阶段**不实现自动 Model Router**（属 P1 / Phase 17）；MVP 生成流程由用户手动选择单一模型。
 API 类型
 
 第一阶段：
@@ -388,17 +404,20 @@ Phase 10 — Generation Job System
 所有耗时 AI 操作都必须变成 Job。
 
 Tasks
- Job Model
- Job Queue
- Job Worker
- Job Status
- Progress
- Retry
- Cancel
- Pause
- Resume
- Error Handling
- Job Persistence
+- [ ] Job Model
+- [ ] Job Queue
+- [ ] Job Worker
+- [ ] Job Status
+- [ ] Progress
+- [ ] Retry
+- [ ] Cancel
+- [ ] Pause
+- [ ] Resume
+- [ ] Error Handling
+- [ ] Job Persistence
+- [ ] Job 绑定单个 Model + 单个 Provider（一次生成只调用一个模型）
+
+> 产品约束：不做多模型并行生成；并发只用于不同 Job 之间的调度，不用于同一生成任务的模型并行。
 状态
 Queued
 Running
@@ -487,15 +506,15 @@ Location Assets
  ↓
 Prompt Builder
  ↓
-Capability Engine
+用户选择 Model（默认 / 临时切换，仅一个）
  ↓
-Model Router
+Capability Engine（确认所选模型具备所需能力）
  ↓
 Image Adapter
  ↓
 API
  ↓
-Job
+Job（绑定单一 Model + Provider）
  ↓
 Image
  ↓
@@ -510,6 +529,8 @@ Tasks
  Image Version
  Retry
  Cancel
+
+> 单模型生成：一次 Job 只用一个 Model / 一个 Provider；不做多模型并行。自动 Model Router 留到 Phase 17（P1）。
 Phase 14 — Video Generation
 
 目标：
@@ -521,15 +542,15 @@ Shot Image
  ↓
 Video Prompt
  ↓
-Capability Engine
+用户选择 Model（默认 / 临时切换，仅一个）
  ↓
-Model Router
+Capability Engine（确认 image_to_video 能力）
  ↓
 Video Adapter
  ↓
 API
  ↓
-Job
+Job（绑定单一 Model + Provider）
  ↓
 Download
  ↓
@@ -556,6 +577,8 @@ Video → Video
 Image → Video
 
 跑通。
+
+> 单模型生成：一次 Job 只用一个 Model / 一个 Provider；不做多模型并行。自动 Model Router 留到 Phase 17（P1）。
 
 Phase 15 — Generation Center
 
@@ -631,6 +654,8 @@ Phase 17 — Model Router
 目标：
 
 系统能够根据任务自动选择合适模型。
+
+> 自动 Model Router 属于 **P1（MVP 后）**。MVP 阶段不做自动路由：由用户在生成界面手动选择**单一**模型（默认或临时切换），本阶段保留该设计供后续实现。
 
 Input
 Task
@@ -834,6 +859,7 @@ Story Bible
 Script
 Asset
 Provider
+Model（独立实体，含默认 Image / Video Model）
 Capability
 Adapter
 Job
@@ -841,9 +867,11 @@ Storyboard
 Image
 Video
 Interrupt
+
+> 单模型生成约束：一次 Generation Job 只绑定一个 Model / 一个 Provider，不实现多模型并行生成。
 P1 — MVP 后
 
-Model Router
+Model Router（自动路由，MVP 后；MVP 阶段由用户手动选择单一模型）
 Director Agent
 Quality Agent
 Advanced Asset Control
