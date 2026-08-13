@@ -25,9 +25,15 @@ githubtoken.txt
 
 # ---- 运行时数据 ----
 apps/backend/data/
+apps/backend/build/
+apps/backend/dist-bundle/
 
 # ---- Tauri / Rust ----
 apps/desktop/src-tauri/target/
+apps/desktop/src-tauri/binaries/
+
+# ---- 打包产物 ----
+release/
 
 # ---- IDE ----
 .idea/

@@ -133,3 +133,9 @@
 - **PowerShell `$pid` 是保留变量**：`foreach ($pid in $listeners)` 直接报 `Cannot overwrite variable PID`，导致 Stop-Process 循环没执行、后端没重启。遍历进程号时用 `$procId` 等自定义变量名。
 - **starlette TestClient.delete 不支持 `json=` 参数**：DELETE 带 body 的接口测试用 `client.delete(url, json=...)` 会抛 `TypeError`；改用 `client.request("DELETE", url, json=...)`。
 - **依赖 projectId 的数据加载写进了挂载 effect**：资产页把 `getAssetSpecs` 放在 `active` effect（挂载时跑一次）里，但此时项目还没选中，导致选中项目后规格选项一直为空（比例下拉只有「默认」、画风下拉空白）。凡「选中项目后才需要的数据」（如资产规格、列表）必须放在依赖 `projectId` 的 effect 里，与刷新列表同批触发。
+- **PyInstaller 打包 FastAPI 后端**：`uvicorn.run("app.main:app")` 字符串导入不会让 PyInstaller 收集 `app` 包 → exe 启动即崩溃且无日志；必须 `from app.main import app` 直接传 app 对象。`schema.sql` / `vendor_models.json` 等运行时读取的数据文件默认不收，要 `--add-data`（源路径用绝对路径，否则会被解析到 `--specpath` 目录下报「Unable to find」）。
+- **Tauri sidecar 双后缀**：运行时（shell 插件/std spawn 前）按编译 target triple（GNU）找 `name-x86_64-pc-windows-gnu.exe`，而 Tauri bundler 打包时按 Windows 默认 triple 找 `name-x86_64-pc-windows-msvc.exe` 并安装为无后缀名。同一后端二进制必须保留两个后缀名的文件（`build-backend.ps1` 已处理），缺 msvc 后缀会 `failed to bundle project: resource path ... doesn't exist`。
+- **MinGW GNU 构建下 WebView2Loader.dll 不进安装包**：NSIS bundler 在 GNU 工具链下不会自动收集 `WebView2Loader.dll`，安装后启动报「找不到 WebView2Loader.dll」。必须在 `tauri.conf.json` 的 `bundle.resources` 显式加 `"target/release/WebView2Loader.dll": "WebView2Loader.dll"`。
+- **x64 应用找不到 WebView2 运行时**：本机 WebView2 只注册在 `WOW6432Node`（32 位视图），x64 Tauri app 初始化失败报「找不到 WebView2」。对策：`webviewInstallMode: { "type": "embedBootstrapper" }`，安装器检测缺失时联网静默补装（+1.8MB）。
+- **退出时清理 sidecar 进程树**：PyInstaller onefile 有父（bootloader）+ 子（解压运行）两个进程。清理顺序必须先 `taskkill /PID <pid> /T /F`（父还活着才能枚举子进程）再 `child.kill()`；先杀父会让 `/T` 失效、子进程残留。
+- **NSIS 静默安装/卸载验证**：`setup.exe /S` 静默安装到 `%LOCALAPPDATA%\AI Drama IDE Lite`（perUser 模式），`uninstall.exe /S` 静默卸载；卸载不会删 `data/` 用户数据（符合预期）。验证安装包用「卸载→重装→启动→taskkill 关闭」链路。

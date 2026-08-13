@@ -7,7 +7,7 @@ import type {
   OutlineChapter,
   StoryBible,
 } from "../types/story";
-import { request } from "./client";
+import { getApiBase, request } from "./client";
 
 export function startStoryAnalysis(
   projectId: string,
@@ -80,8 +80,9 @@ export async function continueAiChapterStream(
     context_chapter_count?: number;
   },
 ): Promise<Response> {
+  const base = await getApiBase();
   return fetch(
-    `/api/projects/${projectId}/novels/${novelId}/ai/continue-stream`,
+    `${base}/api/projects/${projectId}/novels/${novelId}/ai/continue-stream`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },

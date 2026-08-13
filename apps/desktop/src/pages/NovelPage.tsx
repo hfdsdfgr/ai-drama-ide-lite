@@ -16,6 +16,7 @@ import {
 } from "../api/novels";
 import { listProjects } from "../api/projects";
 import { listModels } from "../api/providers";
+import { getApiBase } from "../api/client";
 import {
   continueAiChapterStream,
   generateAiOutline,
@@ -587,8 +588,8 @@ export function NovelPage({ active }: NovelPageProps) {
             summary: current.summary,
           },
         });
-        const response = await fetch(
-          `/api/projects/${projectId}/story/ai-chapter-stream`,
+      const response = await fetch(
+          `${await getApiBase()}/api/projects/${projectId}/story/ai-chapter-stream`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },

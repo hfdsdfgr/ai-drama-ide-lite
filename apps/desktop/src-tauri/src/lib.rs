@@ -1,5 +1,44 @@
+use std::net::TcpListener;
+use std::path::PathBuf;
+use std::process::{Child, Command};
+use std::sync::Mutex;
+
+use tauri::Manager;
+
+#[allow(dead_code)]
+struct BackendPort(Mutex<u16>);
+
+#[allow(dead_code)]
+struct BackendChild(Mutex<Option<Child>>);
+
+#[cfg(not(debug_assertions))]
+fn resolve_backend_exe() -> Option<PathBuf> {
+  // 安装版：后端 exe 与 app.exe 同目录；开发 release 目录没有时回退到 binaries。
+  let dir = std::env::current_exe().ok()?.parent()?.to_path_buf();
+  let candidates = [
+    dir.join("ai-drama-backend.exe"),
+    dir.join("ai-drama-backend-x86_64-pc-windows-gnu.exe"),
+  ];
+  candidates.into_iter().find(|path| path.exists())
+}
+
+#[cfg(not(debug_assertions))]
+fn kill_process_tree(pid: u32) {
+  use std::os::windows::process::CommandExt;
+  let _ = Command::new("taskkill")
+    .args(["/PID", &pid.to_string(), "/T", "/F"])
+    .creation_flags(0x08000000) // CREATE_NO_WINDOW
+    .output();
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+  #[cfg(not(debug_assertions))]
+  fn find_free_port() -> u16 {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("failed to probe free port");
+    listener.local_addr().expect("failed to read port").port()
+  }
+
   tauri::Builder::default()
     .setup(|app| {
       if cfg!(debug_assertions) {
@@ -9,8 +48,44 @@ pub fn run() {
             .build(),
         )?;
       }
+      #[cfg(not(debug_assertions))]
+      {
+        let port = find_free_port();
+        let exe = resolve_backend_exe().expect("backend sidecar exe not found");
+        let child = Command::new(exe)
+          .args(["--host", "127.0.0.1", "--port", &port.to_string()])
+          .spawn()
+          .expect("failed to spawn backend sidecar");
+        app.manage(BackendPort(Mutex::new(port)));
+        app.manage(BackendChild(Mutex::new(Some(child))));
+        log::info!("backend sidecar started on port {}", port);
+      }
       Ok(())
     })
-    .run(tauri::generate_context!())
-    .expect("error while running tauri application");
+    .invoke_handler(tauri::generate_handler![get_backend_port])
+    .build(tauri::generate_context!())
+    .expect("error while building tauri application")
+    .run(|app_handle, event| {
+      if let tauri::RunEvent::Exit = event {
+        #[cfg(not(debug_assertions))]
+        {
+          if let Some(mut child) = app_handle
+            .try_state::<BackendChild>()
+            .and_then(|state| state.0.lock().unwrap().take())
+          {
+            let pid = child.id();
+            // 先杀整棵进程树（父进程仍活着时 /T 才能枚举到子进程），再兜底杀父。
+            kill_process_tree(pid);
+            let _ = child.kill();
+          }
+        }
+      }
+    })
+}
+
+#[tauri::command]
+fn get_backend_port(app: tauri::AppHandle) -> Option<u16> {
+  app
+    .try_state::<BackendPort>()
+    .map(|state| state.0.lock().unwrap().clone())
 }

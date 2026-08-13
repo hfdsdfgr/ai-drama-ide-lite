@@ -787,14 +787,17 @@ Phase 21 — Packaging
 打包成真正可以安装的软件。
 
 Tasks
- Windows Build
- Installer
- Auto Update
- Crash Logging
- Settings Migration
- Project Migration
- API Key Migration
- Version Check
+- [x] Windows Build（PyInstaller 后端 onefile + Tauri release + NSIS，`scripts/tauri-build.ps1`）
+- [x] Installer（NSIS `-setup.exe`，perUser、中英双语、内嵌 WebView2 引导 + WebView2Loader.dll）
+- [x] 后端 sidecar 生命周期（启动拉起、退出杀进程树、动态端口）
+- [x] 数据目录迁移（打包版 `%LOCALAPPDATA%\AI Drama IDE Lite\data`，开发版项目内 data）
+- [x] 前端 API 地址适配（Tauri 环境经 `get_backend_port` 直连，开发走 Vite 代理）
+- [ ] Auto Update
+- [ ] Crash Logging
+- [ ] Settings Migration
+- [ ] Project Migration
+- [ ] API Key Migration
+- [ ] Version Check
 
 最终：
 

@@ -1,11 +1,22 @@
 """Application settings loaded from environment variables / .env file."""
 
+import os
+import sys
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _default_data_dir() -> Path:
+    """数据目录：PyInstaller 打包版用用户目录（防临时解压目录丢数据），开发版保持项目内。"""
+    if getattr(sys, "frozen", False):
+        base = Path(os.environ.get("LOCALAPPDATA", str(Path.home())))
+        return base / "AI Drama IDE Lite" / "data"
+    return BACKEND_ROOT / "data"
 
 
 class Settings(BaseSettings):
@@ -26,10 +37,12 @@ class Settings(BaseSettings):
     host: str = "127.0.0.1"
     port: int = 8000
     log_level: str = "INFO"
-    data_dir: Path = BACKEND_ROOT / "data"
+    data_dir: Path = Field(default_factory=_default_data_dir)
     cors_origins: list[str] = [
         "http://localhost:5173",
         "http://127.0.0.1:5173",
+        "tauri://localhost",
+        "http://tauri.localhost",
     ]
 
     @property
