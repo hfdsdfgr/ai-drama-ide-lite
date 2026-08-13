@@ -176,6 +176,8 @@
 .toolbar {
   display: flex;
   gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: center;
 }
 
 .card {
@@ -208,6 +210,10 @@ select {
   background: var(--bg-panel);
   color: var(--text-h);
   font: inherit;
+}
+
+textarea {
+  resize: vertical;
 }
 
 button {
@@ -315,7 +321,7 @@ button:disabled {
 
 .novel-workspace {
   display: grid;
-  grid-template-columns: 250px minmax(0, 1fr) 400px;
+  grid-template-columns: 250px minmax(0, 1fr) 410px;
   grid-template-rows: minmax(0, 1fr);
   gap: 1rem;
   align-items: stretch;
@@ -405,16 +411,17 @@ button:disabled {
   gap: 0;
   border: 1px dashed var(--border-strong);
   border-radius: var(--radius-md);
-  padding: 0.5rem 0.6rem;
+  padding: 0.45rem 0.55rem;
+  margin-top: 0.2rem;
 }
 
 .step {
   display: flex;
   align-items: center;
-  gap: 0.3rem;
+  gap: 0.25rem;
   flex: 0 1 auto;
   color: var(--text-faint);
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   white-space: nowrap;
 }
 
@@ -423,7 +430,7 @@ button:disabled {
   flex: 1 0 auto;
   height: 1px;
   background: var(--border);
-  margin: 0 0.25rem;
+  margin: 0 0.2rem;
   min-width: 2px;
 }
 
@@ -432,8 +439,8 @@ button:disabled {
 }
 
 .step-dot {
-  width: 14px;
-  height: 14px;
+  width: 13px;
+  height: 13px;
   border-radius: 50%;
   display: inline-flex;
   align-items: center;

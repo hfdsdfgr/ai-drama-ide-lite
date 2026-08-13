@@ -1185,23 +1185,25 @@ export function NovelPage({ active }: NovelPageProps) {
                 />
               )}
               {!wiz ? (
-                <div className="toolbar">
-                  <button type="button" onClick={startWizard}>
-                    开始 AI 撰写
-                  </button>
-                  {detail && detail.chapters.length > 0 && (
-                    <button
-                      type="button"
-                      className="btn-primary"
-                      onClick={startContinueWizard}
-                    >
-                      续写下一章
+                <>
+                  <div className="toolbar">
+                    <button type="button" onClick={startWizard}>
+                      开始 AI 撰写
                     </button>
-                  )}
-                  <span className="muted">
+                    {detail && detail.chapters.length > 0 && (
+                      <button
+                        type="button"
+                        className="btn-primary"
+                        onClick={startContinueWizard}
+                      >
+                        续写下一章
+                      </button>
+                    )}
+                  </div>
+                  <p className="muted">
                     从题材设定到大纲再到正文，AI 逐章撰写，每章由你确认。
-                  </span>
-                </div>
+                  </p>
+                </>
               ) : wiz.continueMode ? (
                 <>
                   <p className="muted">
@@ -1499,6 +1501,12 @@ export function NovelPage({ active }: NovelPageProps) {
                           }
                           placeholder="章节标题"
                         />
+                        <button
+                          type="button"
+                          onClick={() => removeOutlineChapter(i)}
+                        >
+                          删除
+                        </button>
                         <textarea
                           value={c.summary}
                           onChange={(e) =>
@@ -1507,12 +1515,6 @@ export function NovelPage({ active }: NovelPageProps) {
                           rows={2}
                           placeholder="本章内容要点"
                         />
-                        <button
-                          type="button"
-                          onClick={() => removeOutlineChapter(i)}
-                        >
-                          删除
-                        </button>
                       </div>
                     ))}
                   </div>
