@@ -461,17 +461,8 @@ export function ScriptPage({ active }: { active: boolean }) {
               <div className="wizard-preview">
                 <p className="ok">
                   剧本已生成：{scriptPreview.episode.title}（
-                  {scriptPreview.scenes.length} 个场景）
+                  {scriptPreview.scenes.length} 个场景），完整预览已显示在中栏。
                 </p>
-                <p className="muted">{scriptPreview.episode.summary}</p>
-                <ul className="shot-list">
-                  {scriptPreview.scenes.map((s, i) => (
-                    <li key={i}>
-                      <strong>{s.slugline || s.title}</strong>
-                      <p className="muted">{s.action}</p>
-                    </li>
-                  ))}
-                </ul>
                 <div className="toolbar">
                   <button
                     type="button"

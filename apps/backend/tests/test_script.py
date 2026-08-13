@@ -15,13 +15,13 @@ def _episode_json():
             "scenes": [
                 {
                     "title": "宗门大殿",
-                    "slugline": "INT. 宗门大殿 - 夜",
+                    "slugline": "室内·宗门大殿·夜",
                     "action": "林凡踏入大殿，四周弟子窃窃私语。",
                     "dialogue": "长老：你终于来了。\n林凡：我来赴约。",
                 },
                 {
                     "title": "山门",
-                    "slugline": "EXT. 山门 - 日",
+                    "slugline": "室外·山门·日",
                     "action": "林凡与天骄对峙，剑光交错。",
                     "dialogue": "天骄：今日你走不出这道门。",
                 },
@@ -97,7 +97,7 @@ def test_generate_episode_script(client, monkeypatch):
     body = response.json()
     assert body["episode"]["title"] == "第一集 风起"
     assert len(body["scenes"]) == 2
-    assert body["scenes"][0]["slugline"].startswith("INT.")
+    assert body["scenes"][0]["slugline"] == "室内·宗门大殿·夜"
     user = box["messages"][0][1]["content"]
     assert "宗门大殿" in user
 
@@ -124,7 +124,7 @@ def test_save_episode_script_and_detail(client):
         "scenes": [
             {
                 "title": "大殿",
-                "slugline": "INT. 大殿 - 夜",
+                "slugline": "室内·大殿·夜",
                 "action": "对峙",
                 "dialogue": "长老：来吧。",
             }
@@ -140,7 +140,7 @@ def test_save_episode_script_and_detail(client):
     ).json()
     assert detail["episode"]["title"] == "第一集"
     assert len(detail["scenes"]) == 1
-    assert detail["scenes"][0]["slugline"] == "INT. 大殿 - 夜"
+    assert detail["scenes"][0]["slugline"] == "室内·大殿·夜"
 
 
 def test_generate_shots(client, monkeypatch):
@@ -154,7 +154,7 @@ def test_generate_shots(client, monkeypatch):
             "scenes": [
                 {
                     "title": "大殿",
-                    "slugline": "INT. 大殿 - 夜",
+                    "slugline": "室内·大殿·夜",
                     "action": "对峙",
                     "dialogue": "长老：来吧。",
                 }
@@ -186,7 +186,7 @@ def test_save_scene_shots(client):
             "scenes": [
                 {
                     "title": "大殿",
-                    "slugline": "INT. 大殿 - 夜",
+                    "slugline": "室内·大殿·夜",
                     "action": "对峙",
                     "dialogue": "长老：来吧。",
                 }
