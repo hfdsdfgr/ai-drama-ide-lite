@@ -895,24 +895,24 @@ export function NovelPage({ active }: NovelPageProps) {
                 <label htmlFor="novel-import-input" className="button-like">
                   导入 TXT/MD/DOCX
                 </label>
-                {detail && (
-                  <div className="toolbar">
-                    <button
-                      type="button"
-                      disabled={!selectedChapter}
-                      onClick={exportChapterTxt}
-                    >
-                      导出章节
-                    </button>
-                    <button
-                      type="button"
-                      disabled={detail.chapters.length === 0}
-                      onClick={exportNovelTxt}
-                    >
-                      导出小说
-                    </button>
-                  </div>
-                )}
+                <div className="toolbar">
+                  <button
+                    type="button"
+                    disabled={!selectedChapter}
+                    title={!selectedChapter ? "请先打开小说并选择章节" : ""}
+                    onClick={exportChapterTxt}
+                  >
+                    导出章节
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!detail || detail.chapters.length === 0}
+                    title={!detail ? "请先打开小说" : ""}
+                    onClick={exportNovelTxt}
+                  >
+                    导出小说
+                  </button>
+                </div>
                 {confirmDelete === "novel" ? (
                   <div className="actions">
                     <button
