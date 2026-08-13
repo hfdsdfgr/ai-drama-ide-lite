@@ -627,16 +627,41 @@ export function NovelPage({ active }: NovelPageProps) {
 
   function exportPreviewTxt() {
     if (!wiz?.preview) return;
-    const text = `${wiz.preview.title}\n\n${wiz.preview.content}`;
+    downloadTxt(
+      `${wiz.preview.title}\n\n${wiz.preview.content}`,
+      `${wiz.preview.title || "章节"}.txt`,
+    );
+  }
+
+  function downloadTxt(text: string, filename: string) {
     const blob = new Blob(["\ufeff" + text], {
       type: "text/plain;charset=utf-8",
     });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `${wiz.preview.title || "章节"}.txt`;
+    link.download = filename;
     link.click();
     URL.revokeObjectURL(url);
+  }
+
+  function exportChapterTxt() {
+    if (!selectedChapter) return;
+    downloadTxt(
+      `${selectedChapter.title || "未命名章节"}\n\n${selectedChapter.content}`,
+      `${selectedChapter.title || "章节"}.txt`,
+    );
+  }
+
+  function exportNovelTxt() {
+    if (!detail) return;
+    const parts = detail.chapters.map(
+      (c) => `${c.title || "未命名章节"}\n\n${c.content}`,
+    );
+    downloadTxt(
+      parts.join("\n\n---\n\n"),
+      `${detail.novel.title || "小说"}.txt`,
+    );
   }
 
   async function savePreviewChapter() {
@@ -859,7 +884,7 @@ export function NovelPage({ active }: NovelPageProps) {
             {projectId && (
               <>
               <div className="sidebar-block">
-                <h3>导入与管理</h3>
+                <h3>导入与导出</h3>
                 <input
                   type="file"
                   id="novel-import-input"
@@ -870,6 +895,24 @@ export function NovelPage({ active }: NovelPageProps) {
                 <label htmlFor="novel-import-input" className="button-like">
                   导入 TXT/MD/DOCX
                 </label>
+                {detail && (
+                  <div className="toolbar">
+                    <button
+                      type="button"
+                      disabled={!selectedChapter}
+                      onClick={exportChapterTxt}
+                    >
+                      导出章节
+                    </button>
+                    <button
+                      type="button"
+                      disabled={detail.chapters.length === 0}
+                      onClick={exportNovelTxt}
+                    >
+                      导出小说
+                    </button>
+                  </div>
+                )}
                 {confirmDelete === "novel" ? (
                   <div className="actions">
                     <button
