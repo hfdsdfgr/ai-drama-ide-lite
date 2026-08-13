@@ -31,7 +31,7 @@
 
 - 系统代理配置为 `127.0.0.1:10808` 但代理未运行：AKShare provider 内设置 `NO_PROXY=*` 且 `requests.Session.trust_env = False` 绕过。
 - 数据源可用性（本机实测）：腾讯 `web.ifzq.gtimg.cn` 可用；东方财富被重置；新浪 hq 返回 403；Baostock 端口 10030 被拦截。
-- github.com 的 HTTPS 被拦截：push/clone 走 SSH（`ssh.github.com:443`，配置在 `~/.ssh/config`）。
+- github.com 的 HTTPS 被拦截：push/clone 走 SSH（`ssh.github.com:443`）。具体做法：`ssh-keygen -t ed25519` 生成密钥 → `gh ssh-key add <pub> --title <名称>` 注册到账号 → 配置 URL 改写 `git config url."ssh://git@ssh.github.com:443/".insteadOf "https://github.com/"`，之后 `git push` 自动走 SSH 443。
 - `/data/fetch` 返回 422 的两种含义要区分：Pydantic 参数校验失败（请求体错误） vs 业务层「所有行情数据源暂时不可用」（网络/数据源问题，非用户操作导致）。后者是中文 detail，客户端会展示。
 
 ## 3. 后端与数据
