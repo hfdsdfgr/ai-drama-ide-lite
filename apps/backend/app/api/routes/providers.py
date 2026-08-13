@@ -50,7 +50,14 @@ def list_presets() -> list[PresetOut]:
 def list_preset_models(preset_key: str) -> list[BuiltinModelOut]:
     if preset_key not in PRESETS:
         raise AppError(422, "unknown_preset", f"未知厂商预设: {preset_key}")
-    return [BuiltinModelOut(id=item["id"], type=item["type"]) for item in get_builtin_models(preset_key)]
+    return [
+        BuiltinModelOut(
+            id=item["id"],
+            type=item["type"],
+            capabilities=item.get("capabilities", []),
+        )
+        for item in get_builtin_models(preset_key)
+    ]
 
 
 @router.get("", response_model=list[ProviderOut])

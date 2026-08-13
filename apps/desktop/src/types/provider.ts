@@ -99,6 +99,7 @@ export interface ModelInput {
 export interface BuiltinModel {
   id: string;
   type: ModelType;
+  capabilities: CapabilityKey[];
 }
 
 export interface ProviderCheck {

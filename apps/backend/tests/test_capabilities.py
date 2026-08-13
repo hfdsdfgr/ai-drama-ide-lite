@@ -6,6 +6,7 @@ from app.core.errors import AppError
 from app.services.capability_registry import (
     infer_capabilities,
     parse,
+    resolve_default_capabilities,
     serialize,
     validate_capabilities,
 )
@@ -46,14 +47,51 @@ def test_infer_video_rules():
     assert infer_capabilities("openai", "sora-2", "video") == [
         "image_to_video",
         "text_to_video",
+        "video_to_video",
     ]
     assert infer_capabilities("bailian", "wan2.1-t2v", "video") == ["text_to_video"]
+
+
+def test_infer_accurate_rules():
+    # 调研修正：纯文生图模型不再过度声明
+    assert infer_capabilities("siliconflow", "black-forest-labs/FLUX.1-schnell", "image") == [
+        "text_to_image"
+    ]
+    assert infer_capabilities("bailian", "wanx2.1-t2i", "image") == ["text_to_image"]
+    # 调研修正：Kolors 支持图生图 + 参考图
+    assert infer_capabilities("siliconflow", "Kwai-Kolors/Kolors", "image") == [
+        "image_to_image",
+        "reference_image",
+        "text_to_image",
+    ]
+    # wan 图像系列（wan2.7-image-pro 等）支持编辑/组图
+    assert infer_capabilities("bailian", "wan2.7-image-pro", "image") == [
+        "image_to_image",
+        "reference_image",
+        "text_to_image",
+    ]
 
 
 def test_infer_llm_and_defaults():
     assert infer_capabilities("openai", "gpt-4o", "llm") == []
     assert infer_capabilities(None, "custom-image", "image") == ["text_to_image"]
     assert infer_capabilities(None, "custom-video", "video") == ["text_to_video"]
+
+
+def test_resolve_catalog_preferred():
+    # 内置目录优先于规则（wanx2.1-t2i 目录=纯文生图）
+    assert resolve_default_capabilities("bailian", "wanx2.1-t2i", "image") == [
+        "text_to_image"
+    ]
+    assert resolve_default_capabilities("bailian", "qwen-image-plus", "image") == [
+        "image_to_image",
+        "reference_image",
+        "text_to_image",
+    ]
+    # 未收录模型回落到规则
+    assert resolve_default_capabilities("bailian", "brand-new-image", "image") == [
+        "text_to_image"
+    ]
 
 
 def test_validate_capabilities():
@@ -154,3 +192,30 @@ def test_llm_capability_rejected(client):
     )
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "capability_type_mismatch"
+
+
+def test_bulk_add_uses_catalog_capabilities(client):
+    provider = _create_provider(client, preset="bailian")
+    response = client.post(
+        f"/api/providers/{provider['id']}/models/bulk",
+        json={"model_ids": ["wanx2.1-t2i", "qwen-image-plus"]},
+    )
+    assert response.status_code == 201
+    by_id = {m["model_id"]: m["capabilities"] for m in response.json()}
+    assert by_id == {
+        "wanx2.1-t2i": ["text_to_image"],
+        "qwen-image-plus": ["image_to_image", "reference_image", "text_to_image"],
+    }
+
+
+def test_preset_models_include_capabilities(client):
+    response = client.get("/api/providers/presets/bailian/models")
+    assert response.status_code == 200
+    items = {m["id"]: m for m in response.json()}
+    assert items["wanx2.1-t2i"]["capabilities"] == ["text_to_image"]
+    assert items["qwen-image-plus"]["capabilities"] == [
+        "image_to_image",
+        "reference_image",
+        "text_to_image",
+    ]
+    assert items["qwen-plus"]["capabilities"] == []

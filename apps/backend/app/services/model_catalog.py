@@ -14,3 +14,12 @@ def load_catalog() -> dict:
 def get_builtin_models(preset_key: str) -> list[dict]:
     catalog = load_catalog()
     return catalog.get(preset_key, [])
+
+
+def get_builtin_capabilities(preset_key: str, model_id: str) -> list[str] | None:
+    """返回内置目录中该模型的能力集；未收录返回 None。"""
+    for item in get_builtin_models(preset_key):
+        if item.get("id") == model_id:
+            caps = item.get("capabilities")
+            return list(caps) if isinstance(caps, list) else []
+    return None

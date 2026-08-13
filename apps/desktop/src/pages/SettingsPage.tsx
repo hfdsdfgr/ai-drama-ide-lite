@@ -730,6 +730,11 @@ export function SettingsPage() {
                                     <span className={`badge badge-${m.type}`}>
                                       {TYPE_LABEL[m.type]}
                                     </span>
+                                    <span className="muted">
+                                      {m.capabilities
+                                        .map((c) => CAPABILITY_LABELS[c])
+                                        .join("、") || "—"}
+                                    </span>
                                     <button
                                       type="button"
                                       disabled={added}

@@ -1,7 +1,7 @@
 {
   "_meta": {
     "snapshot_date": "2026-08-13",
-    "note": "各厂商精选常用模型快照（本地内置列表）。新模型出现后更新本文件即可，无需改代码。厂商支持 /models 时仍可用「拉取模型」获取完整实时列表。"
+    "note": "各厂商精选常用模型快照（本地内置列表）。capabilities 为调研确认的能力集（来源见 docs/investigations/vendor-capability-catalog.md）。新模型出现后更新本文件即可，无需改代码。厂商支持 /models 时仍可用「拉取模型」获取完整实时列表。"
   },
   "openai": [
     { "id": "gpt-5.5", "type": "llm" },
@@ -19,11 +19,11 @@
     { "id": "o4-mini", "type": "llm" },
     { "id": "gpt-oss-120b", "type": "llm" },
     { "id": "gpt-oss-20b", "type": "llm" },
-    { "id": "gpt-image-2", "type": "image" },
-    { "id": "gpt-image-1.5", "type": "image" },
-    { "id": "gpt-image-1", "type": "image" },
-    { "id": "dall-e-3", "type": "image" },
-    { "id": "sora-2", "type": "video" }
+    { "id": "gpt-image-2", "type": "image", "capabilities": ["image_to_image", "reference_image", "text_to_image"] },
+    { "id": "gpt-image-1.5", "type": "image", "capabilities": ["image_to_image", "reference_image", "text_to_image"] },
+    { "id": "gpt-image-1", "type": "image", "capabilities": ["image_to_image", "reference_image", "text_to_image"] },
+    { "id": "dall-e-3", "type": "image", "capabilities": ["text_to_image"] },
+    { "id": "sora-2", "type": "video", "capabilities": ["image_to_video", "text_to_video", "video_to_video"] }
   ],
   "openrouter": [
     { "id": "openai/gpt-5.5", "type": "llm" },
@@ -32,7 +32,7 @@
     { "id": "openai/gpt-4o-mini", "type": "llm" },
     { "id": "openai/gpt-oss-120b", "type": "llm" },
     { "id": "openai/gpt-oss-20b", "type": "llm" },
-    { "id": "openai/gpt-image-2", "type": "image" },
+    { "id": "openai/gpt-image-2", "type": "image", "capabilities": ["image_to_image", "reference_image", "text_to_image"] },
     { "id": "anthropic/claude-opus-4.7", "type": "llm" },
     { "id": "google/gemini-3-flash-preview", "type": "llm" },
     { "id": "google/gemini-2.5-pro", "type": "llm" },
@@ -54,13 +54,13 @@
     { "id": "qwen-turbo", "type": "llm" },
     { "id": "qwen-long", "type": "llm" },
     { "id": "qwen-vl-plus", "type": "llm" },
-    { "id": "qwen-image-plus", "type": "image" },
-    { "id": "qwen-image-2.0-pro", "type": "image" },
-    { "id": "wan2.7-image-pro", "type": "image" },
-    { "id": "wanx2.1-t2i", "type": "image" },
-    { "id": "wan2.1-t2v", "type": "video" },
-    { "id": "wan2.2-t2v", "type": "video" },
-    { "id": "happyhorse-1.1-t2v", "type": "video" }
+    { "id": "qwen-image-plus", "type": "image", "capabilities": ["image_to_image", "reference_image", "text_to_image"] },
+    { "id": "qwen-image-2.0-pro", "type": "image", "capabilities": ["image_to_image", "reference_image", "text_to_image"] },
+    { "id": "wan2.7-image-pro", "type": "image", "capabilities": ["image_to_image", "reference_image", "text_to_image"] },
+    { "id": "wanx2.1-t2i", "type": "image", "capabilities": ["text_to_image"] },
+    { "id": "wan2.1-t2v", "type": "video", "capabilities": ["text_to_video"] },
+    { "id": "wan2.2-t2v", "type": "video", "capabilities": ["text_to_video"] },
+    { "id": "happyhorse-1.1-t2v", "type": "video", "capabilities": ["text_to_video"] }
   ],
   "zhipu": [
     { "id": "glm-5-turbo", "type": "llm" },
@@ -72,22 +72,22 @@
     { "id": "glm-4-flash", "type": "llm" },
     { "id": "glm-4-long", "type": "llm" },
     { "id": "glm-4v-plus", "type": "llm" },
-    { "id": "cogview-4", "type": "image" },
-    { "id": "cogview-4-250304", "type": "image" },
-    { "id": "cogview-3", "type": "image" },
-    { "id": "cogview-3-plus", "type": "image" },
-    { "id": "cogview-3-flash", "type": "image" },
-    { "id": "cogvideox", "type": "video" },
-    { "id": "cogvideox-flash", "type": "video" }
+    { "id": "cogview-4", "type": "image", "capabilities": ["text_to_image"] },
+    { "id": "cogview-4-250304", "type": "image", "capabilities": ["text_to_image"] },
+    { "id": "cogview-3", "type": "image", "capabilities": ["text_to_image"] },
+    { "id": "cogview-3-plus", "type": "image", "capabilities": ["text_to_image"] },
+    { "id": "cogview-3-flash", "type": "image", "capabilities": ["text_to_image"] },
+    { "id": "cogvideox", "type": "video", "capabilities": ["image_to_video", "text_to_video"] },
+    { "id": "cogvideox-flash", "type": "video", "capabilities": ["image_to_video", "text_to_video"] }
   ],
   "siliconflow": [
     { "id": "deepseek-ai/DeepSeek-V3", "type": "llm" },
     { "id": "deepseek-ai/DeepSeek-R1", "type": "llm" },
     { "id": "Qwen/Qwen2.5-72B-Instruct", "type": "llm" },
     { "id": "THUDM/GLM-4-9B-0414", "type": "llm" },
-    { "id": "black-forest-labs/FLUX.1-schnell", "type": "image" },
-    { "id": "stabilityai/stable-diffusion-3-5-large", "type": "image" },
-    { "id": "Kwai-Kolors/Kolors", "type": "image" }
+    { "id": "black-forest-labs/FLUX.1-schnell", "type": "image", "capabilities": ["text_to_image"] },
+    { "id": "stabilityai/stable-diffusion-3-5-large", "type": "image", "capabilities": ["image_to_image", "text_to_image"] },
+    { "id": "Kwai-Kolors/Kolors", "type": "image", "capabilities": ["image_to_image", "reference_image", "text_to_image"] }
   ],
   "ollama": []
 }

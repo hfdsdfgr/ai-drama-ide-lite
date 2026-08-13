@@ -59,22 +59,24 @@ def _apply_safe_migrations(conn: sqlite3.Connection) -> None:
 
 
 def _backfill_model_capabilities(conn: sqlite3.Connection) -> None:
-    """为已有模型回填自动推断的能力（一次性；已有能力或手动覆盖的不动）。"""
-    from app.services.capability_registry import infer_capabilities, serialize
+    """刷新全部自动推断模型的能力（内置目录优先；手动覆盖的不动）。"""
+    from app.services.capability_registry import resolve_default_capabilities, serialize
 
     rows = conn.execute(
         """
         SELECT m.id, m.model_id, m.model_type, p.preset_key
         FROM models m
         JOIN providers p ON p.id = m.provider_id
-        WHERE m.capability_source = 'auto' AND (m.capabilities IS NULL OR m.capabilities = '')
+        WHERE m.capability_source = 'auto'
         """
     ).fetchall()
     for row in rows:
-        caps = infer_capabilities(row["preset_key"], row["model_id"], row["model_type"])
+        caps = resolve_default_capabilities(
+            row["preset_key"], row["model_id"], row["model_type"]
+        )
         conn.execute(
             "UPDATE models SET capabilities = ? WHERE id = ?",
             (serialize(caps), row["id"]),
         )
     if rows:
-        logger.info("Backfilled capabilities for %d model(s)", len(rows))
+        logger.info("Refreshed capabilities for %d auto model(s)", len(rows))

@@ -9,6 +9,7 @@
 import json
 
 from app.core.errors import AppError
+from app.services.model_catalog import get_builtin_capabilities
 
 CAPABILITY_LABELS: dict[str, str] = {
     "text_to_image": "文生图",
@@ -38,17 +39,19 @@ VIDEO_CAPABILITIES = frozenset(
 )
 
 # (模型名片段, 能力集)：先匹配先得；model_type 已先过滤。
-# 规则只写确定支持的厂商模型，不确定的交给默认值与手动覆盖。
+# 规则基于厂商公开文档调研（见 docs/investigations/vendor-capability-catalog.md），
+# 只写确定支持的，不确定的交给保守默认值与手动覆盖。
 _IMAGE_RULES: tuple[tuple[str, frozenset[str]], ...] = (
     ("gpt-image", frozenset({"text_to_image", "image_to_image", "reference_image"})),
     ("dall-e", frozenset({"text_to_image"})),
     ("qwen-image", frozenset({"text_to_image", "image_to_image", "reference_image"})),
-    ("wanx", frozenset({"text_to_image", "image_to_image", "reference_image"})),
+    ("wanx", frozenset({"text_to_image"})),
     ("wan", frozenset({"text_to_image", "image_to_image", "reference_image"})),
-    ("flux", frozenset({"text_to_image", "image_to_image", "reference_image"})),
+    ("kontext", frozenset({"text_to_image", "image_to_image", "reference_image"})),
+    ("flux", frozenset({"text_to_image"})),
     ("stable-diffusion", frozenset({"text_to_image", "image_to_image"})),
     ("sdxl", frozenset({"text_to_image", "image_to_image"})),
-    ("kolors", frozenset({"text_to_image", "image_to_image"})),
+    ("kolors", frozenset({"text_to_image", "image_to_image", "reference_image"})),
     ("cogview", frozenset({"text_to_image"})),
 )
 
@@ -56,12 +59,23 @@ _VIDEO_RULES: tuple[tuple[str, frozenset[str]], ...] = (
     ("kling", frozenset({"text_to_video", "image_to_video"})),
     ("veo", frozenset({"text_to_video", "image_to_video"})),
     ("pika", frozenset({"text_to_video", "image_to_video"})),
-    ("sora", frozenset({"text_to_video", "image_to_video"})),
+    ("sora", frozenset({"text_to_video", "image_to_video", "video_to_video"})),
     ("cogvideox", frozenset({"text_to_video", "image_to_video"})),
     ("happyhorse", frozenset({"text_to_video"})),
     ("wan2.1-t2v", frozenset({"text_to_video"})),
     ("wan2.2-t2v", frozenset({"text_to_video"})),
 )
+
+
+def resolve_default_capabilities(
+    preset_key: str | None, model_id: str, model_type: str
+) -> list[str]:
+    """模型能力默认值：优先内置目录（调研数据），未收录时按规则推断。"""
+    if preset_key:
+        catalog_caps = get_builtin_capabilities(preset_key, model_id)
+        if catalog_caps is not None:
+            return sorted(set(catalog_caps))
+    return infer_capabilities(preset_key, model_id, model_type)
 
 
 def infer_capabilities(preset_key: str | None, model_id: str, model_type: str) -> list[str]:

@@ -83,6 +83,7 @@ class BulkModelsRequest(BaseModel):
 class BuiltinModelOut(BaseModel):
     id: str
     type: ModelType
+    capabilities: list[str] = Field(default_factory=list)
 
 
 class ModelOut(BaseModel):

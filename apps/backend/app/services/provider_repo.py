@@ -18,8 +18,8 @@ from app.schemas.provider import (
     ProviderUpdate,
 )
 from app.services.capability_registry import (
-    infer_capabilities,
     parse,
+    resolve_default_capabilities,
     serialize,
     validate_capabilities,
 )
@@ -260,7 +260,7 @@ class ProviderRepository:
         provider = self.get_provider(data.provider_id)
         now = _now_iso()
         model_id = _new_id("model")
-        capabilities = infer_capabilities(
+        capabilities = resolve_default_capabilities(
             provider.preset_key, data.model_id.strip(), data.model_type
         )
         with get_connection(self.db_path) as conn:
@@ -298,7 +298,7 @@ class ProviderRepository:
         model = self.get_model(model_id)
         if data.source == "auto":
             provider = self.get_provider(model.provider_id)
-            capabilities = infer_capabilities(
+            capabilities = resolve_default_capabilities(
                 provider.preset_key, model.model_id, model.model_type
             )
             source = "auto"
@@ -377,7 +377,7 @@ class ProviderRepository:
         now = _now_iso()
         for mid in model_ids:
             model_type = classify_model(preset_key, mid)
-            capabilities = infer_capabilities(preset_key, mid, model_type)
+            capabilities = resolve_default_capabilities(preset_key, mid, model_type)
             with get_connection(self.db_path) as conn:
                 exists = conn.execute(
                     "SELECT 1 FROM models WHERE provider_id = ? AND model_id = ? AND deleted_at IS NULL",
