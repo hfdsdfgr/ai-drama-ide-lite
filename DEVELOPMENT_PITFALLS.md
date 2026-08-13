@@ -26,6 +26,7 @@
 | 沙箱内直接访问外网 | 腾讯/新浪等全部连接失败 | 沙箱网络限制 | 排查网络问题先做对比测试：沙箱失败 + 提权成功 = 环境限制，不是数据源故障 |
 | PowerShell 输出被吞 | 命令执行成功但没有输出 | 执行环境吞输出 | 输出重定向到日志文件，或分两次命令分别检查状态 |
 | pytest 临时目录清理报 `PermissionError: [WinError 5]`（`pytest-of-Administrator`） | 测试本身全过，teardown 阶段清理系统 Temp 失败 | 系统 Temp 目录权限/占用问题（Windows 沙箱） | 运行时指定项目内临时目录：`pytest --basetemp=E:\FintechProject\.pytest_tmp -p no:cacheprovider` |
+| 沙箱内启动后端并用 keyring 写系统凭据 | `CredWrite` 报 `[WinError 1312] 指定的登录会话不存在。可能已被终止。` | 沙箱进程没有可用的 Windows 登录会话，凭据管理器拒绝写入 | 后端必须提权（非沙箱）启动；提权下 `keyring.set_password` 实测可用（写后及时删测试凭据） |
 
 ## 2. 网络与数据源
 
