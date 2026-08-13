@@ -101,6 +101,9 @@ export function NovelPage() {
   const [analysisJob, setAnalysisJob] = useState<AnalysisJob | null>(null);
   const [analysisBusy, setAnalysisBusy] = useState(false);
   const analysisPollRef = useRef<string | null>(null);
+  const [inspectorTab, setInspectorTab] = useState<"ai" | "bible">(
+    "ai",
+  );
 
   useEffect(() => {
     listProjects()
@@ -653,32 +656,29 @@ export function NovelPage() {
   }, [chapterId, detail?.novel.id]);
 
   return (
-    <div className="page">
-      <div className="page-head">
-        <h2>小说</h2>
-      </div>
-
-      {projects.length === 0 ? (
-        <p className="muted">还没有项目，请先在「主页」创建。</p>
-      ) : (
-        <label>
-          项目
-          <select value={projectId} onChange={(e) => setProjectId(e.target.value)}>
-            <option value="">选择项目</option>
-            {projects.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
-
-      {error && <p className="error">{error}</p>}
-
-      {projectId && (
-        <>
-          <div className="toolbar">
+    <div className="page novel-page">
+      <div className="novel-topbar">
+        <div className="page-head">
+          <h2>小说</h2>
+          {projects.length === 0 ? (
+            <p className="muted">还没有项目，请先在「主页」创建。</p>
+          ) : (
+            <label className="project-picker">
+              项目
+              <select value={projectId} onChange={(e) => setProjectId(e.target.value)}>
+                <option value="">选择项目</option>
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+        </div>
+        {error && <p className="error">{error}</p>}
+        {projectId && (
+          <div className="toolbar novel-tools">
             <form onSubmit={handleSearch} className="toolbar">
               <input
                 value={searchInput}
@@ -706,20 +706,29 @@ export function NovelPage() {
               导入 TXT/MD/DOCX
             </label>
           </div>
+        )}
+      </div>
 
-          <div className="card">
-            <h3>小说列表</h3>
+      {projectId && (
+        <div className="novel-workspace">
+          <aside className="novel-sidebar">
+            <div className="sidebar-block">
+              <h3>小说</h3>
             {loading ? (
               <p>加载中…</p>
             ) : novels.length === 0 ? (
               <p className="muted">没有小说，新建或导入一个。</p>
             ) : (
-              <ul className="project-list">
+              <ul className="novel-list">
                 {novels.map((novel) => (
                   <li key={novel.id}>
                     <button
                       type="button"
-                      className="project-item"
+                      className={
+                        detail?.novel.id === novel.id
+                          ? "project-item active"
+                          : "project-item"
+                      }
                       onClick={() => openNovel(novel.id)}
                     >
                       <span className="project-name">{novel.title}</span>
@@ -732,70 +741,76 @@ export function NovelPage() {
                 ))}
               </ul>
             )}
-          </div>
+            </div>
 
           {detail && (
-            <>
-            <div className="novel-editor">
-              <aside className="chapter-list">
+            <div className="sidebar-block">
+              <div className="sidebar-head">
                 <h3>章节</h3>
                 <button type="button" onClick={handleAddChapter}>
                   + 新章节
                 </button>
-                <ul>
-                  {detail.chapters.map((c) => (
-                    <li key={c.id}>
-                      <button
-                        type="button"
-                        className={
-                          c.id === chapterId ? "chapter-item active" : "chapter-item"
-                        }
-                        onClick={() => selectChapter(c.id)}
-                      >
-                        {c.title || "未命名章节"}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-                {confirmDelete === "novel" ? (
-                  <>
+              </div>
+              <ul className="chapter-tree">
+                {detail.chapters.map((c) => (
+                  <li key={c.id}>
                     <button
                       type="button"
-                      className="button-danger"
-                      onClick={handleDeleteNovel}
+                      className={
+                        c.id === chapterId ? "chapter-item active" : "chapter-item"
+                      }
+                      onClick={() => selectChapter(c.id)}
                     >
-                      确认删除
+                      {c.title || "未命名章节"}
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => setConfirmDelete(null)}
-                    >
-                      取消
-                    </button>
-                  </>
-                ) : (
+                  </li>
+                ))}
+              </ul>
+              {confirmDelete === "novel" ? (
+                <div className="actions">
                   <button
                     type="button"
                     className="button-danger"
                     onClick={handleDeleteNovel}
                   >
-                    删除小说
+                    确认删除
                   </button>
-                )}
-              </aside>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDelete(null)}
+                  >
+                    取消
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="button-danger"
+                  onClick={handleDeleteNovel}
+                >
+                  删除小说
+                </button>
+              )}
+            </div>
+          )}
+        </aside>
 
-              <section className="chapter-edit">
-                <label>
-                  小说标题
-                  <input
-                    value={novelTitle}
-                    onChange={(e) => setNovelTitle(e.target.value)}
-                  />
-                </label>
-                <span className="muted save-status">
-                  {novelSave === "saving" && "标题保存中…"}
-                  {novelSave === "saved" && "标题已保存"}
-                </span>
+        <section className="novel-main">
+          {detail ? (
+            <>
+                <div className="novel-head">
+                  <label>
+                    小说标题
+                    <input
+                      value={novelTitle}
+                      onChange={(e) => setNovelTitle(e.target.value)}
+                    />
+                  </label>
+                  <span className="muted save-status">
+                    {novelSave === "saving" && "标题保存中…"}
+                    {novelSave === "saved" && "标题已保存"}
+                  </span>
+                </div>
 
                 {selectedChapter ? (
                   <>
@@ -807,11 +822,11 @@ export function NovelPage() {
                       />
                     </label>
                     <label>
-                      正文（由 AI 撰写生成，只读展示；修改请用「AI 撰写」或续写/重写）
+                      正文（可直接编辑，自动保存）
                       <textarea
                         className="chapter-textarea"
                         value={chapterContent}
-                        readOnly
+                        onChange={(e) => setChapterContent(e.target.value)}
                         rows={18}
                       />
                     </label>
@@ -849,15 +864,42 @@ export function NovelPage() {
                     </div>
                   </>
                 ) : (
-                  <p className="muted">点击「+ 新章节」开始写作。</p>
+                  <p className="muted">点击左侧「+ 新章节」开始写作。</p>
                 )}
+              </>
+            ) : (
+              <div className="novel-empty">
+                <p className="muted">从左侧选择一部小说开始阅读与创作。</p>
+              </div>
+            )}
+          </section>
 
-                <div className="card ai-placeholder">
+          <aside className="novel-inspector">
+            <div className="tabs">
+              <button
+                type="button"
+                className={inspectorTab === "ai" ? "tab active" : "tab"}
+                onClick={() => setInspectorTab("ai")}
+              >
+                AI 助手
+              </button>
+              <button
+                type="button"
+                className={inspectorTab === "bible" ? "tab active" : "tab"}
+                onClick={() => setInspectorTab("bible")}
+              >
+                Story Bible
+              </button>
+            </div>
+            <div className="inspector-body">
+              {inspectorTab === "ai" ? (
+                <>
+                <div className="card inspector-card">
                   <h3>AI 创作</h3>
                   {llmModels.length === 0 ? (
                     <p className="muted">
-                      还没有可用的文本模型，请先在「设置」中配置并启用一个 LLM
-                      模型。
+                      没有可用的文本模型。请在「设置」中启用至少一个文本模型，
+                      并确认其 Provider 已启用（Provider 和模型需要同时启用）。
                     </p>
                   ) : (
                     <>
@@ -929,10 +971,7 @@ export function NovelPage() {
                     </div>
                   )}
                 </div>
-              </section>
-            </div>
-
-            <div className="card">
+                <div className="card inspector-card">
               <div className="page-head">
                 <h3>AI 撰写整本小说</h3>
                 {wiz && (
@@ -1210,12 +1249,14 @@ export function NovelPage() {
                 </>
               )}
             </div>
-
-            <div className="card">
-              <h3>故事分析（Story Bible）</h3>
+              </>
+              ) : (
+                <div className="card inspector-card">
+                  <h3>故事分析（Story Bible）</h3>
               {llmModels.length === 0 ? (
                 <p className="muted">
-                  还没有可用的文本模型，请先在「设置」中配置并启用一个 LLM 模型。
+                  没有可用的文本模型。请在「设置」中启用至少一个文本模型，
+                  并确认其 Provider 已启用（Provider 和模型需要同时启用）。
                 </p>
               ) : (
                 <>
@@ -1341,9 +1382,10 @@ export function NovelPage() {
                 </>
               )}
             </div>
-            </>
-          )}
-        </>
+              )}
+            </div>
+          </aside>
+        </div>
       )}
     </div>
   );
