@@ -439,6 +439,30 @@ button:disabled {
   gap: 0.5rem;
 }
 
+.bible {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.bible-section {
+  border-top: 1px solid #eee;
+  padding-top: 0.5rem;
+}
+
+.bible-section h4 {
+  margin: 0 0 0.35rem;
+}
+
+.bible-section ul,
+.bible-section ol {
+  margin: 0;
+  padding-left: 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
 /* ---- InfoTip ---- */
 .info-tip {
   position: relative;

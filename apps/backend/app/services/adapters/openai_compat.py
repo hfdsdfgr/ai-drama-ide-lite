@@ -35,10 +35,15 @@ class OpenAICompatAdapter(Adapter):
     name = "openai-compatible"
     provider_label = "OpenAI 兼容"
 
-    def chat(self, ctx: ProviderContext, messages: list[dict]) -> str:
+    def chat(
+        self,
+        ctx: ProviderContext,
+        messages: list[dict],
+        temperature: float = 0.8,
+    ) -> str:
         url = ctx.base_url.rstrip("/") + "/chat/completions"
         headers = {"Authorization": f"Bearer {ctx.api_key}"} if ctx.api_key else {}
-        payload = {"model": ctx.model_id, "messages": messages, "temperature": 0.8}
+        payload = {"model": ctx.model_id, "messages": messages, "temperature": temperature}
         try:
             with httpx.Client(timeout=60) as client:
                 response = client.post(url, headers=headers, json=payload)

@@ -3,7 +3,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import generation, health, novels, projects, providers
+from app.api.routes import generation, health, novels, projects, providers, story
 from app.core.config import Settings, get_settings
 from app.core.errors import register_exception_handlers
 from app.core.logging import get_logger, setup_logging
@@ -13,6 +13,7 @@ from app.services.generation_service import GenerationService
 from app.services.project_repo import migrate_legacy_json_projects
 from app.services.provider_repo import ProviderRepository
 from app.services.secret_store import KeyringSecretStore, SecretStore
+from app.services.story_analysis import StoryAnalysisService
 
 logger = get_logger("main")
 
@@ -35,6 +36,9 @@ def create_app(
     app.state.generation_service = GenerationService(
         app.state.provider_manager, config.data_dir / "generation_tests"
     )
+    app.state.story_service = StoryAnalysisService(
+        app.state.provider_manager, config.db_path
+    )
     app.add_middleware(
         CORSMiddleware,
         allow_origins=config.cors_origins,
@@ -49,6 +53,7 @@ def create_app(
     app.include_router(providers.router)
     app.include_router(providers.models_router)
     app.include_router(generation.router)
+    app.include_router(story.router)
     logger.info("Application started (env=%s)", config.env)
     return app
 

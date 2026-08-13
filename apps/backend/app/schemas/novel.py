@@ -25,6 +25,7 @@ class Novel(BaseModel):
 
 class ChapterCreate(BaseModel):
     title: str = Field(default="", max_length=300)
+    content: str | None = Field(default=None)
 
 
 class ChapterUpdate(BaseModel):

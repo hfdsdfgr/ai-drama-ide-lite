@@ -280,16 +280,13 @@ Phase 6 — LLM Story Engine
 让小说真正变成结构化故事。
 
 Tasks
- Story Analysis
- Character Extraction
- Location Extraction
- Prop Extraction
- Event Extraction
- Timeline
- Story Bible
- Conflict Analysis
- Plotline
- Foreshadowing
+- [x] Story Analysis（逐章抽取 + 滚动摘要 + 全书合并，map-reduce）
+- [x] Character Extraction / Location Extraction / Prop Extraction / Event Extraction
+- [x] Timeline（事件按章节整理）
+- [x] Story Bible（stories / characters / locations / props 表，Pydantic 校验 + 修复重试）
+- [x] Conflict Analysis / Plotline / Foreshadowing（全书合并阶段生成）
+- [x] 写作上下文注入（AI 续写/扩写/重写时携带 Story Bible，保持设定一致）
+- [x] 合并式更新（增量合并新章节进已有 Bible，旧实体保留）
 Pipeline
 Novel
  ↓

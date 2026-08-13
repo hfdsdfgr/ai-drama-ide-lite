@@ -172,8 +172,17 @@ class NovelRepository:
             ).fetchone()[0]
             conn.execute(
                 "INSERT INTO chapters (id, project_id, novel_id, title, content, order_index, deleted_at, created_at, updated_at)"
-                " VALUES (?, ?, ?, ?, '', ?, NULL, ?, ?)",
-                (chapter_id, project_id, novel_id, data.title.strip(), max_order + 1, now, now),
+                " VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?)",
+                (
+                    chapter_id,
+                    project_id,
+                    novel_id,
+                    data.title.strip(),
+                    data.content or "",
+                    max_order + 1,
+                    now,
+                    now,
+                ),
             )
         return self.get_chapter(novel_id, chapter_id)
 

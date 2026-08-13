@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { InfoTip } from "../components/InfoTip";
 import {
@@ -15,9 +15,19 @@ import {
 } from "../api/novels";
 import { listProjects } from "../api/projects";
 import { listModels } from "../api/providers";
+import {
+  getStoryAnalysis,
+  getStoryBible,
+  startStoryAnalysis,
+} from "../api/story";
 import type { Model } from "../types/provider";
 import type { Chapter, Novel, NovelDetail } from "../types/novel";
 import type { Project } from "../types/project";
+import type {
+  AnalysisJob,
+  AnalysisMode,
+  StoryBible,
+} from "../types/story";
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 type AiAction = "continue" | "expand" | "rewrite";
@@ -67,6 +77,10 @@ export function NovelPage() {
   const [aiBusy, setAiBusy] = useState(false);
   const [aiAction, setAiAction] = useState<AiAction | null>(null);
   const [aiResult, setAiResult] = useState("");
+  const [bible, setBible] = useState<StoryBible | null>(null);
+  const [analysisJob, setAnalysisJob] = useState<AnalysisJob | null>(null);
+  const [analysisBusy, setAnalysisBusy] = useState(false);
+  const analysisPollRef = useRef<string | null>(null);
 
   useEffect(() => {
     listProjects()
@@ -313,6 +327,47 @@ export function NovelPage() {
 
   const selectedChapter: Chapter | undefined =
     detail?.chapters.find((c) => c.id === chapterId) ?? undefined;
+  const currentNovelId = detail?.novel.id;
+
+  useEffect(() => {
+    if (!currentNovelId) return;
+    setAnalysisJob(null);
+    analysisPollRef.current = null;
+    setBible(null);
+    getStoryBible(projectId)
+      .then((r) => setBible(r.bible))
+      .catch((e) => setError((e as Error).message));
+  }, [projectId, currentNovelId]);
+
+  async function runAnalysis(mode: AnalysisMode) {
+    if (!detail || !aiModelId) return;
+    setAnalysisBusy(true);
+    setError("");
+    try {
+      const job = await startStoryAnalysis(projectId, detail.novel.id, aiModelId, mode);
+      setAnalysisJob(job);
+      analysisPollRef.current = job.job_id;
+      while (analysisPollRef.current === job.job_id) {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        if (analysisPollRef.current !== job.job_id) break;
+        const updated = await getStoryAnalysis(projectId, job.job_id);
+        setAnalysisJob(updated);
+        if (["completed", "failed", "cancelled"].includes(updated.status)) {
+          analysisPollRef.current = null;
+          if (updated.status === "completed") {
+            const bibleResult = await getStoryBible(projectId);
+            setBible(bibleResult.bible);
+          }
+          break;
+        }
+      }
+    } catch (err) {
+      setError((err as Error).message);
+      analysisPollRef.current = null;
+    } finally {
+      setAnalysisBusy(false);
+    }
+  }
 
   useEffect(() => {
     setConfirmDelete(null);
@@ -401,6 +456,7 @@ export function NovelPage() {
           </div>
 
           {detail && (
+            <>
             <div className="novel-editor">
               <aside className="chapter-list">
                 <h3>章节</h3>
@@ -596,6 +652,138 @@ export function NovelPage() {
                 </div>
               </section>
             </div>
+
+            <div className="card">
+              <h3>故事分析（Story Bible）</h3>
+              {llmModels.length === 0 ? (
+                <p className="muted">
+                  还没有可用的文本模型，请先在「设置」中配置并启用一个 LLM 模型。
+                </p>
+              ) : (
+                <>
+                  <div className="toolbar">
+                    <button
+                      type="button"
+                      disabled={!detail || !aiModelId || analysisBusy}
+                      onClick={() => runAnalysis("full")}
+                    >
+                      分析故事
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!detail || !aiModelId || analysisBusy || !bible}
+                      onClick={() => runAnalysis("merge")}
+                    >
+                      增量合并新章节
+                    </button>
+                    {analysisJob && (
+                      <span className="muted">
+                        {analysisJob.detail}
+                        {analysisJob.progress != null &&
+                          `（${Math.round(analysisJob.progress * 100)}%）`}
+                      </span>
+                    )}
+                  </div>
+                  {analysisJob?.error && (
+                    <p className="error">{analysisJob.error}</p>
+                  )}
+                  {!detail && (
+                    <p className="muted">先打开一部小说，再进行分析。</p>
+                  )}
+                  {bible ? (
+                    <div className="bible">
+                      {bible.synopsis && <p>{bible.synopsis}</p>}
+                      {bible.characters.length > 0 && (
+                        <div className="bible-section">
+                          <h4>角色</h4>
+                          <ul>
+                            {bible.characters.map((c) => (
+                              <li key={c.name}>
+                                <strong>{c.name}</strong>
+                                {c.role_hint ? `（${c.role_hint}）` : ""} {c.summary}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {bible.locations.length > 0 && (
+                        <div className="bible-section">
+                          <h4>地点</h4>
+                          <ul>
+                            {bible.locations.map((l) => (
+                              <li key={l.name}>
+                                <strong>{l.name}</strong> {l.description}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {bible.props.length > 0 && (
+                        <div className="bible-section">
+                          <h4>道具</h4>
+                          <ul>
+                            {bible.props.map((p) => (
+                              <li key={p.name}>
+                                <strong>{p.name}</strong> {p.description}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {bible.events.length > 0 && (
+                        <div className="bible-section">
+                          <h4>时间线</h4>
+                          <ol>
+                            {bible.events.map((e, i) => (
+                              <li key={i}>
+                                第 {e.chapter_index + 1} 章：{e.summary}
+                              </li>
+                            ))}
+                          </ol>
+                        </div>
+                      )}
+                      {bible.conflicts.length > 0 && (
+                        <div className="bible-section">
+                          <h4>主要冲突</h4>
+                          <ul>
+                            {bible.conflicts.map((c) => (
+                              <li key={c}>{c}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {bible.plotlines.length > 0 && (
+                        <div className="bible-section">
+                          <h4>情节线</h4>
+                          <ul>
+                            {bible.plotlines.map((p) => (
+                              <li key={p}>{p}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {bible.foreshadowing.length > 0 && (
+                        <div className="bible-section">
+                          <h4>伏笔</h4>
+                          <ul>
+                            {bible.foreshadowing.map((f) => (
+                              <li key={f}>{f}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    detail && (
+                      <p className="muted">
+                        还没有 Story Bible。点击「分析故事」从当前小说提取角色、地点、道具与事件。
+                      </p>
+                    )
+                  )}
+                </>
+              )}
+            </div>
+            </>
           )}
         </>
       )}
