@@ -3,6 +3,7 @@ export interface Novel {
   project_id: string;
   title: string;
   source_type: string;
+  ai_brief: string;
   chapter_count: number;
   created_at: string;
   updated_at: string;

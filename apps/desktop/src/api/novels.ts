@@ -26,7 +26,7 @@ export function getNovel(projectId: string, novelId: string): Promise<NovelDetai
 export function updateNovel(
   projectId: string,
   novelId: string,
-  input: { title?: string },
+  input: { title?: string; ai_brief?: string },
 ): Promise<Novel> {
   return request<Novel>(`/projects/${projectId}/novels/${novelId}`, {
     method: "PUT",

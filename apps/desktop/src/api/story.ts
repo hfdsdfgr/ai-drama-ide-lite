@@ -69,3 +69,23 @@ export function generateAiChapter(
     body: JSON.stringify(input),
   });
 }
+
+export async function continueAiChapterStream(
+  projectId: string,
+  novelId: string,
+  input: {
+    model_id: string;
+    brief: AiNovelBrief;
+    user_instruction: string;
+    context_chapter_count?: number;
+  },
+): Promise<Response> {
+  return fetch(
+    `/api/projects/${projectId}/novels/${novelId}/ai/continue-stream`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    },
+  );
+}
