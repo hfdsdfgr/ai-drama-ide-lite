@@ -115,6 +115,30 @@ def test_ai_chapter_endpoint(client, monkeypatch):
     assert "节奏快一点" in user
 
 
+def test_ai_chapter_stream_endpoint(client, monkeypatch):
+    project_id = _create_project(client)
+
+    def fake_stream(self, model_id, messages, temperature=0.8, timeout=180):
+        yield "这是"
+        yield "流式"
+        yield "正文"
+
+    monkeypatch.setattr(ProviderManager, "chat_stream", fake_stream)
+    response = client.post(
+        f"/api/projects/{project_id}/story/ai-chapter-stream",
+        json={
+            "model_id": "model_x",
+            "brief": _brief(),
+            "outline": [{"title": "第一章", "summary": "主角登场"}],
+            "chapter_index": 0,
+        },
+    )
+    assert response.status_code == 200
+    assert "这是" in response.text
+    assert "流式" in response.text
+    assert "done" in response.text
+
+
 def test_ai_chapter_out_of_range(client, monkeypatch):
     project_id = _create_project(client)
     _, fake = _capture_chat([])

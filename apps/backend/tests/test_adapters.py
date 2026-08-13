@@ -90,6 +90,52 @@ def test_chat_success(monkeypatch):
     assert text == "你好"
 
 
+def test_chat_stream_parses_deltas(monkeypatch):
+    lines = [
+        'data: {"choices":[{"delta":{"content":"你"}}]}',
+        "",
+        'data: {"choices":[{"delta":{"content":"好"}}]}',
+        "",
+        "data: [DONE]",
+        "",
+    ]
+
+    class _FakeStreamCtx:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def raise_for_status(self):
+            pass
+
+        def iter_lines(self):
+            return iter(lines)
+
+    class _FakeStreamingClient:
+        def __init__(self, timeout=None):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def stream(self, method, url, headers=None, json=None):
+            return _FakeStreamCtx()
+
+    monkeypatch.setattr(
+        httpx, "Client", lambda timeout=None: _FakeStreamingClient(timeout=timeout)
+    )
+    adapter = OpenAICompatAdapter()
+    chunks = list(
+        adapter.chat_stream(_ctx(), [{"role": "user", "content": "hi"}])
+    )
+    assert chunks == ["你", "好"]
+
+
 def test_chat_auth_fail(monkeypatch):
     _patch_client(monkeypatch, status_code=401, payload={})
     adapter = OpenAICompatAdapter()

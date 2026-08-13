@@ -4,6 +4,7 @@
 """
 
 import base64
+import json
 import uuid
 from pathlib import Path
 
@@ -63,6 +64,55 @@ class OpenAICompatAdapter(Adapter):
             return data["choices"][0]["message"]["content"]
         except (KeyError, IndexError, TypeError) as exc:
             raise AdapterError(502, "llm_invalid_response", f"{ctx.provider_name} 返回格式异常") from exc
+
+    def chat_stream(
+        self,
+        ctx: ProviderContext,
+        messages: list[dict],
+        temperature: float = 0.8,
+        timeout: int = 180,
+    ):
+        """流式 chat：逐段产出内容增量（SSE 用），错误归一化与 chat 一致。"""
+        url = ctx.base_url.rstrip("/") + "/chat/completions"
+        headers = {"Authorization": f"Bearer {ctx.api_key}"} if ctx.api_key else {}
+        payload = {
+            "model": ctx.model_id,
+            "messages": messages,
+            "temperature": temperature,
+            "stream": True,
+        }
+        try:
+            with httpx.Client(timeout=timeout) as client:
+                with client.stream("POST", url, headers=headers, json=payload) as response:
+                    response.raise_for_status()
+                    for line in response.iter_lines():
+                        if not line or not line.startswith("data:"):
+                            continue
+                        data = line[len("data:") :].strip()
+                        if data == "[DONE]":
+                            break
+                        try:
+                            obj = json.loads(data)
+                        except ValueError:
+                            continue
+                        try:
+                            delta = obj["choices"][0]["delta"].get("content")
+                        except (KeyError, IndexError, TypeError, AttributeError):
+                            continue
+                        if delta:
+                            yield delta
+        except httpx.HTTPStatusError as exc:
+            raise AdapterError(
+                502,
+                "llm_stream_failed",
+                f"{ctx.provider_name} 流式生成失败：{self._http_detail(exc.response.status_code, ctx.base_url)}",
+            ) from exc
+        except httpx.TimeoutException as exc:
+            raise AdapterError(502, "llm_stream_timeout", f"{ctx.provider_name} 流式生成超时") from exc
+        except Exception as exc:
+            raise AdapterError(
+                502, "llm_stream_failed", f"无法连接 {ctx.provider_name}，请检查网络与配置"
+            ) from exc
 
     def generate(
         self,

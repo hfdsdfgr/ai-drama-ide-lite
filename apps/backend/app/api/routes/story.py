@@ -1,6 +1,9 @@
 """Story Bible / 分析接口（Phase 6 — LLM Story Engine）。"""
 
+import json
+
 from fastapi import APIRouter, Request
+from fastapi.responses import StreamingResponse
 
 from app.core.errors import AppError
 from app.schemas.story import (
@@ -60,3 +63,29 @@ def ai_chapter(project_id: str, payload: AiChapterRequest, request: Request) -> 
         payload.user_instruction,
         payload.previous_summaries,
     )
+
+
+@router.post("/ai-chapter-stream")
+def ai_chapter_stream(
+    project_id: str, payload: AiChapterRequest, request: Request
+) -> StreamingResponse:
+    """SSE 流式章节生成：data: {"delta": "..."} ... data: {"done": true}。"""
+    service = request.app.state.ai_novel_service
+
+    def event_source():
+        try:
+            for delta in service.chapter_stream(
+                project_id,
+                payload.model_id,
+                payload.brief,
+                payload.outline,
+                payload.chapter_index,
+                payload.user_instruction,
+                payload.previous_summaries,
+            ):
+                yield f"data: {json.dumps({'delta': delta}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'done': True}, ensure_ascii=False)}\n\n"
+        except Exception as exc:  # noqa: BLE001 - 错误以 SSE 事件返回，前端内联展示
+            yield f"data: {json.dumps({'error': str(exc)}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(event_source(), media_type="text/event-stream")

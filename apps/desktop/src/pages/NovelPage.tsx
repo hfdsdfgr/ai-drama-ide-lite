@@ -16,7 +16,6 @@ import {
 import { listProjects } from "../api/projects";
 import { listModels } from "../api/providers";
 import {
-  generateAiChapter,
   generateAiOutline,
   getStoryAnalysis,
   getStoryBible,
@@ -401,6 +400,7 @@ export function NovelPage() {
     writing: boolean;
     currentIndex: number;
     preview: AiChapter | null;
+    streaming: boolean;
     instruction: string;
     previousSummaries: string[];
     done: boolean;
@@ -426,6 +426,7 @@ export function NovelPage() {
       writing: false,
       currentIndex: 0,
       preview: null,
+      streaming: false,
       instruction: "",
       previousSummaries: [],
       done: false,
@@ -489,23 +490,97 @@ export function NovelPage() {
     if (!wiz || !aiModelId || !wiz.outline) return;
     setWizBusy(true);
     setWizError("");
+    const outline = wiz.outline;
+    const index = wiz.currentIndex;
+    const current = outline[index];
+    updateWiz({
+      streaming: true,
+      preview: {
+        title: current.title,
+        content: "",
+        summary: current.summary,
+      },
+    });
     try {
       const brief = wizardBrief();
       if (!brief) return;
-      const result = await generateAiChapter(projectId, {
-        model_id: aiModelId,
-        brief,
-        outline: wiz.outline,
-        chapter_index: wiz.currentIndex,
-        user_instruction: wiz.instruction,
-        previous_summaries: wiz.previousSummaries,
-      });
-      updateWiz({ preview: result });
+      const response = await fetch(
+        `/api/projects/${projectId}/story/ai-chapter-stream`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model_id: aiModelId,
+            brief,
+            outline,
+            chapter_index: index,
+            user_instruction: wiz.instruction,
+            previous_summaries: wiz.previousSummaries,
+          }),
+        },
+      );
+      if (!response.ok || !response.body) {
+        throw new Error(`请求失败（HTTP ${response.status}）`);
+      }
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split("\n\n");
+        buffer = parts.pop() ?? "";
+        for (const part of parts) {
+          const line = part.split("\n")[0];
+          if (!line.startsWith("data:")) continue;
+          let data: { delta?: string; done?: boolean; error?: string };
+          try {
+            data = JSON.parse(line.slice(5)) as {
+              delta?: string;
+              done?: boolean;
+              error?: string;
+            };
+          } catch {
+            continue;
+          }
+          if (data.error) throw new Error(data.error);
+          if (data.delta) {
+            setWiz((prev) =>
+              prev?.preview
+                ? {
+                    ...prev,
+                    preview: {
+                      ...prev.preview,
+                      content: prev.preview.content + (data.delta ?? ""),
+                    },
+                  }
+                : prev,
+            );
+          }
+        }
+      }
+      updateWiz({ streaming: false });
     } catch (err) {
       setWizError((err as Error).message);
+      updateWiz({ streaming: false, preview: null });
     } finally {
       setWizBusy(false);
     }
+  }
+
+  function exportPreviewTxt() {
+    if (!wiz?.preview) return;
+    const text = `${wiz.preview.title}\n\n${wiz.preview.content}`;
+    const blob = new Blob(["\ufeff" + text], {
+      type: "text/plain;charset=utf-8",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${wiz.preview.title || "章节"}.txt`;
+    link.click();
+    URL.revokeObjectURL(url);
   }
 
   async function savePreviewChapter() {
@@ -732,11 +807,11 @@ export function NovelPage() {
                       />
                     </label>
                     <label>
-                      正文
+                      正文（由 AI 撰写生成，只读展示；修改请用「AI 撰写」或续写/重写）
                       <textarea
                         className="chapter-textarea"
                         value={chapterContent}
-                        onChange={(e) => setChapterContent(e.target.value)}
+                        readOnly
                         rows={18}
                       />
                     </label>
@@ -1051,6 +1126,11 @@ export function NovelPage() {
                   </label>
                   {wiz.preview ? (
                     <div className="wizard-preview">
+                      <p className="muted">
+                        {wiz.streaming
+                          ? `正在生成… 已生成 ${wiz.preview.content.length} 字`
+                          : `本章共 ${wiz.preview.content.length} 字`}
+                      </p>
                       <label>
                         章节标题
                         <input
@@ -1061,10 +1141,11 @@ export function NovelPage() {
                               preview: { ...wiz.preview, title: e.target.value },
                             });
                           }}
+                          disabled={wiz.streaming}
                         />
                       </label>
                       <label>
-                        正文预览（可修改）
+                        正文预览
                         <textarea
                           className="chapter-textarea"
                           value={wiz.preview.content}
@@ -1075,25 +1156,34 @@ export function NovelPage() {
                             });
                           }}
                           rows={12}
+                          readOnly={wiz.streaming}
                         />
                       </label>
                       <div className="toolbar">
                         <button
                           type="button"
-                          disabled={wizBusy || !detail}
+                          disabled={wizBusy || !detail || wiz.streaming}
                           onClick={savePreviewChapter}
                         >
                           接受并保存 → 下一章
                         </button>
                         <button
                           type="button"
-                          disabled={wizBusy}
+                          disabled={wizBusy || wiz.streaming}
                           onClick={genChapterPreview}
                         >
                           按意见重写本章
                         </button>
                         <button
                           type="button"
+                          disabled={wiz.streaming}
+                          onClick={exportPreviewTxt}
+                        >
+                          导出 TXT
+                        </button>
+                        <button
+                          type="button"
+                          disabled={wiz.streaming}
                           onClick={() => updateWiz({ preview: null })}
                         >
                           放弃本章
