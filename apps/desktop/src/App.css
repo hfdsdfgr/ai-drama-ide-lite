@@ -106,7 +106,18 @@
   flex-direction: column;
 }
 
-.app-main > .page {
+.view-pane {
+  display: none;
+  flex: 1;
+  min-height: 0;
+}
+
+.view-pane.active {
+  display: flex;
+  flex-direction: column;
+}
+
+.view-pane > .page {
   flex: 1;
   min-height: 0;
   overflow-y: auto;

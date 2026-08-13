@@ -68,7 +68,11 @@ const GENRES = [
 
 const AUDIENCES = ["全年龄", "青少年", "成人"];
 
-export function NovelPage() {
+interface NovelPageProps {
+  active: boolean;
+}
+
+export function NovelPage({ active }: NovelPageProps) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState("");
   const [novels, setNovels] = useState<Novel[]>([]);
@@ -124,6 +128,7 @@ export function NovelPage() {
   }, [projectId, refreshNovels]);
 
   useEffect(() => {
+    if (!active) return;
     listModels({ model_type: "llm", enabled_only: true })
       .then((models) => {
         const usable = models.filter(isChatModel);
@@ -133,7 +138,7 @@ export function NovelPage() {
         );
       })
       .catch((e) => setError((e as Error).message));
-  }, []);
+  }, [active]);
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();

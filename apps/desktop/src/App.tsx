@@ -65,10 +65,18 @@ function App() {
         </div>
       </header>
       <main className="app-main">
-        {view === "project" && <ProjectPage />}
-        {view === "novel" && <NovelPage />}
-        {view === "bible" && <StoryBiblePage />}
-        {view === "settings" && <SettingsPage />}
+        <div className={view === "project" ? "view-pane active" : "view-pane"}>
+          <ProjectPage />
+        </div>
+        <div className={view === "novel" ? "view-pane active" : "view-pane"}>
+          <NovelPage active={view === "novel"} />
+        </div>
+        <div className={view === "bible" ? "view-pane active" : "view-pane"}>
+          <StoryBiblePage />
+        </div>
+        <div className={view === "settings" ? "view-pane active" : "view-pane"}>
+          <SettingsPage />
+        </div>
       </main>
       <StatusBar />
     </div>
