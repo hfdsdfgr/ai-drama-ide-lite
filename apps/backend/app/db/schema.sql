@@ -171,6 +171,18 @@ CREATE TABLE IF NOT EXISTS versions (
     created_at  TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS production_edges (
+    id               TEXT PRIMARY KEY,
+    project_id       TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    upstream_type    TEXT NOT NULL,
+    upstream_id      TEXT NOT NULL,
+    upstream_version INTEGER,
+    downstream_type  TEXT NOT NULL,
+    downstream_id    TEXT NOT NULL,
+    relation         TEXT NOT NULL DEFAULT '',
+    created_at       TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS providers (
     id            TEXT PRIMARY KEY,
     name          TEXT NOT NULL,
@@ -217,5 +229,8 @@ CREATE INDEX IF NOT EXISTS idx_shots_project ON shots(project_id);
 CREATE INDEX IF NOT EXISTS idx_assets_project ON assets(project_id);
 CREATE INDEX IF NOT EXISTS idx_jobs_project ON jobs(project_id);
 CREATE INDEX IF NOT EXISTS idx_versions_project ON versions(project_id);
+CREATE INDEX IF NOT EXISTS idx_production_edges_project ON production_edges(project_id);
+CREATE INDEX IF NOT EXISTS idx_production_edges_upstream ON production_edges(upstream_type, upstream_id);
+CREATE INDEX IF NOT EXISTS idx_production_edges_downstream ON production_edges(downstream_type, downstream_id);
 CREATE INDEX IF NOT EXISTS idx_models_provider ON models(provider_id);
 CREATE INDEX IF NOT EXISTS idx_models_type ON models(model_type);
