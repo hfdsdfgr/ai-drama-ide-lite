@@ -56,6 +56,7 @@
 - **数据库迁移「已是最新结构」判定不完整**：`_migrate_jobs_table` 最初只检查 `model_id` + `cancelled_at` 列存在就跳过重建，但 M1 迁移过的旧库这两个列都在、`project_id` 仍是 `NOT NULL`，导致 `jobs.project_id=NULL` 插入报外键/非空错误。判定最新结构必须同时检查 `PRAGMA table_info(jobs)` 里 `project_id` 的 `notnull == 0`，否则旧库永远不会被重建。
 - **测试数据插 job 引用不存在的 project_id 报 FOREIGN KEY**：`jobs.project_id` 有外键；脚本插入 `asset_completion` 类 job 时用了编造的 `proj_demo`，报 `IntegrityError: FOREIGN KEY constraint failed`（前几条 project_id=None 的反而成功）。插入测试数据前先查库里真实项目 id；无项目任务用 `None`。
 - **插入 queued 测试 job 会被运行中的 worker 真实执行**：开发后端 worker 线程会扫描并领取 queued 任务，截图测试插入的 queued job 会因无效 provider 被真实执行成 failed（不产生费用，但状态会变）。截图数据优先用 `running/failed/completed` 等不依赖执行的状态。
+- **新列索引放在 schema.sql 会导致旧库 init_db 失败**：给 `versions` 表加 `is_current` 等新列后，若把 `CREATE INDEX ... WHERE is_current = 1` 写在 schema.sql，`init_db` 的 `executescript(schema)` 在旧库上会先执行索引语句（此时旧表还没加列）报 `no such column`。依赖新列的索引必须移到 `_apply_safe_migrations` 的 ALTER 加列之后创建（`CREATE UNIQUE INDEX IF NOT EXISTS`），schema.sql 只保留不依赖新列的索引。
 
 ## 4. 客户端 / Qt
 

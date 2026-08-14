@@ -72,12 +72,35 @@ def _apply_safe_migrations(conn: sqlite3.Connection) -> None:
         "ALTER TABLE episodes ADD COLUMN deleted_at TEXT",
         "ALTER TABLE scenes ADD COLUMN deleted_at TEXT",
         "ALTER TABLE shots ADD COLUMN deleted_at TEXT",
+        # Phase 9 — 资产版本系统：versions 表补齐新列
+        "ALTER TABLE versions ADD COLUMN file_path TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE versions ADD COLUMN model_id TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE versions ADD COLUMN provider_id TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE versions ADD COLUMN job_id TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE versions ADD COLUMN is_current INTEGER NOT NULL DEFAULT 0",
     ]
     for statement in statements:
         try:
             conn.execute(statement)
         except sqlite3.OperationalError:
             pass
+    # 依赖新列的索引必须在加列之后创建（见 Phase 9 迁移顺序坑）
+    try:
+        conn.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_versions_entity_version
+            ON versions(entity_type, entity_id, version)
+            """
+        )
+        conn.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_versions_current
+            ON versions(entity_type, entity_id)
+            WHERE is_current = 1
+            """
+        )
+    except sqlite3.OperationalError:
+        pass
 
 
 def _migrate_jobs_table(conn: sqlite3.Connection) -> None:

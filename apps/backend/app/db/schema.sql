@@ -163,6 +163,11 @@ CREATE TABLE IF NOT EXISTS versions (
     entity_id   TEXT NOT NULL,
     version     INTEGER NOT NULL,
     payload     TEXT NOT NULL DEFAULT '{}',
+    file_path   TEXT NOT NULL DEFAULT '',
+    model_id    TEXT NOT NULL DEFAULT '',
+    provider_id TEXT NOT NULL DEFAULT '',
+    job_id      TEXT NOT NULL DEFAULT '',
+    is_current  INTEGER NOT NULL DEFAULT 0,
     created_at  TEXT NOT NULL
 );
 
