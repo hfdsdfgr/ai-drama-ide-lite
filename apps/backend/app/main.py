@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import (
     assets,
+    asset_versions,
     generation,
     health,
     jobs,
@@ -24,6 +25,7 @@ from app.services.adapters.manager import ProviderManager
 from app.services.ai_novel import AiNovelService
 from app.services.ai_script import AiScriptService
 from app.services.asset_service import AssetGenerationService
+from app.services.asset_version_service import AssetVersionService
 from app.services.generation_service import GenerationService
 from app.services.job_store import JobStore
 from app.services.job_worker import JobWorker
@@ -76,6 +78,9 @@ def create_app(
     app.state.asset_service = AssetGenerationService(
         app.state.job_store, app.state.provider_manager, config.db_path
     )
+    app.state.asset_version_service = AssetVersionService(
+        config.db_path, config.projects_dir
+    )
     app.state.ai_novel_service = AiNovelService(
         app.state.provider_manager, config.db_path
     )
@@ -100,6 +105,7 @@ def create_app(
     app.include_router(story.router)
     app.include_router(script.router)
     app.include_router(assets.router)
+    app.include_router(asset_versions.router)
     logger.info("Application started (env=%s)", config.env)
     return app
 
