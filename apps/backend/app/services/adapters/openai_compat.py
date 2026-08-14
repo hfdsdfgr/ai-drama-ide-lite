@@ -52,11 +52,11 @@ class OpenAICompatAdapter(Adapter):
                 response.raise_for_status()
                 data = response.json()
         except httpx.TimeoutException as exc:
-            raise AdapterError(502, "llm_timeout", f"{ctx.provider_name} 文本生成超时，请重试") from exc
+            raise AdapterError(504, "llm_timeout", f"{ctx.provider_name} 文本生成超时，请重试") from exc
         except httpx.HTTPStatusError as exc:
             status = exc.response.status_code
             detail = self._http_detail(status, ctx.base_url)
-            raise AdapterError(502, "llm_failed", f"{ctx.provider_name} 文本生成失败：{detail}") from exc
+            raise AdapterError(status, "llm_failed", f"{ctx.provider_name} 文本生成失败：{detail}") from exc
         except Exception as exc:
             raise AdapterError(502, "llm_failed", f"无法连接 {ctx.provider_name}，请检查网络与配置") from exc
 
@@ -103,12 +103,12 @@ class OpenAICompatAdapter(Adapter):
                             yield delta
         except httpx.HTTPStatusError as exc:
             raise AdapterError(
-                502,
+                exc.response.status_code,
                 "llm_stream_failed",
                 f"{ctx.provider_name} 流式生成失败：{self._http_detail(exc.response.status_code, ctx.base_url)}",
             ) from exc
         except httpx.TimeoutException as exc:
-            raise AdapterError(502, "llm_stream_timeout", f"{ctx.provider_name} 流式生成超时") from exc
+            raise AdapterError(504, "llm_stream_timeout", f"{ctx.provider_name} 流式生成超时") from exc
         except Exception as exc:
             raise AdapterError(
                 502, "llm_stream_failed", f"无法连接 {ctx.provider_name}，请检查网络与配置"
@@ -147,10 +147,14 @@ class OpenAICompatAdapter(Adapter):
                 response.raise_for_status()
                 data = response.json()
         except httpx.TimeoutException as exc:
-            raise AdapterError(502, "image_timeout", f"{ctx.provider_name} 图片生成超时") from exc
+            raise AdapterError(504, "image_timeout", f"{ctx.provider_name} 图片生成超时") from exc
         except httpx.HTTPStatusError as exc:
             detail = self._http_detail(exc.response.status_code, ctx.base_url)
-            raise AdapterError(502, "image_failed", f"{ctx.provider_name} 图片生成失败：{detail}") from exc
+            raise AdapterError(
+                exc.response.status_code,
+                "image_failed",
+                f"{ctx.provider_name} 图片生成失败：{detail}",
+            ) from exc
         except Exception as exc:
             raise AdapterError(502, "image_failed", f"无法连接 {ctx.provider_name}，请检查网络与配置") from exc
         return self._normalize_image_response(data, request.extra.get("output_dir"))
@@ -179,10 +183,14 @@ class OpenAICompatAdapter(Adapter):
                 response.raise_for_status()
                 payload = response.json()
         except httpx.TimeoutException as exc:
-            raise AdapterError(502, "image_timeout", f"{ctx.provider_name} 图片编辑超时") from exc
+            raise AdapterError(504, "image_timeout", f"{ctx.provider_name} 图片编辑超时") from exc
         except httpx.HTTPStatusError as exc:
             detail = self._http_detail(exc.response.status_code, ctx.base_url)
-            raise AdapterError(502, "image_failed", f"{ctx.provider_name} 图片编辑失败：{detail}") from exc
+            raise AdapterError(
+                exc.response.status_code,
+                "image_failed",
+                f"{ctx.provider_name} 图片编辑失败：{detail}",
+            ) from exc
         except Exception as exc:
             raise AdapterError(502, "image_failed", f"无法连接 {ctx.provider_name}，请检查网络与配置") from exc
         finally:

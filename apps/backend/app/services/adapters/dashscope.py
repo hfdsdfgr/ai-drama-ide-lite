@@ -92,12 +92,12 @@ class DashScopeAdapter(Adapter):
                 payload = response.json()
         except httpx.HTTPStatusError as exc:
             raise AdapterError(
-                502,
+                exc.response.status_code,
                 "video_submit_failed",
                 self._http_detail(exc.response.status_code, ctx.provider_name),
             ) from exc
         except httpx.TimeoutException as exc:
-            raise AdapterError(502, "video_submit_timeout", f"{ctx.provider_name} 创建视频任务超时") from exc
+            raise AdapterError(504, "video_submit_timeout", f"{ctx.provider_name} 创建视频任务超时") from exc
         except Exception as exc:
             raise AdapterError(
                 502, "video_submit_failed", f"无法连接 {ctx.provider_name}，请检查网络与配置"
@@ -119,7 +119,7 @@ class DashScopeAdapter(Adapter):
                 payload = response.json()
         except httpx.HTTPStatusError as exc:
             raise AdapterError(
-                502,
+                exc.response.status_code,
                 "video_poll_failed",
                 self._http_detail(exc.response.status_code, ctx.provider_name),
             ) from exc
