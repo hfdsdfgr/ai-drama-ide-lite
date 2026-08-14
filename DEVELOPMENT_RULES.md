@@ -1603,3 +1603,17 @@ After testing (including phase acceptance tests):
 2. Delete all test residue: temporary files, exported test zips, pytest / vitest temp directories, test-generated database rows and project directories.
 3. Preserve pre-existing user data (e.g., the user's own projects); ask before deleting anything ambiguous.
 4. Report the cleanup result, then wait for the user's instruction before starting the next step.
+
+77. Restart Backend Before User Testing
+
+After modifying any backend code (FastAPI routes, services, schemas, or migrations), ALWAYS restart the backend process before handing the app to the user for testing.
+
+The standard dev startup does NOT use `--reload`, so the running `uvicorn` process keeps serving the old code and masks the actual change.
+
+Before telling the user the backend is ready:
+
+1. Check whether any `apps/backend` files changed after the running backend started.
+2. Stop the process listening on port 8000, then restart it:
+   `apps\backend\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000`
+   (working directory: `apps\backend`).
+3. Wait until `/openapi.json` returns 200 before reporting readiness.
