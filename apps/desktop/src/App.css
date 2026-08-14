@@ -1236,3 +1236,84 @@ button:disabled {
   color: var(--danger);
   margin: 0;
 }
+
+/* ---- 生成中心（任务中心） ---- */
+.jobs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.job-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.5rem 1rem;
+  align-items: center;
+}
+
+.job-main {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.job-title {
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.job-status {
+  flex-shrink: 0;
+  padding: 0.1rem 0.55rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.78rem;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  background: var(--bg-elevated);
+}
+
+.job-status-running {
+  border-color: var(--accent-border);
+  color: var(--accent);
+  background: var(--accent-bg);
+}
+
+.job-status-paused {
+  border-color: var(--warning-bg);
+  color: var(--warning);
+  background: var(--warning-bg);
+}
+
+.job-status-completed {
+  border-color: var(--success-bg);
+  color: var(--success);
+  background: var(--success-bg);
+}
+
+.job-status-failed {
+  border-color: var(--danger-border);
+  color: var(--danger);
+  background: var(--danger-bg);
+}
+
+.job-error {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--danger);
+  font-size: 0.85rem;
+}
+
+.job-meta {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 1rem;
+  font-size: 0.8rem;
+}
+
+.job-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}

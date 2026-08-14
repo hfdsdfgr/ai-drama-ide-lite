@@ -258,3 +258,52 @@ def test_legacy_jobs_table_migrated(tmp_path: Path):
         "cancelled_at",
     ]:
         assert expected in cols
+
+
+def test_m1_jobs_table_rebuilt_for_nullable_project(tmp_path: Path):
+    """M1 结构（已有 model_id/cancelled_at 但 project_id NOT NULL）也应重建为可空。"""
+    db_path = tmp_path / "test.db"
+    conn = sqlite3.connect(str(db_path))
+    conn.executescript(
+        """
+        CREATE TABLE projects (
+            id TEXT PRIMARY KEY, name TEXT NOT NULL,
+            description TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL, updated_at TEXT NOT NULL, deleted_at TEXT
+        );
+        CREATE TABLE jobs (
+            id             TEXT PRIMARY KEY,
+            project_id     TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+            type           TEXT NOT NULL,
+            status         TEXT NOT NULL DEFAULT 'queued',
+            progress       INTEGER NOT NULL DEFAULT 0,
+            model_id       TEXT NOT NULL DEFAULT '',
+            provider_id    TEXT NOT NULL DEFAULT '',
+            capability     TEXT NOT NULL DEFAULT '',
+            task_id        TEXT NOT NULL DEFAULT '',
+            input_payload  TEXT NOT NULL DEFAULT '{}',
+            result_payload TEXT NOT NULL DEFAULT '{}',
+            output_files   TEXT NOT NULL DEFAULT '[]',
+            error          TEXT NOT NULL DEFAULT '',
+            error_category TEXT NOT NULL DEFAULT '',
+            attempts       INTEGER NOT NULL DEFAULT 0,
+            max_attempts   INTEGER NOT NULL DEFAULT 1,
+            created_at     TEXT NOT NULL,
+            started_at     TEXT,
+            completed_at   TEXT,
+            heartbeat_at   TEXT,
+            paused_at      TEXT,
+            cancelled_at   TEXT
+        );
+        """
+    )
+    conn.commit()
+    conn.close()
+
+    init_db(db_path)
+    with get_connection(db_path) as migrated:
+        info = migrated.execute("PRAGMA table_info(jobs)").fetchall()
+        cols = {row["name"]: row for row in info}
+        assert cols["project_id"]["notnull"] == 0
+        assert "model_id" in cols
+        assert "cancelled_at" in cols

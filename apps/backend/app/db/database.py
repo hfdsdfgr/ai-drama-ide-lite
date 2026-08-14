@@ -86,8 +86,15 @@ def _migrate_jobs_table(conn: sqlite3.Connection) -> None:
     差异：project_id 改为可空（生成测试任务不绑定项目）、补齐 model/provider/
     capability/payload/重试/心跳等新列。保留旧数据（占位表通常为空）。
     """
-    cols = {row[1] for row in conn.execute("PRAGMA table_info(jobs)").fetchall()}
-    if "model_id" in cols and "cancelled_at" in cols:
+    cols = {
+        row["name"]: row
+        for row in conn.execute("PRAGMA table_info(jobs)").fetchall()
+    }
+    if (
+        "model_id" in cols
+        and "cancelled_at" in cols
+        and not cols["project_id"]["notnull"]
+    ):
         return  # 已是最新结构
     conn.execute("ALTER TABLE jobs RENAME TO jobs_old")
     conn.executescript(
