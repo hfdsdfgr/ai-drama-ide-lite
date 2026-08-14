@@ -27,6 +27,9 @@
 | PowerShell 输出被吞 | 命令执行成功但没有输出 | 执行环境吞输出 | 输出重定向到日志文件，或分两次命令分别检查状态 |
 | pytest 临时目录清理报 `PermissionError: [WinError 5]`（`pytest-of-Administrator`） | 测试本身全过，teardown 阶段清理系统 Temp 失败 | 系统 Temp 目录权限/占用问题（Windows 沙箱） | 运行时指定项目内临时目录：`pytest --basetemp=E:\FintechProject\.pytest_tmp -p no:cacheprovider` |
 | 沙箱内启动后端并用 keyring 写系统凭据 | `CredWrite` 报 `[WinError 1312] 指定的登录会话不存在。可能已被终止。` | 沙箱进程没有可用的 Windows 登录会话，凭据管理器拒绝写入 | 后端必须提权（非沙箱）启动；提权下 `keyring.set_password` 实测可用（写后及时删测试凭据） |
+| Edge headless 截图失败 / 无产物 | `msedge --headless=new --screenshot=...` 返回但没生成 PNG | 本机已有 Edge 在运行，headless 复用同 profile 冲突退出（exit 13） | 截图必须带独立 `--user-data-dir=<临时目录>`；用 `Start-Process ... -Wait -PassThru` 后检查退出码与产物，不要吞 stderr |
+| see.sh 在 PowerShell 直接执行无输出 | `& ...\see\scripts\see.sh image.png` 返回 0 但什么都没发生 | see.sh 是 bash 脚本，PowerShell `&` 不会执行它 | 直接用 Python 跑 `parse_media.py`（`.venv\Scripts\python.exe ...\parse_media.py <图> --task "..."`），读 stdout 的 `output_path=` 指向的 Markdown |
+| PowerShell heredoc 管道执行 python 偶发解析错误 | `@'...'@ \| .venv\Scripts\python.exe -` 报「The module '.venv' could not be loaded」 | heredoc 内容含特殊字符时 PowerShell 解析管道语句异常 | 改为 `$script = @'...'@; $script \| & ".venv\Scripts\python.exe" -`，并显式设置工作目录 |
 
 ## 2. 网络与数据源
 
@@ -50,6 +53,9 @@
 - **OpenAI key 无额度**：`429 insufficient_quota / credit_balance_exhausted` 表示账户余额为 0，换 key/充值前无法生成；OpenAI 系 gpt-image-1.5/1 与 gpt-image-2 共用同一账户额度，换模型无济于事。
 - **PyInstaller 打包缺数据文件**：`storage.py` 用 `Path(__file__).with_name("schema.sql")` 读建表 SQL，PyInstaller 默认只收 `.py`，打包后首次建库报 `FileNotFoundError: ...\_MEIxxxx\python_engine\data\schema.sql`（接口 500 且响应体为空）。修复：在 `quantnova-server.spec` 的 `datas` 中加入 `('python_engine/data/schema.sql', 'python_engine/data')`；以后新增运行时读取的数据文件都要同步进 spec。
 - **类内方法名遮蔽内置类型**：Python 类里定义 `def list(...)` 方法后，类体内**后续方法**的注解 `list | None` 会把 `list` 解析成该类方法（function）而非内置类型，报 `TypeError: unsupported operand type(s) for |: 'function' and 'NoneType'`（函数定义时注解在类体命名空间求值）。解决办法：避免用内置名做方法名（如 `list_jobs`，对齐项目 `list_providers` 风格）；或文件头加 `from __future__ import annotations` 延迟注解求值。
+- **数据库迁移「已是最新结构」判定不完整**：`_migrate_jobs_table` 最初只检查 `model_id` + `cancelled_at` 列存在就跳过重建，但 M1 迁移过的旧库这两个列都在、`project_id` 仍是 `NOT NULL`，导致 `jobs.project_id=NULL` 插入报外键/非空错误。判定最新结构必须同时检查 `PRAGMA table_info(jobs)` 里 `project_id` 的 `notnull == 0`，否则旧库永远不会被重建。
+- **测试数据插 job 引用不存在的 project_id 报 FOREIGN KEY**：`jobs.project_id` 有外键；脚本插入 `asset_completion` 类 job 时用了编造的 `proj_demo`，报 `IntegrityError: FOREIGN KEY constraint failed`（前几条 project_id=None 的反而成功）。插入测试数据前先查库里真实项目 id；无项目任务用 `None`。
+- **插入 queued 测试 job 会被运行中的 worker 真实执行**：开发后端 worker 线程会扫描并领取 queued 任务，截图测试插入的 queued job 会因无效 provider 被真实执行成 failed（不产生费用，但状态会变）。截图数据优先用 `running/failed/completed` 等不依赖执行的状态。
 
 ## 4. 客户端 / Qt
 

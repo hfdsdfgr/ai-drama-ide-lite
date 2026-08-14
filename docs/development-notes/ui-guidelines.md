@@ -50,7 +50,57 @@
 
 ## 7. 验证方法
 
-- 无头浏览器截图 + 读图技能（see）检查：`msedge --headless=new --disable-gpu --virtual-time-budget=12000 --screenshot=...`（必须带 virtual-time-budget，否则异步请求未完成，截图会误报「没有可用模型」等假状态）。
+UI 改动后统一走「截图 → 读图检查 → 清理」标准流程，禁止凭猜测改 CSS。
+
+### 7.1 启动开发服务
+
+1. 后端：提权启动（keyring 需要登录会话）：
+   `apps\backend\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000`（工作目录 `apps\backend`）。
+2. 前端：`npm run dev`（工作目录 `apps\desktop`，Vite 代理到 8000）。
+3. 等待 8000 / 5173 端口都监听后再继续。
+
+### 7.2 准备测试数据（列表类页面需要内容时）
+
+- 通过后端脚本直接向开发库插入临时数据（记录 id 用于清理），例如任务中心插入不同状态的 job。
+- **注意**：插入 `queued` 状态的 job 会被正在运行的 worker 立即真实执行（可能因无效配置变成 failed），
+  截图数据优先用 `running / failed / completed` 等不依赖执行的状态，或接受状态变化。
+- **外键**：job 的 `project_id` 若引用项目必须用库里真实存在的项目 id；生成测试类任务用 `None`（可空）。
+
+### 7.3 无头浏览器截图
+
+```powershell
+# 必须带独立 --user-data-dir（与运行中的 Edge 冲突会导致截图失败/无产物）
+# 必须带 --virtual-time-budget（否则异步请求未完成，误报空状态）
+$shot = "G:\Vibe Coding\AICV\.tmp_shot.png"
+$profile = "G:\Vibe Coding\AICV\.tmp_edge_profile"
+Start-Process -FilePath "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" `
+  -ArgumentList "--headless=new","--disable-gpu","--window-size=1440,900",`
+    "--virtual-time-budget=12000","--user-data-dir=$profile","--screenshot=$shot","http://127.0.0.1:5173" `
+  -WindowStyle Hidden -Wait -PassThru
+Get-Item $shot
+```
+
+- 默认视图不是目标页面时，可临时改 `App.tsx` 的 `useState<View>(...)` 默认值，
+  截图后必须改回并跑前端检查确认。
+
+### 7.4 读图检查（see 技能）
+
+- Windows 下 `see.sh` 不能直接用 PowerShell 执行，用 Python 直接跑解析脚本：
+  `apps\backend\.venv\Scripts\python.exe C:\Users\Administrator\.codex\skills\see\scripts\parse_media.py <截图> --task "检查要点"`
+- 读取 stdout 中 `output_path=` 指向的 Markdown 结果。
+- 检查要点：布局错位 / 水平溢出、状态色是否区分、文字裁切、按钮层级、滚动区域是否合理。
+- 视觉模型对局部小字（尤其英文+中文混排）可能误读成 `?`，先对照其他正常识别的中文判断是否真乱码，不要直接下结论。
+
+### 7.5 清理
+
+1. 删除截图与 Edge profile 临时目录（明确路径）。
+2. 删除插入的测试数据（按记录的 id 精确删除，确认剩余数量归零）。
+3. 还原临时代码改动（如默认视图）。
+4. 停止开发服务，确认 8000 / 5173 端口释放、无 node/uvicorn 残留。
+5. 跑 `npx tsc -b --force` + `npm run lint` + `npm test` + 后端 `pytest -q`。
+
+### 7.6 常规检查
+
 - 每次 UI 改动跑：`npx tsc -b --force` + `npm run lint` + `npm test`。
 - 布局问题优先截图确认再修，不要凭猜测改 CSS。
 
