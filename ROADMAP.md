@@ -388,14 +388,23 @@ Phase 9 — Asset Version System
 AI 生成结果不能覆盖用户作品。
 
 Tasks
- Asset Version
- Prompt History
- Model History
- Reference History
- Version Compare
- Version Restore
- Current Version
- Delete Unused Version
+- [x] Asset Version
+- [ ] Prompt History
+- [x] Model History
+- [ ] Reference History
+- [ ] Version Compare
+- [x] Version Restore
+- [x] Current Version
+- [x] Delete Unused Version
+
+完成标准
+
+- 后端 `AssetVersionService`：新增 / 列表 / 当前 / 恢复（promote）/ 删除版本，文件落盘 `data/projects/{project_id}/assets/{asset_id}/v{n}.png`。
+- API：`/api/projects/{project_id}/assets/{asset_id}/versions` 提供列表、当前、文件查看、恢复、删除。
+- UI：资产页「图片版本」面板展示当前版本与历史缩略图，支持「设为当前」「删除（两步确认）」。
+- 测试：后端 `pytest -q` 171 passed；前端 `tsc` / `lint` / `vitest`（20 passed）通过。
+- 本轮边界：Prompt History / Reference History / Version Compare 待 Phase 13 生图接入后补全（生图才产生真实 prompt、参考图、对比场景）。
+
 示例
 Lin Fan
 ├── v1
