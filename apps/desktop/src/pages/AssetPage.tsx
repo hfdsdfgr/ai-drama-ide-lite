@@ -8,8 +8,15 @@ import {
   startAssetGeneration,
   updateAsset,
 } from "../api/assets";
+import {
+  deleteAssetVersion,
+  listAssetVersions,
+  promoteAssetVersion,
+} from "../api/asset_versions";
+import { getApiBase } from "../api/client";
 import { listProjects } from "../api/projects";
 import { listModels } from "../api/providers";
+import type { AssetVersion } from "../types/asset_version";
 import type { Model } from "../types/provider";
 import type { Project } from "../types/project";
 import type {
@@ -151,6 +158,13 @@ function buildDraft(asset: AssetCard): Record<string, string> {
   return draft;
 }
 
+function formatVersionTime(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 export function AssetPage({ active }: { active: boolean }) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState("");
@@ -166,6 +180,12 @@ export function AssetPage({ active }: { active: boolean }) {
   const [genJob, setGenJob] = useState<AssetGenerateJob | null>(null);
   const [genBusy, setGenBusy] = useState(false);
   const [error, setError] = useState("");
+  const [versions, setVersions] = useState<AssetVersion[]>([]);
+  const [apiBase, setApiBase] = useState("");
+  const [confirmDeleteVersionId, setConfirmDeleteVersionId] = useState<
+    string | null
+  >(null);
+  const [versionBusy, setVersionBusy] = useState(false);
   const pollRef = useRef<string | null>(null);
 
   const refreshAssets = useCallback(async (pid: string) => {
@@ -182,8 +202,19 @@ export function AssetPage({ active }: { active: boolean }) {
 
   useEffect(() => {
     if (!active) return;
+    void getApiBase().then(setApiBase).catch(() => {});
     listProjects()
-      .then(setProjects)
+      .then((data) => {
+        const sorted = [...data].sort((a, b) =>
+          b.created_at.localeCompare(a.created_at),
+        );
+        setProjects(sorted);
+        setProjectId((prev) =>
+          prev && sorted.some((p) => p.id === prev)
+            ? prev
+            : (sorted[0]?.id ?? ""),
+        );
+      })
       .catch((e) => setError((e as Error).message));
     listModels({ model_type: "llm", enabled_only: true })
       .then((models) => {
@@ -230,6 +261,7 @@ export function AssetPage({ active }: { active: boolean }) {
     setSelectedName(asset.name);
     setDraft(buildDraft(asset));
     setConfirmDeleteName(null);
+    setConfirmDeleteVersionId(null);
   }
 
   function changeType(next: AssetType) {
@@ -237,6 +269,58 @@ export function AssetPage({ active }: { active: boolean }) {
     setSelectedName(null);
     setDraft(null);
     setConfirmDeleteName(null);
+    setConfirmDeleteVersionId(null);
+  }
+
+  const refreshVersions = useCallback(async () => {
+    if (!projectId || !selected?.asset_id) return;
+    try {
+      setVersions(await listAssetVersions(projectId, selected.asset_id));
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }, [projectId, selected?.asset_id]);
+
+  useEffect(() => {
+    if (!projectId || !selected?.asset_id) {
+      setVersions([]);
+      return;
+    }
+    void refreshVersions();
+    setConfirmDeleteVersionId(null);
+  }, [projectId, selected?.asset_id, refreshVersions]);
+
+  async function handlePromoteVersion(versionId: string) {
+    if (!projectId || !selected?.asset_id) return;
+    setVersionBusy(true);
+    setError("");
+    try {
+      await promoteAssetVersion(projectId, selected.asset_id, versionId);
+      await refreshVersions();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setVersionBusy(false);
+    }
+  }
+
+  async function handleDeleteVersion(versionId: string) {
+    if (!projectId || !selected?.asset_id) return;
+    if (confirmDeleteVersionId !== versionId) {
+      setConfirmDeleteVersionId(versionId);
+      return;
+    }
+    setVersionBusy(true);
+    setError("");
+    try {
+      await deleteAssetVersion(projectId, selected.asset_id, versionId);
+      setConfirmDeleteVersionId(null);
+      await refreshVersions();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setVersionBusy(false);
+    }
   }
 
   async function saveAsset() {
@@ -546,6 +630,78 @@ export function AssetPage({ active }: { active: boolean }) {
                     />
                   </label>
                 ))}
+              </div>
+
+              <div className="card">
+                <div className="sidebar-head">
+                  <h3>图片版本</h3>
+                  <span className="badge badge-default">
+                    {versions.some((v) => v.is_current)
+                      ? `当前 v${versions.find((v) => v.is_current)?.version}`
+                      : "暂无版本"}
+                  </span>
+                </div>
+                {versions.length === 0 ? (
+                  <p className="muted">
+                    还没有图片版本。生图功能上线后，每次生成都会在这里保存一个新版本。
+                  </p>
+                ) : (
+                  <ul className="version-list">
+                    {versions.map((v) => (
+                      <li
+                        key={v.id}
+                        className={
+                          v.is_current
+                            ? "version-item version-item-current"
+                            : "version-item"
+                        }
+                      >
+                        <img
+                          src={`${apiBase}${v.file_url}`}
+                          alt={`版本 v${v.version}`}
+                          className="version-thumb"
+                        />
+                        <div className="version-info">
+                          <span className="project-name">
+                            v{v.version}
+                            {v.is_current && " · 当前"}
+                          </span>
+                          <span className="muted">
+                            {formatVersionTime(v.created_at)}
+                            {v.model_id ? ` · ${v.model_id}` : ""}
+                          </span>
+                        </div>
+                        <div className="version-actions">
+                          {!v.is_current && (
+                            <button
+                              type="button"
+                              onClick={() => void handlePromoteVersion(v.id)}
+                              disabled={versionBusy}
+                            >
+                              设为当前
+                            </button>
+                          )}
+                          {!v.is_current && (
+                            <button
+                              type="button"
+                              className={
+                                confirmDeleteVersionId === v.id
+                                  ? "button-danger"
+                                  : "button-ghost"
+                              }
+                              onClick={() => void handleDeleteVersion(v.id)}
+                              disabled={versionBusy}
+                            >
+                              {confirmDeleteVersionId === v.id
+                                ? "确认删除"
+                                : "删除"}
+                            </button>
+                          )}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             </>
           ) : (
