@@ -7,6 +7,7 @@ import {
   generateEpisodeScript,
   generateShots,
   getEpisodeDetail,
+  getSceneDetail,
   listEpisodes,
   deleteEpisode,
   saveEpisodeScript,
@@ -22,6 +23,7 @@ import type {
   Episode,
   EpisodeDetail,
   Scene,
+  SceneDetail,
 } from "../types/script";
 
 // 虽然分类为 llm，但这些模型不是「文本创作」模型，不用于剧本生成
@@ -54,11 +56,18 @@ export function ScriptPage({ active }: { active: boolean }) {
   const [episodes, setEpisodes] = useState<Episode[]>([]);
   const [selectedEpisodeId, setSelectedEpisodeId] = useState<string | null>(null);
   const [episodeDetail, setEpisodeDetail] = useState<EpisodeDetail | null>(null);
+  const [sceneDetails, setSceneDetails] = useState<Record<string, SceneDetail>>({});
   const [llmModels, setLlmModels] = useState<Model[]>([]);
   const [aiModelId, setAiModelId] = useState("");
   const [shotModelId, setShotModelId] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [allShotsBusy, setAllShotsBusy] = useState(false);
+  const [allShotsProgress, setAllShotsProgress] = useState<{
+    current: number;
+    total: number;
+    sceneTitle: string;
+  } | null>(null);
 
   const [chapterIndex, setChapterIndex] = useState(0);
   const [scriptInstruction, setScriptInstruction] = useState("");
@@ -137,6 +146,11 @@ export function ScriptPage({ active }: { active: boolean }) {
       try {
         const detail = await getEpisodeDetail(projectId, episodeId);
         setEpisodeDetail(detail);
+        const sceneMap: Record<string, SceneDetail> = {};
+        for (const scene of detail.scenes) {
+          sceneMap[scene.id] = await getSceneDetail(projectId, scene.id);
+        }
+        setSceneDetails(sceneMap);
       } catch (e) {
         setError((e as Error).message);
       }
@@ -218,6 +232,8 @@ export function ScriptPage({ active }: { active: boolean }) {
       await saveSceneShots(projectId, sceneId, {
         shots: shotPreview.shots,
       });
+      const detail = await getSceneDetail(projectId, sceneId);
+      setSceneDetails((prev) => ({ ...prev, [sceneId]: detail }));
       setShotPreview(null);
       setShotSceneId(null);
       setNotice("分镜已保存，请前往「分镜」模块查看和编辑。");
@@ -225,6 +241,49 @@ export function ScriptPage({ active }: { active: boolean }) {
       setError((e as Error).message);
     } finally {
       setShotBusy(false);
+    }
+  }
+
+  async function generateAllShots() {
+    if (!projectId || !episodeDetail || !shotModelId) return;
+    const pendingScenes = episodeDetail.scenes.filter(
+      (scene) => (sceneDetails[scene.id]?.shots.length ?? 0) === 0,
+    );
+    if (pendingScenes.length === 0) {
+      setNotice("当前分集的所有场景都已生成分镜。");
+      return;
+    }
+    setAllShotsBusy(true);
+    setError("");
+    setNotice("");
+    let completed = 0;
+    for (const scene of pendingScenes) {
+      setAllShotsProgress({
+        current: completed + 1,
+        total: pendingScenes.length,
+        sceneTitle: scene.slugline || scene.title || "未命名场景",
+      });
+      try {
+        const result = await generateShots(projectId, scene.id, {
+          model_id: shotModelId,
+          scene_id: scene.id,
+          user_instruction: shotInstruction,
+        });
+        await saveSceneShots(projectId, scene.id, { shots: result.shots });
+        const detail = await getSceneDetail(projectId, scene.id);
+        setSceneDetails((prev) => ({ ...prev, [scene.id]: detail }));
+        completed++;
+      } catch (e) {
+        setError(
+          `场景「${scene.slugline || scene.title || "未命名场景"}」分镜生成失败：${(e as Error).message}`,
+        );
+        break;
+      }
+    }
+    setAllShotsBusy(false);
+    setAllShotsProgress(null);
+    if (completed === pendingScenes.length) {
+      setNotice(`已为 ${completed} 个场景生成并保存分镜，请前往「分镜」模块查看。`);
     }
   }
 
@@ -377,8 +436,45 @@ export function ScriptPage({ active }: { active: boolean }) {
           {episodeDetail ? (
             <>
               <div className="panel-head">
-                <h3>{episodeDetail.episode.title}</h3>
+                <div className="scene-head">
+                  <h3>{episodeDetail.episode.title}</h3>
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    disabled={
+                      allShotsBusy ||
+                      !shotModelId ||
+                      episodeDetail.scenes.length === 0 ||
+                      episodeDetail.scenes.every(
+                        (s) => (sceneDetails[s.id]?.shots.length ?? 0) > 0,
+                      )
+                    }
+                    onClick={generateAllShots}
+                  >
+                    {allShotsBusy ? "正在生成全部分镜…" : "一键生成全部分镜"}
+                  </button>
+                </div>
                 <p className="muted">{episodeDetail.episode.summary}</p>
+                {(() => {
+                  const pending = episodeDetail.scenes.filter(
+                    (s) => (sceneDetails[s.id]?.shots.length ?? 0) === 0,
+                  ).length;
+                  return (
+                    <p className="muted">
+                      每个场景预计 1-3 分钟
+                      {pending > 0
+                        ? `；当前 ${pending} 个场景未生成分镜，预计共 ${pending}-${pending * 3} 分钟`
+                        : "；当前分集场景都已生成分镜"}
+                    </p>
+                  );
+                })()}
+                {allShotsProgress && (
+                  <p className="muted">
+                    正在生成第 {allShotsProgress.current}/
+                    {allShotsProgress.total} 个场景的分镜：
+                    {allShotsProgress.sceneTitle}
+                  </p>
+                )}
               </div>
               {episodeDetail.scenes.length === 0 ? (
                 <p className="muted">本分集还没有场景。</p>
@@ -387,7 +483,21 @@ export function ScriptPage({ active }: { active: boolean }) {
                   return (
                     <div className="card" key={scene.id}>
                       <div className="scene-head">
-                        <strong>{scene.slugline || scene.title}</strong>
+                        <span
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.5rem",
+                            minWidth: 0,
+                          }}
+                        >
+                          <strong>{scene.slugline || scene.title}</strong>
+                          <span className="badge">
+                            {sceneDetails[scene.id]?.shots.length
+                              ? `已生成 ${sceneDetails[scene.id].shots.length} 个镜头`
+                              : "未生成分镜"}
+                          </span>
+                        </span>
                         <div className="toolbar">
                           <button
                             type="button"
