@@ -501,17 +501,27 @@ Phase 12 — Storyboard UI
 用户真正开始“导演”。
 
 Tasks
- Storyboard Board
- Shot Card
- Shot Detail
- Drag & Drop
- Shot Edit
- Character Reference
- Scene Reference
- Camera
- Duration
- Prompt
- Generation Status
+- [x] Storyboard Board
+- [x] Shot Card
+- [x] Shot Detail
+- [x] Drag & Drop
+- [x] Shot Edit
+- [x] Camera
+- [x] Duration
+- [x] Prompt
+- [ ] Character Reference（待 Phase 13）
+- [ ] Scene Reference（待 Phase 13）
+- [ ] Generation Status（待 Phase 13）
+
+完成标准
+
+- 「分镜」模块：场景块 + 镜头卡片 + 右侧镜头详情（保存/取消/删除两步确认）。
+- 场景内镜头卡片支持拖拽排序，写回 `order_index`（批量 reorder 接口）。
+- 「剧本」页：场景显示已生成/未生成分镜状态；支持一键生成当前分集全部分镜；显示预计时间。
+- 镜头编辑支持景别/运镜/角色/动作/光影/台词/时长/提示词。
+- 测试：后端 `pytest -q` 187 passed；前端 `tsc` / `lint` / `vitest`（20 passed）通过。
+- 本轮边界：Character Reference / Scene Reference / Generation Status 待 Phase 13 生图接入；不提前实现图片生成。
+
 UI
 Scene 01
 
