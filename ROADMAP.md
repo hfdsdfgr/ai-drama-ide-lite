@@ -467,11 +467,19 @@ Image
  ↓
 Video
 Tasks
- Dependency Graph
- Asset Dependency
- Shot Dependency
- Affected Node Detection
- Regeneration Planning
+- [x] Dependency Graph（production_edges 表 + 通用节点/边模型）
+- [x] Asset Dependency（边结构支持 asset → shot / image 依赖）
+- [x] Shot Dependency（边结构支持 shot → image / video 依赖）
+- [x] Affected Node Detection（BFS 下游传递闭包 + 去重）
+- [ ] Regeneration Planning（受影响节点结果结构已备，UI 动作待 Phase 12/13）
+
+完成标准
+
+- 后端 `ProductionGraphService`：新增 / 列表 / 下游 / 受影响节点 / 删除生产边。
+- API：`/api/projects/{project_id}/graph/edges`（增删查）与 `/affected`（传递闭包查询）。
+- 测试：后端 `pytest -q` 185 passed（含生产图服务 8 个 + 接口 6 个）。
+- 本轮边界：不实现 UI；不自动重新生成；边写入由 Phase 13/14 生图、生视频时补齐。
+
 示例
 Character v3
  ↓
