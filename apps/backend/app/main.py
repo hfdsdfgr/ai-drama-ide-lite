@@ -1,5 +1,7 @@
 """FastAPI application entrypoint."""
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -7,6 +9,7 @@ from app.api.routes import (
     assets,
     generation,
     health,
+    jobs,
     novels,
     projects,
     providers,
@@ -22,12 +25,23 @@ from app.services.ai_novel import AiNovelService
 from app.services.ai_script import AiScriptService
 from app.services.asset_service import AssetGenerationService
 from app.services.generation_service import GenerationService
+from app.services.job_store import JobStore
+from app.services.job_worker import JobWorker
 from app.services.project_repo import migrate_legacy_json_projects
 from app.services.provider_repo import ProviderRepository
 from app.services.secret_store import KeyringSecretStore, SecretStore
 from app.services.story_analysis import StoryAnalysisService
 
 logger = get_logger("main")
+
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    app.state.job_worker.start()
+    try:
+        yield
+    finally:
+        app.state.job_worker.stop()
 
 
 def create_app(
@@ -39,20 +53,28 @@ def create_app(
     init_db(config.db_path)
     migrate_legacy_json_projects(config.db_path, config.projects_dir)
 
-    app = FastAPI(title=config.app_name, version="0.1.0")
+    app = FastAPI(title=config.app_name, version="0.1.1", lifespan=_lifespan)
     app.state.settings = config
     app.state.secret_store = secret_store or KeyringSecretStore()
     app.state.provider_manager = ProviderManager(
         ProviderRepository(config.db_path, app.state.secret_store)
     )
+    app.state.job_store = JobStore(config.db_path)
+    app.state.job_worker = JobWorker(
+        app.state.job_store,
+        app.state.provider_manager,
+        config.data_dir / "generation_tests",
+    )
     app.state.generation_service = GenerationService(
-        app.state.provider_manager, config.data_dir / "generation_tests"
+        app.state.job_store,
+        app.state.provider_manager,
+        config.data_dir / "generation_tests",
     )
     app.state.story_service = StoryAnalysisService(
         app.state.provider_manager, config.db_path
     )
     app.state.asset_service = AssetGenerationService(
-        app.state.provider_manager, config.db_path
+        app.state.job_store, app.state.provider_manager, config.db_path
     )
     app.state.ai_novel_service = AiNovelService(
         app.state.provider_manager, config.db_path
@@ -74,6 +96,7 @@ def create_app(
     app.include_router(providers.router)
     app.include_router(providers.models_router)
     app.include_router(generation.router)
+    app.include_router(jobs.router)
     app.include_router(story.router)
     app.include_router(script.router)
     app.include_router(assets.router)

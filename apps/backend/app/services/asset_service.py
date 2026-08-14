@@ -1,20 +1,18 @@
-"""Phase 8 — Asset Engine 服务。
+"""Phase 8/10 — Asset Engine 服务。
 
 职责：
 1. 定义同类型资产图片的固定规格（Phase 13 生图时直接复用，不随模型变化）。
 2. 提供「从 Story Bible 补全资产卡」的 LLM Job：字段级合并，只补空不覆盖，
-   避免 AI 生成覆盖用户手动编辑。
+   避免 AI 生成覆盖用户手动编辑。Phase 10 起 Job 持久化，由 JobWorker 执行。
 """
 
 import json
-import threading
-import uuid
-from datetime import datetime, timezone
 from pathlib import Path
 
 from app.core.errors import AppError
 from app.schemas.story import AssetGenerateResult, StoryBible
 from app.services.adapters.manager import ProviderManager
+from app.services.job_store import JOB_TYPE_ASSET_COMPLETION, JobStore
 from app.services.llm_json import parse_llm_json, trim
 from app.services.story_repo import StoryRepository
 
@@ -100,19 +98,58 @@ _GENERATE_USER = """项目 Story Bible：
 
 请补全上述角色的视觉资产卡。"""
 
+def run_asset_completion(
+    db_path: Path,
+    manager: ProviderManager,
+    project_id: str,
+    model_id: str,
+) -> str:
+    """执行资产卡补全（JobWorker 调用）：LLM 生成 -> 字段级合并 -> 保存。
 
-def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    返回完成摘要（detail）；抛异常由 worker 分类并落为 failed。
+    """
+    repo = StoryRepository(db_path)
+    bible = repo.get_bible(project_id)
+    if bible is None:
+        raise AppError(
+            422, "no_bible", "该项目还没有 Story Bible，请先运行「分析故事」。"
+        )
+    text = manager.chat(
+        model_id,
+        [
+            {"role": "system", "content": _GENERATE_SYSTEM},
+            {
+                "role": "user",
+                "content": _GENERATE_USER.format(
+                    bible_json=trim(
+                        json.dumps(_compact(bible), ensure_ascii=False),
+                        MAX_BIBLE_CHARS,
+                    )
+                ),
+            },
+        ],
+        temperature=0.2,
+    )
+    result = parse_llm_json(
+        AssetGenerateResult, text, manager.chat, model_id, "资产卡补全"
+    )
+    merged = _merge(bible, result)
+    repo.save_bible(project_id, merged)
+    return (
+        f"完成：{len(merged.characters)} 角色 / {len(merged.locations)} 地点"
+        f" / {len(merged.props)} 道具"
+    )
 
 
 class AssetGenerationService:
-    """内存 Job 化资产卡补全（持久化 Job 系统属 Phase 10）。"""
+    """资产卡补全服务：创建持久化 Job，由 JobWorker 执行（Phase 10）。"""
 
-    def __init__(self, manager: ProviderManager, db_path: Path) -> None:
+    def __init__(
+        self, store: JobStore, manager: ProviderManager, db_path: Path
+    ) -> None:
+        self.store = store
         self.manager = manager
         self.db_path = db_path
-        self._jobs: dict[str, dict] = {}
-        self._lock = threading.Lock()
 
     def start(self, project_id: str, model_id: str) -> dict:
         bible = StoryRepository(self.db_path).get_bible(project_id)
@@ -124,128 +161,88 @@ class AssetGenerationService:
                 "no_assets",
                 "该项目还没有资产。请先运行「分析故事」生成 Story Bible 后再补全资产卡。",
             )
-        job_id = f"asset_{uuid.uuid4().hex[:12]}"
-        job = {
-            "job_id": job_id,
-            "project_id": project_id,
-            "model_id": model_id,
-            "status": "queued",
-            "progress": 0.0,
-            "detail": "排队中",
-            "error": None,
-            "created_at": _now_iso(),
-        }
-        with self._lock:
-            self._jobs[job_id] = job
-        threading.Thread(target=self._run, args=(job_id,), daemon=True).start()
-        return self.get(job_id)
+        try:
+            provider_id = self.manager.repo.get_model(model_id).provider_id
+        except AppError:
+            provider_id = ""
+        job = self.store.create(
+            JOB_TYPE_ASSET_COMPLETION,
+            project_id,
+            model_id=model_id,
+            provider_id=provider_id,
+            capability="llm_asset_completion",
+            input_payload={},
+        )
+        return self.get(job.id)
 
     def get(self, job_id: str) -> dict:
-        with self._lock:
-            job = self._jobs.get(job_id)
-        if job is None:
-            raise AppError(404, "asset_job_not_found", f"资产任务不存在: {job_id}")
-        return {
-            "job_id": job["job_id"],
-            "project_id": job["project_id"],
-            "status": job["status"],
-            "progress": job["progress"],
-            "detail": job["detail"],
-            "error": job["error"],
-            "created_at": job["created_at"],
-        }
-
-    def _run(self, job_id: str) -> None:
-        job = self._jobs[job_id]
-        repo = StoryRepository(self.db_path)
         try:
-            job["status"] = "running"
-            job["progress"] = 0.1
-            job["detail"] = "正在生成视觉资产卡…"
-            bible = repo.get_bible(job["project_id"])
-            if bible is None:
+            record = self.store.get(job_id)
+        except AppError as exc:
+            if exc.code == "job_not_found":
                 raise AppError(
-                    422, "no_bible", "该项目还没有 Story Bible，请先运行「分析故事」。"
-                )
-            text = self.manager.chat(
-                job["model_id"],
-                [
-                    {"role": "system", "content": _GENERATE_SYSTEM},
-                    {
-                        "role": "user",
-                        "content": _GENERATE_USER.format(
-                            bible_json=trim(
-                                json.dumps(
-                                    self._compact(bible), ensure_ascii=False
-                                ),
-                                MAX_BIBLE_CHARS,
-                            )
-                        ),
-                    },
-                ],
-                temperature=0.2,
-            )
-            result = parse_llm_json(
-                AssetGenerateResult, text, self.manager.chat, job["model_id"], "资产卡补全"
-            )
-            job["progress"] = 0.7
-            job["detail"] = "合并资产卡…"
-            merged = self._merge(bible, result)
-            repo.save_bible(job["project_id"], merged)
-            job["status"] = "completed"
-            job["progress"] = 1.0
-            job["detail"] = (
-                f"完成：{len(merged.characters)} 角色 / {len(merged.locations)} 地点"
-                f" / {len(merged.props)} 道具"
-            )
-        except Exception as exc:  # noqa: BLE001 - 后台任务必须落定状态
-            job["status"] = "failed"
-            job["error"] = str(exc)
-            job["detail"] = "资产卡生成失败"
-
-    @staticmethod
-    def _compact(bible: StoryBible) -> dict:
+                    404, "asset_job_not_found", f"资产任务不存在: {job_id}"
+                ) from exc
+            raise
+        detail = record.result_payload.get("detail", "") if record.result_payload else ""
+        if record.status == "queued":
+            detail = detail or "排队中"
+        elif record.status == "running":
+            detail = detail or "正在生成视觉资产卡…"
+        elif record.status == "failed":
+            detail = detail or "资产卡生成失败"
         return {
-            "characters": [
-                c.model_dump(exclude={"asset_id"}) for c in bible.characters
-            ],
-            "locations": [
-                l.model_dump(exclude={"asset_id"}) for l in bible.locations
-            ],
-            "props": [p.model_dump(exclude={"asset_id"}) for p in bible.props],
+            "job_id": record.id,
+            "project_id": record.project_id,
+            "status": record.status,
+            "progress": record.progress / 100.0,
+            "detail": detail,
+            "error": record.error or None,
+            "created_at": record.created_at,
         }
 
-    @staticmethod
-    def _merge(bible: StoryBible, result: AssetGenerateResult) -> StoryBible:
-        """字段级合并：新值非空且原值为空时填充；否则保留原值。"""
+def _compact(bible: StoryBible) -> dict:
+    return {
+        "characters": [
+            c.model_dump(exclude={"asset_id"}) for c in bible.characters
+        ],
+        "locations": [
+            l.model_dump(exclude={"asset_id"}) for l in bible.locations
+        ],
+        "props": [p.model_dump(exclude={"asset_id"}) for p in bible.props],
+    }
 
-        def merge_one(existing, incoming):
-            if incoming is None:
-                return existing
-            updates = {}
-            for key in type(existing).model_fields:
-                if key in ("name", "asset_id"):
-                    continue
-                old = getattr(existing, key)
-                new = getattr(incoming, key)
-                if isinstance(old, list):
-                    if not old and new:
-                        updates[key] = new
-                elif not old and new:
+
+def _merge(bible: StoryBible, result: AssetGenerateResult) -> StoryBible:
+    """字段级合并：新值非空且原值为空时填充；否则保留原值。"""
+
+    def merge_one(existing, incoming):
+        if incoming is None:
+            return existing
+        updates = {}
+        for key in type(existing).model_fields:
+            if key in ("name", "asset_id"):
+                continue
+            old = getattr(existing, key)
+            new = getattr(incoming, key)
+            if isinstance(old, list):
+                if not old and new:
                     updates[key] = new
-            return existing.model_copy(update=updates)
+            elif not old and new:
+                updates[key] = new
+        return existing.model_copy(update=updates)
 
-        def merge_list(existing_items, incoming_items):
-            incoming_by_name = {i.name: i for i in incoming_items}
-            merged = []
-            for item in existing_items:
-                merged.append(merge_one(item, incoming_by_name.get(item.name)))
-            return merged
+    def merge_list(existing_items, incoming_items):
+        incoming_by_name = {i.name: i for i in incoming_items}
+        merged = []
+        for item in existing_items:
+            merged.append(merge_one(item, incoming_by_name.get(item.name)))
+        return merged
 
-        return bible.model_copy(
-            update={
-                "characters": merge_list(bible.characters, result.characters),
-                "locations": merge_list(bible.locations, result.locations),
-                "props": merge_list(bible.props, result.props),
-            }
-        )
+    return bible.model_copy(
+        update={
+            "characters": merge_list(bible.characters, result.characters),
+            "locations": merge_list(bible.locations, result.locations),
+            "props": merge_list(bible.props, result.props),
+        }
+    )

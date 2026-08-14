@@ -45,6 +45,7 @@ def init_db(db_path: Path) -> None:
 
 def _apply_safe_migrations(conn: sqlite3.Connection) -> None:
     """幂等加列迁移：旧库补列，已存在则静默跳过（见 DEVELOPMENT_PITFALLS.md）。"""
+    _migrate_jobs_table(conn)
     statements = [
         "ALTER TABLE novels ADD COLUMN deleted_at TEXT",
         "ALTER TABLE novels ADD COLUMN ai_brief TEXT NOT NULL DEFAULT ''",
@@ -71,26 +72,70 @@ def _apply_safe_migrations(conn: sqlite3.Connection) -> None:
         "ALTER TABLE episodes ADD COLUMN deleted_at TEXT",
         "ALTER TABLE scenes ADD COLUMN deleted_at TEXT",
         "ALTER TABLE shots ADD COLUMN deleted_at TEXT",
-        # Phase 10 — 持久化 Job 系统：旧库 jobs 表补齐新列
-        "ALTER TABLE jobs ADD COLUMN model_id TEXT NOT NULL DEFAULT ''",
-        "ALTER TABLE jobs ADD COLUMN provider_id TEXT NOT NULL DEFAULT ''",
-        "ALTER TABLE jobs ADD COLUMN capability TEXT NOT NULL DEFAULT ''",
-        "ALTER TABLE jobs ADD COLUMN task_id TEXT NOT NULL DEFAULT ''",
-        "ALTER TABLE jobs ADD COLUMN input_payload TEXT NOT NULL DEFAULT '{}'",
-        "ALTER TABLE jobs ADD COLUMN result_payload TEXT NOT NULL DEFAULT '{}'",
-        "ALTER TABLE jobs ADD COLUMN output_files TEXT NOT NULL DEFAULT '[]'",
-        "ALTER TABLE jobs ADD COLUMN error_category TEXT NOT NULL DEFAULT ''",
-        "ALTER TABLE jobs ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0",
-        "ALTER TABLE jobs ADD COLUMN max_attempts INTEGER NOT NULL DEFAULT 1",
-        "ALTER TABLE jobs ADD COLUMN heartbeat_at TEXT",
-        "ALTER TABLE jobs ADD COLUMN paused_at TEXT",
-        "ALTER TABLE jobs ADD COLUMN cancelled_at TEXT",
     ]
     for statement in statements:
         try:
             conn.execute(statement)
         except sqlite3.OperationalError:
             pass
+
+
+def _migrate_jobs_table(conn: sqlite3.Connection) -> None:
+    """旧版 jobs 表（Phase 1 占位结构）重建为 Phase 10 结构。
+
+    差异：project_id 改为可空（生成测试任务不绑定项目）、补齐 model/provider/
+    capability/payload/重试/心跳等新列。保留旧数据（占位表通常为空）。
+    """
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(jobs)").fetchall()}
+    if "model_id" in cols and "cancelled_at" in cols:
+        return  # 已是最新结构
+    conn.execute("ALTER TABLE jobs RENAME TO jobs_old")
+    conn.executescript(
+        """
+        CREATE TABLE jobs (
+            id             TEXT PRIMARY KEY,
+            project_id     TEXT REFERENCES projects(id) ON DELETE CASCADE,
+            type           TEXT NOT NULL,
+            status         TEXT NOT NULL DEFAULT 'queued',
+            progress       INTEGER NOT NULL DEFAULT 0,
+            model_id       TEXT NOT NULL DEFAULT '',
+            provider_id    TEXT NOT NULL DEFAULT '',
+            capability     TEXT NOT NULL DEFAULT '',
+            task_id        TEXT NOT NULL DEFAULT '',
+            input_payload  TEXT NOT NULL DEFAULT '{}',
+            result_payload TEXT NOT NULL DEFAULT '{}',
+            output_files   TEXT NOT NULL DEFAULT '[]',
+            error          TEXT NOT NULL DEFAULT '',
+            error_category TEXT NOT NULL DEFAULT '',
+            attempts       INTEGER NOT NULL DEFAULT 0,
+            max_attempts   INTEGER NOT NULL DEFAULT 1,
+            created_at     TEXT NOT NULL,
+            started_at     TEXT,
+            completed_at   TEXT,
+            heartbeat_at   TEXT,
+            paused_at      TEXT,
+            cancelled_at   TEXT
+        );
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO jobs (
+            id, project_id, type, status, progress,
+            model_id, provider_id, capability, task_id,
+            input_payload, result_payload, output_files,
+            error, error_category, attempts, max_attempts,
+            created_at, started_at, completed_at, heartbeat_at, paused_at, cancelled_at
+        )
+        SELECT id, project_id, type, status, progress,
+               '', '', '', '',
+               '{}', '{}', '[]',
+               error, '', 0, 1,
+               created_at, started_at, completed_at, NULL, NULL, NULL
+        FROM jobs_old
+        """
+    )
+    conn.execute("DROP TABLE jobs_old")
 
 
 def _backfill_model_capabilities(conn: sqlite3.Connection) -> None:

@@ -37,6 +37,9 @@ CATEGORY_NONE = ""
 CATEGORY_RETRYABLE = "retryable"
 CATEGORY_PERMANENT = "permanent"
 
+JOB_TYPE_GENERATION = "generation"
+JOB_TYPE_ASSET_COMPLETION = "asset_completion"
+
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
@@ -287,6 +290,25 @@ class JobStore:
                 WHERE id = ? AND status = ?
                 """,
                 (STATUS_QUEUED, job_id, STATUS_PAUSED),
+            )
+        return self.get(job_id)
+
+    def retry(self, job_id: str) -> JobRecord:
+        """failed / cancelled -> queued（用户手动重试），重置错误与尝试次数。
+
+        默认不自动重试（防重复费用）；重试一律由用户显式触发。
+        """
+        with get_connection(self.db_path) as conn:
+            conn.execute(
+                """
+                UPDATE jobs
+                SET status = ?, attempts = 0, error = '', error_category = '',
+                    progress = 0, task_id = '',
+                    started_at = NULL, completed_at = NULL,
+                    heartbeat_at = NULL, paused_at = NULL, cancelled_at = NULL
+                WHERE id = ? AND status IN (?, ?)
+                """,
+                (STATUS_QUEUED, job_id, STATUS_FAILED, STATUS_CANCELLED),
             )
         return self.get(job_id)
 

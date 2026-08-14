@@ -49,6 +49,7 @@ const TYPE_LABEL: Record<ModelType, string> = {
 const GEN_STATUS_LABEL: Record<GenerationJob["status"], string> = {
   queued: "排队中…",
   running: "生成中…",
+  paused: "已暂停",
   completed: "已完成",
   failed: "失败",
   cancelled: "已取消",

@@ -19,9 +19,12 @@ from app.core.errors import AppError
 from app.core.logging import get_logger
 from app.services.adapters.base import GenerationRequest, GenerationResult
 from app.services.adapters.manager import ProviderManager
+from app.services.asset_service import run_asset_completion
 from app.services.job_store import (
     CATEGORY_PERMANENT,
     CATEGORY_RETRYABLE,
+    JOB_TYPE_ASSET_COMPLETION,
+    JOB_TYPE_GENERATION,
     STATUS_CANCELLED,
     STATUS_COMPLETED,
     STATUS_FAILED,
@@ -31,9 +34,6 @@ from app.services.job_store import (
 )
 
 logger = get_logger("job_worker")
-
-JOB_TYPE_GENERATION = "generation"
-JOB_TYPE_ASSET_COMPLETION = "asset_completion"  # M3 接入资产补全
 
 
 def classify_error(exc: BaseException) -> str:
@@ -113,6 +113,8 @@ class JobWorker:
         try:
             if job.type == JOB_TYPE_GENERATION:
                 self._run_generation(job)
+            elif job.type == JOB_TYPE_ASSET_COMPLETION:
+                self._run_asset_completion(job)
             else:
                 self.store.mark_failed(
                     job.id, f"未知任务类型: {job.type}", CATEGORY_PERMANENT
@@ -150,6 +152,18 @@ class JobWorker:
             return
         self.store.set_task_id(job.id, task_id)
         self._poll_until_done(job.id)
+
+    def _run_asset_completion(self, job) -> None:
+        """资产卡补全：LLM 字段级补全（只补空不覆盖），结果写回 Story Bible。"""
+        detail = run_asset_completion(
+            self.store.db_path,
+            self.manager,
+            job.project_id,
+            job.model_id,
+        )
+        self.store.mark_completed(
+            job.id, result_payload={"detail": detail}
+        )
 
     def _finish_sync(self, job_id: str, result) -> None:
         self.store.mark_completed(

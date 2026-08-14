@@ -1,5 +1,7 @@
 """Generation Job 接口测试（Phase 5）。"""
 
+import time
+
 import httpx
 
 
@@ -99,13 +101,20 @@ def test_sync_image_job_completed(client, monkeypatch):
     )
     assert response.status_code == 201
     body = response.json()
-    assert body["status"] == "completed"
-    assert body["result"]["urls"] == ["https://cdn/x.png"]
+    assert body["status"] == "queued"
 
-    # 同步任务查询直接返回结果
-    fetched = client.get(f"/api/generation/jobs/{body['job_id']}")
+    # Phase 10 起由 worker 异步执行，轮询等待终态
+    job_id = body["job_id"]
+    deadline = time.time() + 10
+    status = body["status"]
+    while status in ("queued", "running") and time.time() < deadline:
+        time.sleep(0.05)
+        status = client.get(f"/api/generation/jobs/{job_id}").json()["status"]
+    fetched = client.get(f"/api/generation/jobs/{job_id}")
     assert fetched.status_code == 200
-    assert fetched.json()["status"] == "completed"
+    result = fetched.json()
+    assert result["status"] == "completed"
+    assert result["result"]["urls"] == ["https://cdn/x.png"]
 
 
 def test_async_video_job_polls_to_completed(client, monkeypatch):
@@ -123,7 +132,13 @@ def test_async_video_job_polls_to_completed(client, monkeypatch):
     body = response.json()
     assert body["status"] == "queued"
 
-    fetched = client.get(f"/api/generation/jobs/{body['job_id']}")
+    job_id = body["job_id"]
+    deadline = time.time() + 10
+    status = body["status"]
+    while status in ("queued", "running") and time.time() < deadline:
+        time.sleep(0.05)
+        status = client.get(f"/api/generation/jobs/{job_id}").json()["status"]
+    fetched = client.get(f"/api/generation/jobs/{job_id}")
     assert fetched.status_code == 200
     result = fetched.json()
     assert result["status"] == "completed"
