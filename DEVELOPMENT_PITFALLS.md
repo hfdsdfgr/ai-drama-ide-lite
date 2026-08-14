@@ -49,6 +49,7 @@
 - **imagegen skill 换模型**：其 CLI 校验 `--model` 必须是 `gpt-image-*`，无法直接换 qwen/wanx 等模型；换第三方模型时直接用 openai SDK 指定 `base_url`（如百炼兼容端点）或按官方端点写一次性调用，不要改 skill 脚本。
 - **OpenAI key 无额度**：`429 insufficient_quota / credit_balance_exhausted` 表示账户余额为 0，换 key/充值前无法生成；OpenAI 系 gpt-image-1.5/1 与 gpt-image-2 共用同一账户额度，换模型无济于事。
 - **PyInstaller 打包缺数据文件**：`storage.py` 用 `Path(__file__).with_name("schema.sql")` 读建表 SQL，PyInstaller 默认只收 `.py`，打包后首次建库报 `FileNotFoundError: ...\_MEIxxxx\python_engine\data\schema.sql`（接口 500 且响应体为空）。修复：在 `quantnova-server.spec` 的 `datas` 中加入 `('python_engine/data/schema.sql', 'python_engine/data')`；以后新增运行时读取的数据文件都要同步进 spec。
+- **类内方法名遮蔽内置类型**：Python 类里定义 `def list(...)` 方法后，类体内**后续方法**的注解 `list | None` 会把 `list` 解析成该类方法（function）而非内置类型，报 `TypeError: unsupported operand type(s) for |: 'function' and 'NoneType'`（函数定义时注解在类体命名空间求值）。解决办法：避免用内置名做方法名（如 `list_jobs`，对齐项目 `list_providers` 风格）；或文件头加 `from __future__ import annotations` 延迟注解求值。
 
 ## 4. 客户端 / Qt
 

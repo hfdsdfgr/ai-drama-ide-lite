@@ -71,6 +71,20 @@ def _apply_safe_migrations(conn: sqlite3.Connection) -> None:
         "ALTER TABLE episodes ADD COLUMN deleted_at TEXT",
         "ALTER TABLE scenes ADD COLUMN deleted_at TEXT",
         "ALTER TABLE shots ADD COLUMN deleted_at TEXT",
+        # Phase 10 — 持久化 Job 系统：旧库 jobs 表补齐新列
+        "ALTER TABLE jobs ADD COLUMN model_id TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE jobs ADD COLUMN provider_id TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE jobs ADD COLUMN capability TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE jobs ADD COLUMN task_id TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE jobs ADD COLUMN input_payload TEXT NOT NULL DEFAULT '{}'",
+        "ALTER TABLE jobs ADD COLUMN result_payload TEXT NOT NULL DEFAULT '{}'",
+        "ALTER TABLE jobs ADD COLUMN output_files TEXT NOT NULL DEFAULT '[]'",
+        "ALTER TABLE jobs ADD COLUMN error_category TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE jobs ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE jobs ADD COLUMN max_attempts INTEGER NOT NULL DEFAULT 1",
+        "ALTER TABLE jobs ADD COLUMN heartbeat_at TEXT",
+        "ALTER TABLE jobs ADD COLUMN paused_at TEXT",
+        "ALTER TABLE jobs ADD COLUMN cancelled_at TEXT",
     ]
     for statement in statements:
         try:

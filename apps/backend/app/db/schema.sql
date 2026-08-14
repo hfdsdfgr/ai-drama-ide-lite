@@ -132,17 +132,28 @@ CREATE TABLE IF NOT EXISTS assets (
 );
 
 CREATE TABLE IF NOT EXISTS jobs (
-    id           TEXT PRIMARY KEY,
-    project_id   TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-    type         TEXT NOT NULL,
-    status       TEXT NOT NULL DEFAULT 'Queued',
-    progress     INTEGER NOT NULL DEFAULT 0,
-    input        TEXT NOT NULL DEFAULT '',
-    output       TEXT NOT NULL DEFAULT '',
-    error        TEXT NOT NULL DEFAULT '',
-    created_at   TEXT NOT NULL,
-    started_at   TEXT,
-    completed_at TEXT
+    id             TEXT PRIMARY KEY,
+    project_id     TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    type           TEXT NOT NULL,
+    status         TEXT NOT NULL DEFAULT 'queued',
+    progress       INTEGER NOT NULL DEFAULT 0,
+    model_id       TEXT NOT NULL DEFAULT '',
+    provider_id    TEXT NOT NULL DEFAULT '',
+    capability     TEXT NOT NULL DEFAULT '',
+    task_id        TEXT NOT NULL DEFAULT '',
+    input_payload  TEXT NOT NULL DEFAULT '{}',
+    result_payload TEXT NOT NULL DEFAULT '{}',
+    output_files   TEXT NOT NULL DEFAULT '[]',
+    error          TEXT NOT NULL DEFAULT '',
+    error_category TEXT NOT NULL DEFAULT '',
+    attempts       INTEGER NOT NULL DEFAULT 0,
+    max_attempts   INTEGER NOT NULL DEFAULT 1,
+    created_at     TEXT NOT NULL,
+    started_at     TEXT,
+    completed_at   TEXT,
+    heartbeat_at   TEXT,
+    paused_at      TEXT,
+    cancelled_at   TEXT
 );
 
 CREATE TABLE IF NOT EXISTS versions (
