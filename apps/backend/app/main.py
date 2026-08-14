@@ -12,6 +12,7 @@ from app.api.routes import (
     health,
     jobs,
     novels,
+    production_graph,
     projects,
     providers,
     script,
@@ -30,6 +31,7 @@ from app.services.generation_service import GenerationService
 from app.services.job_store import JobStore
 from app.services.job_worker import JobWorker
 from app.services.project_repo import migrate_legacy_json_projects
+from app.services.production_graph import ProductionGraphService
 from app.services.provider_repo import ProviderRepository
 from app.services.secret_store import KeyringSecretStore, SecretStore
 from app.services.story_analysis import StoryAnalysisService
@@ -81,6 +83,7 @@ def create_app(
     app.state.asset_version_service = AssetVersionService(
         config.db_path, config.projects_dir
     )
+    app.state.production_graph_service = ProductionGraphService(config.db_path)
     app.state.ai_novel_service = AiNovelService(
         app.state.provider_manager, config.db_path
     )
@@ -106,6 +109,7 @@ def create_app(
     app.include_router(script.router)
     app.include_router(assets.router)
     app.include_router(asset_versions.router)
+    app.include_router(production_graph.router)
     logger.info("Application started (env=%s)", config.env)
     return app
 
