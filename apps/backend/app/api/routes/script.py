@@ -18,6 +18,7 @@ from app.schemas.script import (
     ShotsGenerateRequest,
     ShotCreate,
     ShotUpdate,
+    ShotsReorderRequest,
 )
 from app.services.script_repo import ScriptRepository
 
@@ -147,3 +148,15 @@ def update_shot(
 @router.delete("/scenes/{scene_id}/shots/{shot_id}", status_code=204)
 def delete_shot(project_id: str, scene_id: str, shot_id: str, request: Request):
     _repo(request).soft_delete_shot(project_id, scene_id, shot_id)
+
+
+@router.post("/scenes/{scene_id}/shots/reorder", response_model=SceneDetail)
+def reorder_shots(
+    project_id: str,
+    scene_id: str,
+    payload: ShotsReorderRequest,
+    request: Request,
+) -> SceneDetail:
+    return _repo(request).reorder_shots(
+        project_id, scene_id, payload.shot_ids
+    )

@@ -368,6 +368,31 @@ class ScriptRepository:
                 (_now_iso(), _now_iso(), shot_id, scene_id),
             )
 
+    def reorder_shots(
+        self, project_id: str, scene_id: str, shot_ids: list[str]
+    ) -> SceneDetail:
+        """按给定顺序重排场景内镜头（写回 order_index）。"""
+        self.get_scene(project_id, scene_id)
+        with get_connection(self.db_path) as conn:
+            rows = conn.execute(
+                "SELECT id FROM shots WHERE scene_id = ? AND deleted_at IS NULL",
+                (scene_id,),
+            ).fetchall()
+            existing_ids = {row["id"] for row in rows}
+            if set(shot_ids) != existing_ids:
+                raise AppError(
+                    422,
+                    "shot_reorder_mismatch",
+                    "镜头列表与场景内镜头不一致，请刷新后重试",
+                )
+            now = _now_iso()
+            for index, shot_id in enumerate(shot_ids):
+                conn.execute(
+                    "UPDATE shots SET order_index = ?, updated_at = ? WHERE id = ?",
+                    (index, now, shot_id),
+                )
+        return self.get_scene_detail(project_id, scene_id)
+
 
 def _row_to_episode(row: sqlite3.Row) -> Episode:
     return Episode(

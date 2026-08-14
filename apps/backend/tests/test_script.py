@@ -313,3 +313,104 @@ def test_update_and_delete_episode(client):
         ).status_code
         == 404
     )
+
+
+def test_reorder_shots(client):
+    project_id, novel_id = _create_project_with_novel(client)
+    saved = client.post(
+        f"/api/projects/{project_id}/script/save-episode-script",
+        json={
+            "novel_id": novel_id,
+            "chapter_index": 0,
+            "episode": {"title": "第一集", "summary": "s"},
+            "scenes": [
+                {
+                    "title": "大殿",
+                    "slugline": "室内·大殿·夜",
+                    "action": "对峙",
+                    "dialogue": "长老：来吧。",
+                }
+            ],
+        },
+    ).json()
+    scene_id = saved["scenes"][0]["id"]
+    shots = client.post(
+        f"/api/projects/{project_id}/script/scenes/{scene_id}/save-shots",
+        json={
+            "shots": [
+                {
+                    "shot_type": "wide",
+                    "camera": "固定",
+                    "characters": "林凡",
+                    "action": "走入",
+                    "lighting": "烛光",
+                    "dialogue": "",
+                    "duration": 3,
+                    "prompt": "全景。",
+                },
+                {
+                    "shot_type": "close-up",
+                    "camera": "推近",
+                    "characters": "林凡",
+                    "action": "抬头",
+                    "lighting": "烛光",
+                    "dialogue": "林凡：我来。",
+                    "duration": 2,
+                    "prompt": "特写。",
+                },
+            ]
+        },
+    ).json()["shots"]
+    shot_ids = [s["id"] for s in shots]
+    reordered = client.post(
+        f"/api/projects/{project_id}/script/scenes/{scene_id}/shots/reorder",
+        json={"shot_ids": list(reversed(shot_ids))},
+    )
+    assert reordered.status_code == 200
+    assert [s["id"] for s in reordered.json()["shots"]] == list(
+        reversed(shot_ids)
+    )
+
+
+def test_reorder_shots_mismatch(client):
+    project_id, novel_id = _create_project_with_novel(client)
+    saved = client.post(
+        f"/api/projects/{project_id}/script/save-episode-script",
+        json={
+            "novel_id": novel_id,
+            "chapter_index": 0,
+            "episode": {"title": "第一集", "summary": "s"},
+            "scenes": [
+                {
+                    "title": "大殿",
+                    "slugline": "室内·大殿·夜",
+                    "action": "对峙",
+                    "dialogue": "长老：来吧。",
+                }
+            ],
+        },
+    ).json()
+    scene_id = saved["scenes"][0]["id"]
+    client.post(
+        f"/api/projects/{project_id}/script/scenes/{scene_id}/save-shots",
+        json={
+            "shots": [
+                {
+                    "shot_type": "close-up",
+                    "camera": "推近",
+                    "characters": "林凡",
+                    "action": "抬头",
+                    "lighting": "烛光",
+                    "dialogue": "",
+                    "duration": 3,
+                    "prompt": "特写。",
+                }
+            ]
+        },
+    )
+    response = client.post(
+        f"/api/projects/{project_id}/script/scenes/{scene_id}/shots/reorder",
+        json={"shot_ids": ["unknown_shot"]},
+    )
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "shot_reorder_mismatch"

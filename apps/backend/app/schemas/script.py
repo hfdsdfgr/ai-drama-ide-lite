@@ -158,3 +158,7 @@ class ShotsGenerateRequest(BaseModel):
     model_id: str
     scene_id: str
     user_instruction: str = Field(default="", max_length=2000)
+
+
+class ShotsReorderRequest(BaseModel):
+    shot_ids: list[str] = Field(min_length=1, max_length=200)
