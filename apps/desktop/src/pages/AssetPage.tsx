@@ -640,11 +640,19 @@ export function AssetPage({ active }: { active: boolean }) {
                       ? `当前 v${versions.find((v) => v.is_current)?.version}`
                       : "暂无版本"}
                   </span>
+                  <button
+                    type="button"
+                    disabled
+                    title="图片生成功能将在后续阶段开放"
+                  >
+                    生成图片
+                  </button>
                 </div>
+                <p className="muted">
+                  图片生成功能将在后续阶段开放，生成结果会自动保存为新版本。
+                </p>
                 {versions.length === 0 ? (
-                  <p className="muted">
-                    还没有图片版本。生图功能上线后，每次生成都会在这里保存一个新版本。
-                  </p>
+                  <p className="muted">还没有图片版本。</p>
                 ) : (
                   <ul className="version-list">
                     {versions.map((v) => (
@@ -748,7 +756,7 @@ export function AssetPage({ active }: { active: boolean }) {
               disabled={!projectId || !aiModelId || genBusy || llmModels.length === 0}
               onClick={runGeneration}
             >
-              {genBusy ? "生成中…" : "生成 / 补全资产卡"}
+              {genBusy ? "生成中…" : "补全资产卡"}
             </button>
             {genJob && (
               <p className="muted">
