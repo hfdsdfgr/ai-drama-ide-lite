@@ -137,7 +137,16 @@ export function NovelPage({ active }: NovelPageProps) {
 
   useEffect(() => {
     listProjects()
-      .then(setProjects)
+      .then((data) => {
+        const sorted = [...data].sort((a, b) =>
+          b.created_at.localeCompare(a.created_at),
+        );
+        setProjects(sorted);
+        setProjectId((prev) => {
+          if (prev && sorted.some((p) => p.id === prev)) return prev;
+          return sorted[0]?.id ?? "";
+        });
+      })
       .catch((e) => setError((e as Error).message));
   }, []);
 
