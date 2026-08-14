@@ -563,6 +563,11 @@ button:disabled {
   background: var(--accent-bg);
 }
 
+.shot-card-dragging {
+  opacity: 0.6;
+  z-index: 10;
+}
+
 .shot-frame {
   aspect-ratio: 16 / 9;
   display: flex;

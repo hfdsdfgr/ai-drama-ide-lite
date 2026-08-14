@@ -1,5 +1,21 @@
 import { useCallback, useEffect, useState } from "react";
 
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  rectSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+
 import { listNovels } from "../api/novels";
 import { listProjects } from "../api/projects";
 import {
@@ -7,6 +23,7 @@ import {
   getEpisodeDetail,
   getSceneDetail,
   listEpisodes,
+  reorderShots,
   updateShot,
 } from "../api/script";
 import type { Novel } from "../types/novel";
@@ -17,6 +34,52 @@ import type {
   SceneDetail,
   Shot,
 } from "../types/script";
+
+function SortableShotCard({
+  shot,
+  sceneId,
+  isSelected,
+  onOpen,
+}: {
+  shot: Shot;
+  sceneId: string;
+  isSelected: boolean;
+  onOpen: (sceneId: string, shot: Shot) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: shot.id });
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+      }}
+      className={[
+        "shot-card",
+        isSelected ? "active" : "",
+        isDragging ? "shot-card-dragging" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      onClick={() => onOpen(sceneId, shot)}
+      {...attributes}
+      {...listeners}
+    >
+      <div className="shot-frame">待生成</div>
+      <div className="shot-meta">
+        <span className="shot-number">Shot {shot.shot_number ?? "-"}</span>
+        {shot.shot_type && <span className="shot-type">{shot.shot_type}</span>}
+      </div>
+      <div className="shot-submeta">
+        {shot.duration ? <span>{shot.duration}s</span> : null}
+        {shot.camera ? <span>{shot.camera}</span> : null}
+      </div>
+      <span className="shot-status shot-status-pending">待生成</span>
+    </div>
+  );
+}
 
 export function StoryboardPage({ active }: { active: boolean }) {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -36,6 +99,10 @@ export function StoryboardPage({ active }: { active: boolean }) {
     null,
   );
   const [error, setError] = useState("");
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+  );
 
   useEffect(() => {
     if (!active) return;
@@ -159,6 +226,32 @@ export function StoryboardPage({ active }: { active: boolean }) {
     }
   }
 
+  async function persistReorder(sceneId: string, shotIds: string[]) {
+    if (!projectId) return;
+    setError("");
+    try {
+      const detail = await reorderShots(projectId, sceneId, shotIds);
+      setSceneDetails((prev) => ({ ...prev, [sceneId]: detail }));
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  function handleDragEnd(sceneId: string, event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const shots = sceneDetails[sceneId]?.shots ?? [];
+    const oldIndex = shots.findIndex((s) => s.id === active.id);
+    const newIndex = shots.findIndex((s) => s.id === over.id);
+    if (oldIndex < 0 || newIndex < 0) return;
+    const reordered = arrayMove(shots, oldIndex, newIndex);
+    setSceneDetails((prev) => ({
+      ...prev,
+      [sceneId]: { ...prev[sceneId], shots: reordered },
+    }));
+    void persistReorder(sceneId, reordered.map((s) => s.id));
+  }
+
   return (
     <div className="page storyboard-page">
       {error && <p className="error">{error}</p>}
@@ -255,47 +348,28 @@ export function StoryboardPage({ active }: { active: boolean }) {
                           该场景还没有镜头，请在「剧本」页生成分镜。
                         </p>
                       ) : (
-                        <div className="shot-board">
-                          {shots.map((shot) => (
-                            <div
-                              key={shot.id}
-                              className={
-                                selectedShotId === shot.id
-                                  ? "shot-card active"
-                                  : "shot-card"
-                              }
-                              role="button"
-                              tabIndex={0}
-                              onClick={() => openShotDetail(scene.id, shot)}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter" || e.key === " ") {
-                                  openShotDetail(scene.id, shot);
-                                }
-                              }}
-                            >
-                              <div className="shot-frame">待生成</div>
-                              <div className="shot-meta">
-                                <span className="shot-number">
-                                  Shot {shot.shot_number ?? "-"}
-                                </span>
-                                {shot.shot_type && (
-                                  <span className="shot-type">
-                                    {shot.shot_type}
-                                  </span>
-                                )}
-                              </div>
-                              <div className="shot-submeta">
-                                {shot.duration ? (
-                                  <span>{shot.duration}s</span>
-                                ) : null}
-                                {shot.camera ? <span>{shot.camera}</span> : null}
-                              </div>
-                              <span className="shot-status shot-status-pending">
-                                待生成
-                              </span>
+                        <DndContext
+                          sensors={sensors}
+                          collisionDetection={closestCenter}
+                          onDragEnd={(event) => handleDragEnd(scene.id, event)}
+                        >
+                          <SortableContext
+                            items={shots.map((s) => s.id)}
+                            strategy={rectSortingStrategy}
+                          >
+                            <div className="shot-board">
+                              {shots.map((shot) => (
+                                <SortableShotCard
+                                  key={shot.id}
+                                  shot={shot}
+                                  sceneId={scene.id}
+                                  isSelected={selectedShotId === shot.id}
+                                  onOpen={openShotDetail}
+                                />
+                              ))}
                             </div>
-                          ))}
-                        </div>
+                          </SortableContext>
+                        </DndContext>
                       )}
                     </div>
                   );

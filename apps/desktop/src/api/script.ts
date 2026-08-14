@@ -158,6 +158,20 @@ export function deleteShot(
   );
 }
 
+export function reorderShots(
+  projectId: string,
+  sceneId: string,
+  shotIds: string[],
+): Promise<SceneDetail> {
+  return request<SceneDetail>(
+    `/projects/${projectId}/script/scenes/${sceneId}/shots/reorder`,
+    {
+      method: "POST",
+      body: JSON.stringify({ shot_ids: shotIds }),
+    },
+  );
+}
+
 export function deleteEpisode(
   projectId: string,
   episodeId: string,
