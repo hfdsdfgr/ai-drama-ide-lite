@@ -7,6 +7,7 @@ import { NovelPage } from "./pages/NovelPage";
 import { ProjectPage } from "./pages/ProjectPage";
 import { ScriptPage } from "./pages/ScriptPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { StoryboardPage } from "./pages/StoryboardPage";
 import { StoryBiblePage } from "./pages/StoryBiblePage";
 import "./App.css";
 
@@ -15,6 +16,7 @@ type View =
   | "novel"
   | "bible"
   | "script"
+  | "storyboard"
   | "assets"
   | "generation"
   | "settings";
@@ -32,7 +34,7 @@ const CREATION_MODULES: ModuleDef[] = [
   { key: "bible", label: "故事圣经", ready: true },
   { key: "script", label: "剧本", ready: true },
   { key: "assets", label: "资产", ready: true },
-  { key: "storyboard", label: "分镜", ready: false },
+  { key: "storyboard", label: "分镜", ready: true },
   { key: "generation", label: "生成中心", ready: true },
 ];
 
@@ -85,6 +87,9 @@ function App() {
         </div>
         <div className={view === "script" ? "view-pane active" : "view-pane"}>
           <ScriptPage active={view === "script"} />
+        </div>
+        <div className={view === "storyboard" ? "view-pane active" : "view-pane"}>
+          <StoryboardPage active={view === "storyboard"} />
         </div>
         <div className={view === "assets" ? "view-pane active" : "view-pane"}>
           <AssetPage active={view === "assets"} />

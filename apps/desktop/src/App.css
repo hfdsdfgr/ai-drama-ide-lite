@@ -534,6 +534,94 @@ button:disabled {
   font-size: 0.82rem;
 }
 
+.shot-board {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.shot-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  width: 184px;
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  cursor: pointer;
+  text-align: left;
+  box-sizing: border-box;
+}
+
+.shot-card:hover {
+  border-color: var(--accent-border);
+}
+
+.shot-card.active {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
+
+.shot-frame {
+  aspect-ratio: 16 / 9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel);
+  color: var(--text-faint);
+  font-size: 0.75rem;
+}
+
+.shot-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+
+.shot-number {
+  font-weight: 600;
+  color: var(--text-h);
+  font-size: 0.82rem;
+}
+
+.shot-type {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shot-submeta {
+  display: flex;
+  gap: 0.5rem;
+  min-height: 1em;
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  flex-wrap: wrap;
+}
+
+.shot-status {
+  align-self: flex-start;
+  font-size: 0.68rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.shot-status-pending {
+  color: var(--text-faint);
+  background: var(--bg-panel);
+}
+
+.shot-detail .panel-head h3 {
+  margin: 0;
+}
+
 .shots-preview {
   border-top: 1px dashed var(--border);
   padding-top: 0.5rem;
