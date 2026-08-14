@@ -410,18 +410,18 @@ Phase 10 — Generation Job System
 所有耗时 AI 操作都必须变成 Job。
 
 Tasks
-- [ ] Job Model
-- [ ] Job Queue
-- [ ] Job Worker
-- [ ] Job Status
-- [ ] Progress
-- [ ] Retry
-- [ ] Cancel
-- [ ] Pause
-- [ ] Resume
-- [ ] Error Handling
-- [ ] Job Persistence
-- [ ] Job 绑定单个 Model + 单个 Provider（一次生成只调用一个模型）
+- [x] Job Model（`jobs` 表：状态机 + payload + 重试字段，project_id 可空）
+- [x] Job Queue（`JobStore` 条件领取，单 worker 顺序调度）
+- [x] Job Worker（同步/异步厂商任务、轮询、心跳、启动 stale 恢复）
+- [x] Job Status（queued / running / paused / completed / failed / cancelled）
+- [x] Progress（只来自厂商真实返回，不做假进度）
+- [x] Retry（用户手动重试：failed/cancelled -> queued，重置错误与次数）
+- [x] Cancel（queued/running -> cancelled，幂等；worker 停止轮询）
+- [x] Pause（running -> paused）
+- [x] Resume（paused -> queued）
+- [x] Error Handling（失败分类 retryable / permanent，可理解的错误信息）
+- [x] Job Persistence（SQLite，重启不丢，崩溃残留自动恢复）
+- [x] Job 绑定单个 Model + 单个 Provider（一次生成只调用一个模型）
 
 > 产品约束：不做多模型并行生成；并发只用于不同 Job 之间的调度，不用于同一生成任务的模型并行。
 状态
@@ -431,6 +431,12 @@ Paused
 Completed
 Failed
 Cancelled
+
+完成标准
+
+- 生成测试任务与资产补全任务都由统一持久化 Job 承载，重启应用不丢失。
+- 任务中心（生成中心）可查看所有任务状态、错误，并执行取消 / 暂停 / 恢复 / 重试。
+- 默认不自动重试（防止重复费用），失败由用户显式重试。
 Phase 11 — Production Graph
 
 目标：
