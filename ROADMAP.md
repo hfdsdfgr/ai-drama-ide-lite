@@ -509,9 +509,9 @@ Tasks
 - [x] Camera
 - [x] Duration
 - [x] Prompt
-- [ ] Character Reference（待 Phase 13）
-- [ ] Scene Reference（待 Phase 13）
-- [ ] Generation Status（待 Phase 13）
+- [x] Character Reference（Phase 13）
+- [x] Scene Reference（Phase 13）
+- [x] Generation Status（Phase 13）
 
 完成标准
 
@@ -520,7 +520,7 @@ Tasks
 - 「剧本」页：场景显示已生成/未生成分镜状态；支持一键生成当前分集全部分镜；显示预计时间。
 - 镜头编辑支持景别/运镜/角色/动作/光影/台词/时长/提示词。
 - 测试：后端 `pytest -q` 187 passed；前端 `tsc` / `lint` / `vitest`（20 passed）通过。
-- 本轮边界：Character Reference / Scene Reference / Generation Status 待 Phase 13 生图接入；不提前实现图片生成。
+- 本轮边界：Character Reference / Scene Reference / Generation Status 已由 Phase 13 生图接入补齐。
 
 UI
 Scene 01
@@ -559,15 +559,15 @@ Image
  ↓
 Asset Version
 Tasks
- Text → Image
- Image → Image
- Reference Image
- Character Reference
- Batch Generation
- Image Preview
- Image Version
- Retry
- Cancel
+- [x] Text → Image
+- [x] Image → Image
+- [x] Reference Image
+- [x] Character Reference
+- [ ] Batch Generation
+- [x] Image Preview
+- [x] Image Version
+- [x] Retry
+- [x] Cancel
 
 > 单模型生成：一次 Job 只用一个 Model / 一个 Provider；不做多模型并行。自动 Model Router 留到 Phase 17（P1）。
 Phase 14 — Video Generation
