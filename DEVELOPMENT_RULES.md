@@ -1617,3 +1617,18 @@ Before telling the user the backend is ready:
    `apps\backend\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000`
    (working directory: `apps\backend`).
 3. Wait until `/openapi.json` returns 200 before reporting readiness.
+
+78. User-First Product Usability
+
+All future features and UI designs MUST follow these usability principles, not only Phase 13:
+
+1. Before implementation, write the expected user journey in the plan / investigation document. Do not design interfaces from API fields.
+2. The primary action must be visible in the current context. The user should not have to search for how to do the next step.
+3. Model / provider selections should default to the user-configured default and only show valid, enabled options. Never hardcode model names.
+4. Generated results should appear in place (asset version list, shot card, preview panel). The user should not need to manually refresh or navigate away.
+5. Error messages must be actionable and displayed near the control that caused the failure, not only in a global banner.
+6. When no model / provider is available, show a clear next step and entry point instead of an empty page or a dead disabled button.
+7. Paid operations need a short cost notice, but avoid interrupting every single action with a modal.
+8. Never fake progress. Show real provider progress when available; otherwise show an indeterminate "processing" state.
+9. Avoid developer jargon in user-facing UI. Use clear Chinese industry terms, not raw enums such as `INT` or `medium close`.
+10. Acceptance criteria must include a usability review, not only functionality, type checks, and tests.
