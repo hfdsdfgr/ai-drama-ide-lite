@@ -16,6 +16,8 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
+import { listAssets } from "../api/assets";
+import { getCurrentAssetVersion } from "../api/asset_versions";
 import { getApiBase } from "../api/client";
 import {
   generateImage,
@@ -38,12 +40,24 @@ import type { GenerationJob } from "../types/generation";
 import type { Novel } from "../types/novel";
 import type { Project } from "../types/project";
 import type { Model } from "../types/provider";
+import type { AssetCard, AssetType } from "../types/story";
 import type {
   Episode,
   EpisodeDetail,
   SceneDetail,
   Shot,
 } from "../types/script";
+
+const ASSET_TYPE_LABELS: Record<AssetType, string> = {
+  character: "角色",
+  location: "场景",
+  prop: "道具",
+};
+
+interface ReferenceAsset {
+  asset: AssetCard;
+  version: AssetVersion;
+}
 
 function SortableShotCard({
   shot,
@@ -137,6 +151,10 @@ export function StoryboardPage({ active }: { active: boolean }) {
   const [imageJob, setImageJob] = useState<GenerationJob | null>(null);
   const [generatingShotId, setGeneratingShotId] = useState<string | null>(null);
   const [apiBase, setApiBase] = useState("");
+  const [referenceAssets, setReferenceAssets] = useState<ReferenceAsset[]>([]);
+  const [selectedReferenceAssetIds, setSelectedReferenceAssetIds] = useState<
+    string[]
+  >([]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -151,7 +169,12 @@ export function StoryboardPage({ active }: { active: boolean }) {
     listModels({ model_type: "image", enabled_only: true })
       .then((models) => {
         const usable = models
-          .filter((m) => m.capabilities.includes("text_to_image"))
+          .filter(
+            (m) =>
+              m.capabilities.includes("text_to_image") ||
+              m.capabilities.includes("reference_image") ||
+              m.capabilities.includes("image_to_image"),
+          )
           .sort((a, b) => Number(b.is_default_image) - Number(a.is_default_image));
         setImageModels(usable);
         setImageModelId((prev) =>
@@ -175,11 +198,37 @@ export function StoryboardPage({ active }: { active: boolean }) {
     setShotVersions({});
     setGeneratingShotId(null);
     setImageJob(null);
+    setReferenceAssets([]);
+    setSelectedReferenceAssetIds([]);
     setNovelId("");
     setEpisodes([]);
     setEpisodeDetail(null);
     void refreshNovels(projectId);
   }, [projectId, refreshNovels]);
+
+  useEffect(() => {
+    if (!projectId || !apiBase) return;
+    setError("");
+    listAssets(projectId)
+      .then(async (assets) => {
+        const references: ReferenceAsset[] = [];
+        const results = await Promise.allSettled(
+          assets.map((asset) =>
+            getCurrentAssetVersion(projectId, asset.asset_id),
+          ),
+        );
+        results.forEach((result, index) => {
+          if (result.status === "fulfilled" && result.value) {
+            references.push({
+              asset: assets[index],
+              version: result.value,
+            });
+          }
+        });
+        setReferenceAssets(references);
+      })
+      .catch((e) => setError((e as Error).message));
+  }, [projectId, apiBase]);
 
   useEffect(() => {
     if (!projectId || !novelId) return;
@@ -237,6 +286,7 @@ export function StoryboardPage({ active }: { active: boolean }) {
     setShotDetailDraft({ ...shot });
     setConfirmShotDeleteId(null);
     setImageJob(null);
+    setSelectedReferenceAssetIds([]);
   }
 
   function closeShotDetail() {
@@ -286,6 +336,7 @@ export function StoryboardPage({ active }: { active: boolean }) {
         target_id: selectedShotId,
         model_id: imageModelId,
         capability: "text_to_image",
+        reference_asset_ids: selectedReferenceAssetIds,
       });
       setImageJob(job);
       while (true) {
@@ -643,6 +694,46 @@ export function StoryboardPage({ active }: { active: boolean }) {
                     还没有可用的图片模型，请先在「设置」启用一个支持文生图的模型。
                   </p>
                 )}
+                <div className="reference-picker">
+                  <div className="sidebar-head">
+                    <h4>参考图（可选）</h4>
+                  </div>
+                  {referenceAssets.length === 0 ? (
+                    <p className="muted">
+                      暂无可用的资产图片参考图。先在「资产」页生成角色或场景图片。
+                    </p>
+                  ) : (
+                    referenceAssets.map((ref) => (
+                      <label
+                        key={ref.asset.asset_id}
+                        className="reference-option"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedReferenceAssetIds.includes(
+                            ref.asset.asset_id,
+                          )}
+                          onChange={(e) => {
+                            const id = ref.asset.asset_id;
+                            setSelectedReferenceAssetIds((prev) =>
+                              e.target.checked
+                                ? [...prev, id]
+                                : prev.filter((item) => item !== id),
+                            );
+                          }}
+                        />
+                        <img
+                          src={`${apiBase}${ref.version.file_url}`}
+                          alt={ref.asset.name}
+                        />
+                        <span>
+                          {ASSET_TYPE_LABELS[ref.asset.asset_type]} ·{" "}
+                          {ref.asset.name}
+                        </span>
+                      </label>
+                    ))
+                  )}
+                </div>
                 <button
                   type="button"
                   className="btn-primary"

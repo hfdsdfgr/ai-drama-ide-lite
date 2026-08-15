@@ -25,6 +25,7 @@ def test_generate_asset_image_route(client, monkeypatch):
         aspect_ratio=None,
         art_style=None,
         negative_prompt="",
+        reference_asset_ids=None,
     ):
         calls.update(
             {
@@ -71,6 +72,7 @@ def test_generate_shot_image_route(client, monkeypatch):
         aspect_ratio=None,
         art_style=None,
         negative_prompt="",
+        reference_asset_ids=None,
     ):
         return _job_out(model_id, capability)
 

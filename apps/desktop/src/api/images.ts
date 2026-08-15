@@ -10,6 +10,7 @@ export interface ImageGenerateInput {
   aspect_ratio?: string;
   art_style?: string;
   negative_prompt?: string;
+  reference_asset_ids?: string[];
 }
 
 export function generateImage(

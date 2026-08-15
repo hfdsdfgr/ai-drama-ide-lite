@@ -81,19 +81,20 @@ def create_app(
         app.state.provider_manager,
         config.data_dir / "generation_tests",
     )
+    app.state.asset_version_service = AssetVersionService(
+        config.db_path, config.projects_dir
+    )
     app.state.image_generation_service = ImageGenerationService(
         app.state.generation_service,
         app.state.provider_manager,
         config.db_path,
+        app.state.asset_version_service,
     )
     app.state.story_service = StoryAnalysisService(
         app.state.provider_manager, config.db_path
     )
     app.state.asset_service = AssetGenerationService(
         app.state.job_store, app.state.provider_manager, config.db_path
-    )
-    app.state.asset_version_service = AssetVersionService(
-        config.db_path, config.projects_dir
     )
     app.state.production_graph_service = ProductionGraphService(config.db_path)
     app.state.ai_novel_service = AiNovelService(

@@ -38,6 +38,16 @@ class _FakeRecord:
         self.project_id = project_id
 
 
+class _FakeAssetVersionService:
+    def get_current(self, project_id, entity_type, entity_id):
+        return _FakeVersion(f"{entity_id}.png")
+
+
+class _FakeVersion:
+    def __init__(self, file_path):
+        self.file_path = file_path
+
+
 def _shot(**overrides) -> Shot:
     now = datetime.now(timezone.utc)
     values = {
@@ -85,6 +95,7 @@ def _service(fake):
         fake,
         object(),
         "unused.db",
+        _FakeAssetVersionService(),
     )
 
 
@@ -168,6 +179,41 @@ def test_start_shot_builds_prompt_with_matched_asset_references(monkeypatch):
     assert "mountain town, sunset" in prompt
     assert kwargs["aspect_ratio"] == "720x1280"
     assert kwargs["extra"]["target_type"] == "shot"
+
+
+def test_start_shot_uses_explicit_reference_assets(monkeypatch):
+    fake = _FakeGenerationService()
+    service = _service(fake)
+    monkeypatch.setattr(
+        ScriptRepository,
+        "get_shot_with_scene",
+        lambda self, project_id, shot_id: (_shot(), _scene()),
+    )
+    monkeypatch.setattr(
+        StoryRepository,
+        "list_assets",
+        lambda self, project_id: [
+            {
+                "asset_type": "character",
+                "asset_id": "character_lin_001",
+                "name": "林凡",
+                "reference_prompt": "male protagonist, green cloth robe",
+                "fields": {},
+            }
+        ],
+    )
+
+    service.start_shot(
+        "proj_1",
+        "shot_01",
+        "model_img",
+        "reference_image",
+        reference_asset_ids=["character_lin_001"],
+    )
+
+    args, kwargs = fake.calls[0]
+    assert kwargs["images"] == ["character_lin_001.png"]
+    assert kwargs["extra"]["source_refs"][1]["id"] == "character_lin_001"
 
 
 def test_invalid_image_capability_is_rejected():

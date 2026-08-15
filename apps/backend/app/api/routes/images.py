@@ -39,6 +39,7 @@ def generate_image(
         aspect_ratio=payload.aspect_ratio,
         art_style=payload.art_style,
         negative_prompt=payload.negative_prompt,
+        reference_asset_ids=payload.reference_asset_ids,
     )
 
 
