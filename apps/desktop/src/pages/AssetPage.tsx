@@ -14,8 +14,10 @@ import {
   promoteAssetVersion,
 } from "../api/asset_versions";
 import { getApiBase } from "../api/client";
+import { generateImage, getImageJob } from "../api/images";
 import { listProjects } from "../api/projects";
 import { listModels } from "../api/providers";
+import type { GenerationJob } from "../types/generation";
 import type { AssetVersion } from "../types/asset_version";
 import type { Model } from "../types/provider";
 import type { Project } from "../types/project";
@@ -176,9 +178,15 @@ export function AssetPage({ active }: { active: boolean }) {
   const [confirmDeleteName, setConfirmDeleteName] = useState<string | null>(null);
   const [llmModels, setLlmModels] = useState<Model[]>([]);
   const [aiModelId, setAiModelId] = useState("");
+  const [imageModels, setImageModels] = useState<Model[]>([]);
+  const [imageModelId, setImageModelId] = useState("");
   const [specs, setSpecs] = useState<AssetSpecs | null>(null);
   const [genJob, setGenJob] = useState<AssetGenerateJob | null>(null);
   const [genBusy, setGenBusy] = useState(false);
+  const [imageJob, setImageJob] = useState<GenerationJob | null>(null);
+  const [imageJobTargetId, setImageJobTargetId] = useState("");
+  const [imageJobTargetName, setImageJobTargetName] = useState("");
+  const [imageBusy, setImageBusy] = useState(false);
   const [error, setError] = useState("");
   const [versions, setVersions] = useState<AssetVersion[]>([]);
   const [apiBase, setApiBase] = useState("");
@@ -186,7 +194,10 @@ export function AssetPage({ active }: { active: boolean }) {
     string | null
   >(null);
   const [versionBusy, setVersionBusy] = useState(false);
+  const [zoomImageUrl, setZoomImageUrl] = useState<string | null>(null);
   const pollRef = useRef<string | null>(null);
+  const imagePollRef = useRef<string | null>(null);
+  const selectedAssetIdRef = useRef("");
 
   const refreshAssets = useCallback(async (pid: string) => {
     setError("");
@@ -225,6 +236,17 @@ export function AssetPage({ active }: { active: boolean }) {
         );
       })
       .catch((e) => setError((e as Error).message));
+    listModels({ model_type: "image", enabled_only: true })
+      .then((models) => {
+        const usable = models
+          .filter((m) => m.capabilities.includes("text_to_image"))
+          .sort((a, b) => Number(b.is_default_image) - Number(a.is_default_image));
+        setImageModels(usable);
+        setImageModelId((prev) =>
+          usable.some((m) => m.id === prev) ? prev : (usable[0]?.id ?? ""),
+        );
+      })
+      .catch((e) => setError((e as Error).message));
     if (projectId) {
       void refreshAssets(projectId);
     }
@@ -247,6 +269,10 @@ export function AssetPage({ active }: { active: boolean }) {
   const selected = assets.find(
     (a) => a.asset_type === assetType && a.name === selectedName,
   );
+
+  useEffect(() => {
+    selectedAssetIdRef.current = selected?.asset_id ?? "";
+  }, [selected?.asset_id]);
 
   // 主从布局：切换分类后自动选中第一个资产
   useEffect(() => {
@@ -404,6 +430,52 @@ export function AssetPage({ active }: { active: boolean }) {
       pollRef.current = null;
     } finally {
       setGenBusy(false);
+    }
+  }
+
+  async function runImageGeneration() {
+    if (!projectId || !selected || !imageModelId) return;
+    const targetAssetId = selected.asset_id;
+    const targetAssetName = selected.name;
+    setImageBusy(true);
+    setError("");
+    try {
+      const job = await generateImage(projectId, {
+        target_type: "asset",
+        target_id: targetAssetId,
+        model_id: imageModelId,
+        capability: "text_to_image",
+        aspect_ratio: draft?.aspect_ratio || undefined,
+        art_style: draft?.art_style || undefined,
+      });
+      setImageJob(job);
+      setImageJobTargetId(targetAssetId);
+      setImageJobTargetName(targetAssetName);
+      imagePollRef.current = job.job_id;
+      while (imagePollRef.current === job.job_id) {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        if (imagePollRef.current !== job.job_id) break;
+        const updated = await getImageJob(projectId, job.job_id);
+        setImageJob(updated);
+        if (["completed", "failed", "cancelled"].includes(updated.status)) {
+          imagePollRef.current = null;
+          if (updated.status === "completed") {
+            const refreshedVersions = await listAssetVersions(
+              projectId,
+              targetAssetId,
+            );
+            if (selectedAssetIdRef.current === targetAssetId) {
+              setVersions(refreshedVersions);
+            }
+          }
+          break;
+        }
+      }
+    } catch (e) {
+      setError((e as Error).message);
+      imagePollRef.current = null;
+    } finally {
+      setImageBusy(false);
     }
   }
 
@@ -640,17 +712,58 @@ export function AssetPage({ active }: { active: boolean }) {
                       ? `当前 v${versions.find((v) => v.is_current)?.version}`
                       : "暂无版本"}
                   </span>
+                  {imageModels.length > 0 ? (
+                    <select
+                      value={imageModelId}
+                      onChange={(e) => setImageModelId(e.target.value)}
+                      disabled={imageBusy}
+                    >
+                      {imageModels.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.model_id}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span className="muted">暂无图片模型</span>
+                  )}
                   <button
                     type="button"
-                    disabled
-                    title="图片生成功能将在后续阶段开放"
+                    className="btn-primary"
+                    disabled={!imageModelId || imageBusy}
+                    onClick={runImageGeneration}
                   >
-                    生成图片
+                    {imageBusy ? "生成中…" : "生成图片"}
                   </button>
                 </div>
                 <p className="muted">
-                  图片生成功能将在后续阶段开放，生成结果会自动保存为新版本。
+                  生成结果会自动保存为新版本；调用图片 API 可能产生费用。
                 </p>
+                {imageModels.length === 0 && (
+                  <p className="muted">
+                    还没有可用的图片模型，请先在「设置」启用一个支持文生图的模型。
+                  </p>
+                )}
+                {imageJob && imageJob.status !== "completed" && (
+                  imageJobTargetId && imageJobTargetId !== selected.asset_id ? (
+                    <p className="muted">
+                      正在生成「{imageJobTargetName || "其他资产"}」的图片。
+                      当前可继续查看其他资产，生成完成后返回该资产即可看到新版本。
+                    </p>
+                  ) : (
+                    <p className="muted">
+                      状态：
+                      {imageJob.status === "running"
+                        ? "生成中……"
+                        : imageJob.status === "failed"
+                          ? "生成失败"
+                          : imageJob.status === "cancelled"
+                            ? "已取消"
+                            : "排队中"}
+                      {imageJob.error ? ` · ${imageJob.error}` : ""}
+                    </p>
+                  )
+                )}
                 {versions.length === 0 ? (
                   <p className="muted">还没有图片版本。</p>
                 ) : (
@@ -664,11 +777,23 @@ export function AssetPage({ active }: { active: boolean }) {
                             : "version-item"
                         }
                       >
-                        <img
-                          src={`${apiBase}${v.file_url}`}
-                          alt={`版本 v${v.version}`}
-                          className="version-thumb"
-                        />
+                        <div className="version-thumb-wrap">
+                          <img
+                            src={`${apiBase}${v.file_url}`}
+                            alt={`版本 v${v.version}`}
+                            className="version-thumb"
+                          />
+                          <button
+                            type="button"
+                            className="version-zoom"
+                            title="放大查看"
+                            onClick={() =>
+                              setZoomImageUrl(`${apiBase}${v.file_url}`)
+                            }
+                          >
+                            🔍
+                          </button>
+                        </div>
                         <div className="version-info">
                           <span className="project-name">
                             v{v.version}
@@ -779,6 +904,26 @@ export function AssetPage({ active }: { active: boolean }) {
           </div>
         </aside>
       </div>
+      {zoomImageUrl && (
+        <div
+          className="image-lightbox"
+          onClick={() => setZoomImageUrl(null)}
+        >
+          <div
+            className="image-lightbox-inner"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img src={zoomImageUrl} alt="图片放大预览" />
+            <button
+              type="button"
+              className="button-ghost"
+              onClick={() => setZoomImageUrl(null)}
+            >
+              关闭
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -16,8 +16,15 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
+import { getApiBase } from "../api/client";
+import {
+  generateImage,
+  getCurrentImageVersion,
+  getImageJob,
+} from "../api/images";
 import { listNovels } from "../api/novels";
 import { listProjects } from "../api/projects";
+import { listModels } from "../api/providers";
 import {
   deleteShot,
   getEpisodeDetail,
@@ -26,8 +33,11 @@ import {
   reorderShots,
   updateShot,
 } from "../api/script";
+import type { AssetVersion } from "../types/asset_version";
+import type { GenerationJob } from "../types/generation";
 import type { Novel } from "../types/novel";
 import type { Project } from "../types/project";
+import type { Model } from "../types/provider";
 import type {
   Episode,
   EpisodeDetail,
@@ -39,11 +49,15 @@ function SortableShotCard({
   shot,
   sceneId,
   isSelected,
+  imageUrl,
+  generating,
   onOpen,
 }: {
   shot: Shot;
   sceneId: string;
   isSelected: boolean;
+  imageUrl: string | null;
+  generating: boolean;
   onOpen: (sceneId: string, shot: Shot) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
@@ -67,7 +81,13 @@ function SortableShotCard({
       {...attributes}
       {...listeners}
     >
-      <div className="shot-frame">待生成</div>
+      <div className="shot-frame">
+        {imageUrl ? (
+          <img src={imageUrl} alt={`Shot ${shot.shot_number ?? "-"}`} />
+        ) : (
+          <span>{generating ? "生成中…" : "待生成"}</span>
+        )}
+      </div>
       <div className="shot-meta">
         <span className="shot-number">Shot {shot.shot_number ?? "-"}</span>
         {shot.shot_type && <span className="shot-type">{shot.shot_type}</span>}
@@ -76,7 +96,17 @@ function SortableShotCard({
         {shot.duration ? <span>{shot.duration}s</span> : null}
         {shot.camera ? <span>{shot.camera}</span> : null}
       </div>
-      <span className="shot-status shot-status-pending">待生成</span>
+      <span
+        className={
+          imageUrl
+            ? "shot-status shot-status-completed"
+            : generating
+              ? "shot-status shot-status-running"
+              : "shot-status shot-status-pending"
+        }
+      >
+        {imageUrl ? "已完成" : generating ? "生成中" : "待生成"}
+      </span>
     </div>
   );
 }
@@ -99,6 +129,14 @@ export function StoryboardPage({ active }: { active: boolean }) {
     null,
   );
   const [error, setError] = useState("");
+  const [imageModels, setImageModels] = useState<Model[]>([]);
+  const [imageModelId, setImageModelId] = useState("");
+  const [shotVersions, setShotVersions] = useState<Record<string, AssetVersion>>(
+    {},
+  );
+  const [imageJob, setImageJob] = useState<GenerationJob | null>(null);
+  const [generatingShotId, setGeneratingShotId] = useState<string | null>(null);
+  const [apiBase, setApiBase] = useState("");
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -108,6 +146,18 @@ export function StoryboardPage({ active }: { active: boolean }) {
     if (!active) return;
     listProjects()
       .then(setProjects)
+      .catch((e) => setError((e as Error).message));
+    void getApiBase().then(setApiBase).catch(() => {});
+    listModels({ model_type: "image", enabled_only: true })
+      .then((models) => {
+        const usable = models
+          .filter((m) => m.capabilities.includes("text_to_image"))
+          .sort((a, b) => Number(b.is_default_image) - Number(a.is_default_image));
+        setImageModels(usable);
+        setImageModelId((prev) =>
+          usable.some((m) => m.id === prev) ? prev : (usable[0]?.id ?? ""),
+        );
+      })
       .catch((e) => setError((e as Error).message));
   }, [active]);
 
@@ -122,6 +172,9 @@ export function StoryboardPage({ active }: { active: boolean }) {
 
   useEffect(() => {
     if (!projectId) return;
+    setShotVersions({});
+    setGeneratingShotId(null);
+    setImageJob(null);
     setNovelId("");
     setEpisodes([]);
     setEpisodeDetail(null);
@@ -153,6 +206,19 @@ export function StoryboardPage({ active }: { active: boolean }) {
           sceneMap[scene.id] = await getSceneDetail(projectId, scene.id);
         }
         setSceneDetails(sceneMap);
+        const shots = Object.values(sceneMap).flatMap((scene) => scene.shots);
+        const versionMap: Record<string, AssetVersion> = {};
+        const results = await Promise.allSettled(
+          shots.map((shot) =>
+            getCurrentImageVersion(projectId, "shot", shot.id),
+          ),
+        );
+        results.forEach((result, index) => {
+          if (result.status === "fulfilled" && result.value) {
+            versionMap[shots[index].id] = result.value;
+          }
+        });
+        setShotVersions(versionMap);
       } catch (e) {
         setError((e as Error).message);
       }
@@ -170,6 +236,7 @@ export function StoryboardPage({ active }: { active: boolean }) {
     setSelectedShotId(shot.id);
     setShotDetailDraft({ ...shot });
     setConfirmShotDeleteId(null);
+    setImageJob(null);
   }
 
   function closeShotDetail() {
@@ -208,6 +275,49 @@ export function StoryboardPage({ active }: { active: boolean }) {
     }
   }
 
+  async function runShotImageGeneration() {
+    if (!projectId || !selectedShotId || !imageModelId) return;
+    setGeneratingShotId(selectedShotId);
+    setImageJob(null);
+    setError("");
+    try {
+      const job = await generateImage(projectId, {
+        target_type: "shot",
+        target_id: selectedShotId,
+        model_id: imageModelId,
+        capability: "text_to_image",
+      });
+      setImageJob(job);
+      while (true) {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        const updated = await getImageJob(projectId, job.job_id);
+        setImageJob(updated);
+        if (["completed", "failed", "cancelled"].includes(updated.status)) {
+          if (updated.status === "completed") {
+            const version = await getCurrentImageVersion(
+              projectId,
+              "shot",
+              selectedShotId,
+            );
+            if (version) {
+              setShotVersions((prev) => ({
+                ...prev,
+                [selectedShotId]: version,
+              }));
+            }
+          }
+          break;
+        }
+      }
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setGeneratingShotId((prev) =>
+        prev === selectedShotId ? null : prev,
+      );
+    }
+  }
+
   async function handleDeleteSelectedShot() {
     if (!projectId || !selectedShotSceneId || !selectedShotId) return;
     if (confirmShotDeleteId !== selectedShotId) {
@@ -220,6 +330,11 @@ export function StoryboardPage({ active }: { active: boolean }) {
       await deleteShot(projectId, selectedShotSceneId, selectedShotId);
       const detail = await getSceneDetail(projectId, selectedShotSceneId);
       setSceneDetails((prev) => ({ ...prev, [selectedShotSceneId]: detail }));
+      setShotVersions((prev) => {
+        const next = { ...prev };
+        delete next[selectedShotId];
+        return next;
+      });
       closeShotDetail();
     } catch (e) {
       setError((e as Error).message);
@@ -358,15 +473,23 @@ export function StoryboardPage({ active }: { active: boolean }) {
                             strategy={rectSortingStrategy}
                           >
                             <div className="shot-board">
-                              {shots.map((shot) => (
-                                <SortableShotCard
-                                  key={shot.id}
-                                  shot={shot}
-                                  sceneId={scene.id}
-                                  isSelected={selectedShotId === shot.id}
-                                  onOpen={openShotDetail}
-                                />
-                              ))}
+                              {shots.map((shot) => {
+                                const version = shotVersions[shot.id];
+                                const imageUrl = version
+                                  ? `${apiBase}${version.file_url}`
+                                  : null;
+                                return (
+                                  <SortableShotCard
+                                    key={shot.id}
+                                    shot={shot}
+                                    sceneId={scene.id}
+                                    isSelected={selectedShotId === shot.id}
+                                    imageUrl={imageUrl}
+                                    generating={generatingShotId === shot.id}
+                                    onOpen={openShotDetail}
+                                  />
+                                );
+                              })}
                             </div>
                           </SortableContext>
                         </DndContext>
@@ -496,6 +619,54 @@ export function StoryboardPage({ active }: { active: boolean }) {
                   placeholder="视觉提示词（后续生图使用）"
                 />
               </label>
+              <div className="card image-generate-card">
+                <div className="sidebar-head">
+                  <h3>分镜图片</h3>
+                </div>
+                {imageModels.length > 0 ? (
+                  <label>
+                    图片模型
+                    <select
+                      value={imageModelId}
+                      onChange={(e) => setImageModelId(e.target.value)}
+                      disabled={generatingShotId === selectedShotId}
+                    >
+                      {imageModels.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.model_id}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : (
+                  <p className="muted">
+                    还没有可用的图片模型，请先在「设置」启用一个支持文生图的模型。
+                  </p>
+                )}
+                <button
+                  type="button"
+                  className="btn-primary"
+                  disabled={
+                    !imageModelId || generatingShotId === selectedShotId
+                  }
+                  onClick={runShotImageGeneration}
+                >
+                  {generatingShotId === selectedShotId ? "生成中…" : "生成图片"}
+                </button>
+                <p className="muted">生成会调用 API，可能产生费用。</p>
+                {imageJob && imageJob.status !== "completed" && (
+                  <p className="muted">
+                    {imageJob.status === "running"
+                      ? "生成中……"
+                      : imageJob.status === "failed"
+                        ? "生成失败"
+                        : imageJob.status === "cancelled"
+                          ? "已取消"
+                          : "排队中"}
+                    {imageJob.error ? ` · ${imageJob.error}` : ""}
+                  </p>
+                )}
+              </div>
               <div className="toolbar">
                 <button
                   type="button"
