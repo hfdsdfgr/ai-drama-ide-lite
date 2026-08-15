@@ -12,6 +12,8 @@ class GenerationJobCreate(BaseModel):
     prompt: str = Field(min_length=1, max_length=2000)
     aspect_ratio: str | None = Field(default=None, max_length=20)
     duration: int | None = Field(default=None, ge=2, le=15)
+    images: list[str] = Field(default_factory=list, max_length=10)
+    negative_prompt: str = Field(default="", max_length=1000)
 
 
 class GenerationResultOut(BaseModel):

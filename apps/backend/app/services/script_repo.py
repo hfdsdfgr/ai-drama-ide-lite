@@ -315,6 +315,22 @@ class ScriptRepository:
             raise AppError(404, "shot_not_found", f"镜头不存在: {shot_id}")
         return _row_to_shot(row)
 
+    def get_shot_with_scene(self, project_id: str, shot_id: str) -> tuple[Shot, Scene]:
+        """通过 shot_id 返回镜头及其所属场景，供生图提示词组装使用。"""
+        _validate_id(project_id, "项目")
+        _validate_id(shot_id, "镜头")
+        with get_connection(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT scene_id FROM shots WHERE id = ? AND project_id = ? AND deleted_at IS NULL",
+                (shot_id, project_id),
+            ).fetchone()
+        if row is None:
+            raise AppError(404, "shot_not_found", f"镜头不存在: {shot_id}")
+        scene_id = row["scene_id"]
+        return self.get_shot(project_id, scene_id, shot_id), self.get_scene(
+            project_id, scene_id
+        )
+
     def update_shot(
         self,
         project_id: str,

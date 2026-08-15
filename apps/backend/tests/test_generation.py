@@ -88,6 +88,21 @@ def _add_bailian_video_model(client):
     return model
 
 
+def _add_bailian_image_model(client):
+    provider = client.post(
+        "/api/providers", json={"preset_key": "bailian", "api_key": "sk-cn"}
+    ).json()
+    model = client.post(
+        "/api/models",
+        json={
+            "provider_id": provider["id"],
+            "model_id": "qwen-image-2.0-pro",
+            "model_type": "image",
+        },
+    ).json()
+    return model
+
+
 def test_sync_image_job_completed(client, monkeypatch):
     _patch_client(monkeypatch, submit={"data": [{"url": "https://cdn/x.png"}]})
     model = _add_image_model(client)
@@ -115,6 +130,47 @@ def test_sync_image_job_completed(client, monkeypatch):
     result = fetched.json()
     assert result["status"] == "completed"
     assert result["result"]["urls"] == ["https://cdn/x.png"]
+
+
+def test_bailian_image_job_uses_native_sync_adapter(client, monkeypatch):
+    _patch_client(
+        monkeypatch,
+        submit={
+            "output": {
+                "choices": [
+                    {
+                        "finish_reason": "stop",
+                        "message": {
+                            "role": "assistant",
+                            "content": [{"image": "https://cdn/qwen.png"}],
+                        },
+                    }
+                ]
+            }
+        },
+    )
+    model = _add_bailian_image_model(client)
+    response = client.post(
+        "/api/generation/jobs",
+        json={
+            "model_id": model["id"],
+            "capability": "text_to_image",
+            "prompt": "一只猫",
+        },
+    )
+    assert response.status_code == 201
+    job_id = response.json()["job_id"]
+
+    deadline = time.time() + 10
+    status = "queued"
+    while status in ("queued", "running") and time.time() < deadline:
+        time.sleep(0.05)
+        status = client.get(f"/api/generation/jobs/{job_id}").json()["status"]
+    fetched = client.get(f"/api/generation/jobs/{job_id}")
+    assert fetched.status_code == 200
+    result = fetched.json()
+    assert result["status"] == "completed"
+    assert result["result"]["urls"] == ["https://cdn/qwen.png"]
 
 
 def test_async_video_job_polls_to_completed(client, monkeypatch):

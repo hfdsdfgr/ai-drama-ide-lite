@@ -10,7 +10,7 @@ from app.services.adapters.base import (
 )
 from app.services.adapters.dashscope import DashScopeAdapter
 from app.services.adapters.openai_compat import OpenAICompatAdapter
-from app.services.capability_registry import VIDEO_CAPABILITIES
+from app.services.capability_registry import IMAGE_CAPABILITIES, VIDEO_CAPABILITIES
 from app.services.provider_repo import ProviderRepository
 
 
@@ -52,7 +52,7 @@ class ProviderManager:
         )
 
     def _adapter(self, model: ModelOut, capability: str) -> Adapter:
-        if capability in VIDEO_CAPABILITIES and model.provider_preset_key in (
+        if capability in (VIDEO_CAPABILITIES | IMAGE_CAPABILITIES) and model.provider_preset_key in (
             "bailian",
             "bailian-intl",
         ):
@@ -118,6 +118,15 @@ class ProviderManager:
         """启动一次生成：异步厂商提交任务；同步厂商直接生成并返回结果。"""
         adapter = self.adapter_for(model_id, capability)
         ctx = self.ctx_for(model_id)
+        if capability in IMAGE_CAPABILITIES:
+            result = adapter.generate(ctx, capability, request)
+            return {
+                "mode": "sync",
+                "adapter": adapter,
+                "ctx": ctx,
+                "task_id": None,
+                "result": result,
+            }
         if isinstance(adapter, DashScopeAdapter):
             task_id = adapter.submit(ctx, capability, request)
             return {

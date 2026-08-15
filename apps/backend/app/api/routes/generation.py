@@ -25,6 +25,8 @@ def create_generation_job(
         prompt=payload.prompt,
         aspect_ratio=payload.aspect_ratio,
         duration=payload.duration,
+        images=payload.images,
+        negative_prompt=payload.negative_prompt,
     )
 
 

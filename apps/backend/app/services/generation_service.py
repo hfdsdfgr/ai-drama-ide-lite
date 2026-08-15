@@ -31,13 +31,18 @@ class GenerationService:
         prompt: str,
         aspect_ratio: str | None = None,
         duration: int | None = None,
+        *,
+        project_id: str | None = None,
+        images: list[str] | None = None,
+        negative_prompt: str = "",
+        extra: dict | None = None,
     ) -> dict:
         # fail-fast：校验模型启用/Key/能力（不触发任何 API 调用或费用）
         self.manager.adapter_for(model_id, capability)
         model = self.manager.repo.get_model(model_id)
         record = self.store.create(
             JOB_TYPE_GENERATION,
-            None,  # 生成测试任务不绑定项目
+            project_id or None,
             model_id=model_id,
             provider_id=model.provider_id,
             capability=capability,
@@ -45,6 +50,9 @@ class GenerationService:
                 "prompt": prompt,
                 "aspect_ratio": aspect_ratio,
                 "duration": duration,
+                "images": images or [],
+                "negative_prompt": negative_prompt or "",
+                "extra": extra or {},
             },
         )
         return self._public(record)

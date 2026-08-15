@@ -1,4 +1,4 @@
-"""阿里云百炼（DashScope）原生 Adapter：异步任务制视频生成。
+"""阿里云百炼（DashScope）原生 Adapter：视频异步任务 + 图片同步生成。
 
 参考官方文档（wan 文生视频 API reference）：
 - 创建任务 POST {base}/api/v1/services/aigc/video-generation/video-synthesis
@@ -6,6 +6,10 @@
 - 轮询 GET {base}/api/v1/tasks/{task_id}
 状态：PENDING -> RUNNING -> SUCCEEDED / FAILED / CANCELED / UNKNOWN
 """
+
+import base64
+import mimetypes
+from pathlib import Path
 
 import httpx
 
@@ -39,6 +43,99 @@ def _native_base(compatible_base: str) -> str:
 class DashScopeAdapter(Adapter):
     name = "dashscope"
     provider_label = "阿里云百炼"
+
+    def generate(
+        self,
+        ctx: ProviderContext,
+        capability: str,
+        request: GenerationRequest,
+    ) -> GenerationResult:
+        if capability not in {
+            "text_to_image",
+            "image_to_image",
+            "reference_image",
+            "character_reference",
+        }:
+            raise AdapterError(
+                422,
+                "generation_not_supported",
+                f"{ctx.provider_name}（{ctx.model_id}）暂不支持能力: {capability}",
+            )
+        if capability != "text_to_image" and not request.images:
+            raise AdapterError(
+                422,
+                "image_required",
+                f"{ctx.provider_name} 的 {ctx.model_id} 需要一张输入图片",
+            )
+
+        content: list[dict] = []
+        if request.images:
+            content.extend(
+                {"image": self._image_input(image)} for image in request.images
+            )
+        content.append({"text": request.prompt})
+
+        body: dict = {
+            "model": ctx.model_id,
+            "input": {
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": content,
+                    }
+                ]
+            },
+            "parameters": {
+                "size": self._image_size(request.aspect_ratio),
+                "n": 1,
+                "prompt_extend": True,
+                "watermark": False,
+            },
+        }
+        if request.negative_prompt:
+            body["parameters"]["negative_prompt"] = request.negative_prompt
+
+        base = _native_base(ctx.base_url)
+        path = "/api/v1/services/aigc/multimodal-generation/generation"
+        headers = {
+            "Authorization": f"Bearer {ctx.api_key}",
+            "Content-Type": "application/json",
+        }
+        try:
+            with httpx.Client(timeout=90) as client:
+                response = client.post(base + path, headers=headers, json=body)
+                response.raise_for_status()
+                payload = response.json()
+        except httpx.TimeoutException as exc:
+            raise AdapterError(504, "image_timeout", f"{ctx.provider_name} 图片生成超时") from exc
+        except httpx.HTTPStatusError as exc:
+            raise AdapterError(
+                exc.response.status_code,
+                "image_failed",
+                f"{ctx.provider_name} 图片生成失败：{self._http_detail(exc.response.status_code, ctx.provider_name)}",
+            ) from exc
+        except Exception as exc:
+            raise AdapterError(
+                502, "image_failed", f"无法连接 {ctx.provider_name}，请检查网络与配置"
+            ) from exc
+
+        try:
+            content_items = payload["output"]["choices"][0]["message"]["content"]
+        except (KeyError, IndexError, TypeError) as exc:
+            raise AdapterError(
+                502, "image_invalid_response", f"{ctx.provider_name} 图片返回格式异常"
+            ) from exc
+        urls = [
+            item["image"]
+            for item in content_items
+            if isinstance(item, dict) and item.get("image")
+        ]
+        if not urls:
+            raise AdapterError(502, "image_no_output", f"{ctx.provider_name} 未返回可用图片结果")
+        return GenerationResult(
+            urls=urls,
+            meta={"provider": ctx.provider_name, "model": ctx.model_id},
+        )
 
     def submit(
         self,
@@ -152,6 +249,21 @@ class DashScopeAdapter(Adapter):
                 f"{ctx.provider_name} 任务尚未完成（{status.status}）",
             )
         return status.result
+
+    @staticmethod
+    def _image_size(value: str | None) -> str:
+        return (value or "1024*1024").replace("x", "*").replace("×", "*")
+
+    @staticmethod
+    def _image_input(value: str) -> str:
+        if value.startswith(("http://", "https://")):
+            return value
+        path = Path(value)
+        if not path.is_file():
+            raise AdapterError(422, "image_file_not_found", f"输入图片不存在: {value}")
+        mime = mimetypes.guess_type(path.name)[0] or "image/png"
+        data = base64.b64encode(path.read_bytes()).decode("ascii")
+        return f"data:{mime};base64,{data}"
 
     @staticmethod
     def _http_detail(status: int, provider_name: str) -> str:

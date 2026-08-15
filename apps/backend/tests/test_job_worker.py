@@ -59,6 +59,14 @@ class _FakeManager:
         return object()
 
 
+class _FakeImageResultService:
+    def __init__(self):
+        self.calls = []
+
+    def persist(self, job, result):
+        self.calls.append((job, result))
+
+
 def _init(tmp_path: Path):
     db_path = tmp_path / "test.db"
     init_db(db_path)
@@ -280,3 +288,29 @@ def test_worker_start_recovers_stale(tmp_path):
         assert store.get(job.id).status == STATUS_COMPLETED
     finally:
         worker.stop()
+
+
+def test_sync_image_job_calls_image_result_service(tmp_path):
+    store = _init(tmp_path)
+    out = tmp_path / "out"
+    local_file = out / "image.png"
+    manager = _FakeManager(
+        mode="sync",
+        result=GenerationResult(urls=[str(local_file)], meta={}),
+    )
+    image_results = _FakeImageResultService()
+    worker = _worker(
+        store, manager, tmp_path, image_result_service=image_results
+    )
+    job = _make_job(
+        store,
+        input_payload={
+            "prompt": "x",
+            "extra": {"target_type": "asset", "target_id": "character_1"},
+        },
+    )
+
+    worker._execute(job)
+
+    assert store.get(job.id).status == STATUS_COMPLETED
+    assert len(image_results.calls) == 1

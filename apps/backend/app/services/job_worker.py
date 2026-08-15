@@ -20,6 +20,7 @@ from app.core.logging import get_logger
 from app.services.adapters.base import GenerationRequest, GenerationResult
 from app.services.adapters.manager import ProviderManager
 from app.services.asset_service import run_asset_completion
+from app.services.capability_registry import IMAGE_CAPABILITIES
 from app.services.job_store import (
     CATEGORY_PERMANENT,
     CATEGORY_RETRYABLE,
@@ -60,12 +61,14 @@ class JobWorker:
         *,
         scan_interval: float = 2.0,
         poll_interval: float = 3.0,
+        image_result_service=None,
     ) -> None:
         self.store = store
         self.manager = manager
         self.output_dir = Path(output_dir)
         self.scan_interval = scan_interval
         self.poll_interval = poll_interval
+        self.image_result_service = image_result_service
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
 
@@ -142,7 +145,7 @@ class JobWorker:
         )
         started = self.manager.start_job(job.model_id, job.capability, request)
         if started["mode"] == "sync":
-            self._finish_sync(job.id, started["result"])
+            self._finish_sync(job, started["result"])
             return
         task_id = started.get("task_id")
         if not task_id:
@@ -165,9 +168,10 @@ class JobWorker:
             job.id, result_payload={"detail": detail}
         )
 
-    def _finish_sync(self, job_id: str, result) -> None:
+    def _finish_sync(self, job, result) -> None:
+        self._persist_image_result(job, result)
         self.store.mark_completed(
-            job_id,
+            job.id,
             result_payload=self._result_payload(result),
             output_files=self._local_files(result),
         )
@@ -191,6 +195,7 @@ class JobWorker:
 
             if status.status == STATUS_COMPLETED:
                 if status.result:
+                    self._persist_image_result(job, status.result)
                     self.store.mark_completed(
                         job_id,
                         result_payload=self._result_payload(status.result),
@@ -214,6 +219,17 @@ class JobWorker:
             self._stop.wait(self.poll_interval)
 
     # ---------- 结果处理 ----------
+
+    def _persist_image_result(self, job, result) -> None:
+        if self.image_result_service is None:
+            return
+        if job.type != JOB_TYPE_GENERATION:
+            return
+        if job.capability not in IMAGE_CAPABILITIES:
+            return
+        if not isinstance(result, GenerationResult):
+            return
+        self.image_result_service.persist(job, result)
 
     @staticmethod
     def _result_payload(result) -> dict:

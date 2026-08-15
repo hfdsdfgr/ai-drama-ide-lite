@@ -207,6 +207,62 @@ def test_image_edit_requires_input_image():
         raise AssertionError("should raise image_required")
 
 
+# ---------- DashScope：图片同步生成 ----------
+
+
+def test_dashscope_generate_text_to_image(monkeypatch):
+    _patch_client(
+        monkeypatch,
+        payload={
+            "output": {
+                "choices": [
+                    {
+                        "finish_reason": "stop",
+                        "message": {
+                            "role": "assistant",
+                            "content": [{"image": "https://cdn/qwen.png"}],
+                        },
+                    }
+                ]
+            }
+        },
+    )
+    adapter = DashScopeAdapter()
+    result = adapter.generate(
+        _ctx(
+            model_id="qwen-image-2.0-pro",
+            base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+            preset="bailian",
+        ),
+        "text_to_image",
+        GenerationRequest(
+            capability="text_to_image",
+            prompt="一只猫",
+            aspect_ratio="1024x1536",
+        ),
+    )
+
+    assert result.urls == ["https://cdn/qwen.png"]
+
+
+def test_dashscope_generate_image_to_image_requires_image():
+    adapter = DashScopeAdapter()
+    try:
+        adapter.generate(
+            _ctx(
+                model_id="qwen-image-2.0-pro",
+                base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+                preset="bailian",
+            ),
+            "image_to_image",
+            GenerationRequest(capability="image_to_image", prompt="改一下"),
+        )
+    except AppError as exc:
+        assert exc.code == "image_required"
+    else:
+        raise AssertionError("should raise image_required")
+
+
 # ---------- DashScope：视频异步任务 ----------
 
 

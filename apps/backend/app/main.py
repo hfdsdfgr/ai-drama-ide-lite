@@ -10,6 +10,7 @@ from app.api.routes import (
     asset_versions,
     generation,
     health,
+    images,
     jobs,
     novels,
     production_graph,
@@ -28,6 +29,8 @@ from app.services.ai_script import AiScriptService
 from app.services.asset_service import AssetGenerationService
 from app.services.asset_version_service import AssetVersionService
 from app.services.generation_service import GenerationService
+from app.services.image_generation_service import ImageGenerationService
+from app.services.image_result_service import ImageResultService
 from app.services.job_store import JobStore
 from app.services.job_worker import JobWorker
 from app.services.project_repo import migrate_legacy_json_projects
@@ -64,15 +67,24 @@ def create_app(
         ProviderRepository(config.db_path, app.state.secret_store)
     )
     app.state.job_store = JobStore(config.db_path)
+    app.state.image_result_service = ImageResultService(
+        config.db_path, config.projects_dir
+    )
     app.state.job_worker = JobWorker(
         app.state.job_store,
         app.state.provider_manager,
         config.data_dir / "generation_tests",
+        image_result_service=app.state.image_result_service,
     )
     app.state.generation_service = GenerationService(
         app.state.job_store,
         app.state.provider_manager,
         config.data_dir / "generation_tests",
+    )
+    app.state.image_generation_service = ImageGenerationService(
+        app.state.generation_service,
+        app.state.provider_manager,
+        config.db_path,
     )
     app.state.story_service = StoryAnalysisService(
         app.state.provider_manager, config.db_path
@@ -104,6 +116,7 @@ def create_app(
     app.include_router(providers.router)
     app.include_router(providers.models_router)
     app.include_router(generation.router)
+    app.include_router(images.router)
     app.include_router(jobs.router)
     app.include_router(story.router)
     app.include_router(script.router)

@@ -16,6 +16,7 @@ from pathlib import Path
 
 from app.core.errors import AppError
 from app.db.database import get_connection
+from app.services.story_repo import ASSET_TYPES
 
 
 def _now_iso() -> str:
@@ -73,8 +74,10 @@ class AssetVersionService:
         self.db_path = db_path
         self.projects_dir = projects_dir
 
-    def _asset_dir(self, project_id: str, asset_id: str) -> Path:
-        return self.projects_dir / project_id / "assets" / asset_id
+    def _entity_dir(self, project_id: str, entity_type: str, entity_id: str) -> Path:
+        if entity_type in ASSET_TYPES:
+            return self.projects_dir / project_id / "assets" / entity_id
+        return self.projects_dir / project_id / "generated" / entity_type / entity_id
 
     def add_version(
         self,
@@ -102,7 +105,7 @@ class AssetVersionService:
             ).fetchone()
         next_version = int(row["next_version"])
 
-        asset_dir = self._asset_dir(project_id, entity_id)
+        asset_dir = self._entity_dir(project_id, entity_type, entity_id)
         asset_dir.mkdir(parents=True, exist_ok=True)
         target = asset_dir / f"v{next_version}.{file_ext}"
         if source_path is not None:
@@ -144,10 +147,11 @@ class AssetVersionService:
                     now,
                 ),
             )
-            conn.execute(
-                "UPDATE assets SET version = ?, updated_at = ? WHERE id = ?",
-                (next_version, now, entity_id),
-            )
+            if entity_type in ASSET_TYPES:
+                conn.execute(
+                    "UPDATE assets SET version = ?, updated_at = ? WHERE id = ?",
+                    (next_version, now, entity_id),
+                )
         return self.get(version_id)
 
     def get(self, version_id: str) -> AssetVersionRecord:
@@ -209,10 +213,11 @@ class AssetVersionService:
                 "UPDATE versions SET is_current = 1 WHERE id = ?",
                 (version_id,),
             )
-            conn.execute(
-                "UPDATE assets SET version = ?, updated_at = ? WHERE id = ?",
-                (record.version, now, record.entity_id),
-            )
+            if record.entity_type in ASSET_TYPES:
+                conn.execute(
+                    "UPDATE assets SET version = ?, updated_at = ? WHERE id = ?",
+                    (record.version, now, record.entity_id),
+                )
         return self.get(version_id)
 
     def delete(self, version_id: str) -> None:
