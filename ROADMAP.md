@@ -595,15 +595,15 @@ Download
  ↓
 Video Asset
 Tasks
- Image → Video
- Duration
- Aspect Ratio
- Motion
- Camera Motion
- Video Preview
- Video Version
- Retry
- Cancel
+- [x] Image → Video
+- [x] Duration（各厂商时长映射：Sora 4/8/12、智谱 5/10）
+- [x] Aspect Ratio
+- [ ] Motion（第一阶段不做）
+- [ ] Camera Motion（第一阶段不做）
+- [x] Video Preview
+- [x] Video Version
+- [x] Retry（Job 系统）
+- [x] Cancel（Job 系统）
 
 第一阶段不要急着做：
 
@@ -616,6 +616,14 @@ Video → Video
 Image → Video
 
 跑通。
+
+完成标准
+
+- 后端：统一视频 Job（submit → poll → fetch_result），结果写版本系统（`shot_video` / `*_video` / `production_graph` 的 `video_version` 节点）。
+- Adapter：已接入 DashScope（百炼原生）、Sora、OpenRouter Video、智谱 CogVideoX、SiliconFlow Video 五种协议，均继承 OpenAI Compat 以保留文本/图片能力。
+- 前端：分镜页图生视频卡片（动态读取 `image_to_video` 视频模型、Prompt、时长 5/10/15），完成后显示视频预览。
+- 测试：后端 pytest 222 passed；前端 lint / vitest / build 通过。
+- 本轮边界：Motion / Camera Motion、Text → Video、First/Last Frame、Video → Video 留后续。
 
 > 单模型生成：一次 Job 只用一个 Model / 一个 Provider；不做多模型并行。自动 Model Router 留到 Phase 17（P1）。
 

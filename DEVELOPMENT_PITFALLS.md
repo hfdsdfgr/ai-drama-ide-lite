@@ -147,3 +147,13 @@
 - **x64 应用找不到 WebView2 运行时**：本机 WebView2 只注册在 `WOW6432Node`（32 位视图），x64 Tauri app 初始化失败报「找不到 WebView2」。对策：`webviewInstallMode: { "type": "embedBootstrapper" }`，安装器检测缺失时联网静默补装（+1.8MB）。
 - **退出时清理 sidecar 进程树**：PyInstaller onefile 有父（bootloader）+ 子（解压运行）两个进程。清理顺序必须先 `taskkill /PID <pid> /T /F`（父还活着才能枚举子进程）再 `child.kill()`；先杀父会让 `/T` 失效、子进程残留。
 - **NSIS 静默安装/卸载验证**：`setup.exe /S` 静默安装到 `%LOCALAPPDATA%\AI Drama IDE Lite`（perUser 模式），`uninstall.exe /S` 静默卸载；卸载不会删 `data/` 用户数据（符合预期）。验证安装包用「卸载→重装→启动→taskkill 关闭」链路。
+
+## 10. 视频生成与多 Provider 协议（Phase 14）
+
+- **智谱 CogVideoX 时长只支持 5/10，传 15 返回 HTTP 400**：前端统一时长 5/10/15，但智谱视频 `duration` 仅 5、10，传 15 直接被 400。修复：`ZhipuVideoAdapter.submit` 把 `duration > 10` 收敛为 10（Sora 类似，映射 5→4、10→8、15→12）。新增厂商视频 Adapter 时先核对时长枚举，不要透传通用时长。
+- **Sora / OpenRouter 视频结果 URL 需要鉴权下载**：轮询完成后 `content` 端点（`/videos/{id}/content`）要求 Authorization，而 `ImageResultService._materialize` 原本只做无鉴权 GET。修复：`GenerationResult` 增加 `download_headers`，Adapter 在 poll 完成时把 `Authorization: Bearer ...` 放进结果，`_materialize` 下载时透传；`_result_payload` 不持久化 headers，避免 key 落库。
+- **视频模型不在 OpenAI 兼容 `/models` 列表**：DashScope 视频走 `video-synthesis`、智谱走 `videos/generations`、SiliconFlow 走 `video/submit`、OpenRouter/Sora 走 `videos`，`/models` 只返回 LLM 和部分图片模型。只做 discover 会永远拉不到视频模型。修复：`discover-models` 在 `/models` 结果上合并 `vendor_models.json` 内置目录，且 `upsert_discovered` 对内建模型优先用其准确 `type`/`capabilities`，不按名称猜。
+- **已有 preset Provider 的 protocol 不自动跟随新预设**：新增 `sora` / `openrouter_video` / `zhipu_video` / `siliconflow_video` 协议后，库里旧 provider 仍是 `openai_compat`，导致视频模型存在却走错 Adapter。修复：`database.py` 启动迁移 `UPDATE providers SET protocol = preset.protocol WHERE preset_key = ? AND protocol = 'openai_compat'`，只在默认值时才迁移，不覆盖用户手改的协议。
+- **阿里云百炼 Wan 图生视频 REST 字段是 `input.img_url`，不是 `input.media`**：旧实现用 `input.media[type=first_frame]` 会请求失败。以官方最新 `image-to-video guide` 为准：`input.prompt + input.img_url`（或音频时再加 `audio_url`），轮询 `GET /api/v1/tasks/{id}` 取 `output.video_url`。
+- **分镜参考图在 dev 模式永远不加载**：`StoryboardPage` 的参考图 effect 曾写 `if (!projectId || !apiBase) return`，而 Tauri dev 下 `getApiBase()` 返回空字符串，导致资产参考图列表永远为空、显示「暂无可用的资产图片参考图」。修复：去掉 `!apiBase`，改为 `if (!active || !projectId) return`，图片 src 用相对路径走 Vite 代理。
+- **切资产页生成图片后回分镜页参考图不刷新**：参考图 effect 只依赖 `projectId`，资产页生成新图片后切回分镜页不会重新加载。修复：依赖加入 `active`，每次进入分镜页重新拉取有当前图片版本的资产。
