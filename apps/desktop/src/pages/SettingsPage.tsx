@@ -29,8 +29,10 @@ import type {
   ModelType,
   Preset,
   Provider,
+  ProviderProtocol,
   ProviderTestResult,
 } from "../types/provider";
+import { PROTOCOL_LABELS } from "../types/provider";
 import type { GenerationJob } from "../types/generation";
 import {
   CAPABILITY_LABELS,
@@ -99,8 +101,10 @@ export function SettingsPage() {
   const [formPreset, setFormPreset] = useState("");
   const [formName, setFormName] = useState("");
   const [formBaseUrl, setFormBaseUrl] = useState("");
+  const [formProtocol, setFormProtocol] = useState<ProviderProtocol>("openai_compat");
   const [formNeedsKey, setFormNeedsKey] = useState(true);
   const [formApiKey, setFormApiKey] = useState("");
+  const [modelFilter, setModelFilter] = useState<"all" | ModelType>("all");
   const [manualModel, setManualModel] = useState<{
     providerId: string;
     modelId: string;
@@ -126,6 +130,7 @@ export function SettingsPage() {
     setFormPreset("");
     setFormName("");
     setFormBaseUrl("");
+    setFormProtocol("openai_compat");
     setFormNeedsKey(true);
     setFormApiKey("");
     setShowForm(false);
@@ -272,12 +277,14 @@ export function SettingsPage() {
           name: formName || undefined,
           api_base_url: formBaseUrl || undefined,
           needs_key: formNeedsKey,
+          protocol: formProtocol,
           api_key: formApiKey || undefined,
         });
       } else if (formPreset === CUSTOM_KEY) {
         provider = await createProvider({
           name: formName,
           api_base_url: formBaseUrl,
+          protocol: formProtocol,
           needs_key: formNeedsKey,
           api_key: formApiKey || undefined,
         });
@@ -303,6 +310,7 @@ export function SettingsPage() {
     setEditing(provider);
     setFormName(provider.name);
     setFormBaseUrl(provider.api_base_url);
+    setFormProtocol(provider.protocol);
     setFormNeedsKey(provider.needs_key);
     setFormApiKey("");
     setShowForm(true);
@@ -457,9 +465,12 @@ export function SettingsPage() {
               <select
                 value={formPreset}
                 onChange={(e) => {
-                  setFormPreset(e.target.value);
+                  const next = e.target.value;
+                  const nextPreset = presets.find((p) => p.key === next);
+                  setFormPreset(next);
                   setFormName("");
                   setFormBaseUrl("");
+                  setFormProtocol(nextPreset?.protocol ?? "openai_compat");
                   setFormNeedsKey(true);
                   setFormApiKey("");
                 }}
@@ -484,6 +495,27 @@ export function SettingsPage() {
                 onChange={(e) => setFormName(e.target.value)}
                 required={!editing}
               />
+            </label>
+          )}
+
+          {(isCustom || editing) && (
+            <label>
+              协议类型
+              <InfoTip text="OpenAI 兼容适合大多数 OpenAI 风格接口；阿里云百炼 / DashScope 使用百炼原生视频与图片协议。" />
+              <select
+                value={formProtocol}
+                onChange={(e) =>
+                  setFormProtocol(e.target.value as ProviderProtocol)
+                }
+              >
+                {(Object.keys(PROTOCOL_LABELS) as ProviderProtocol[]).map(
+                  (protocol) => (
+                    <option key={protocol} value={protocol}>
+                      {PROTOCOL_LABELS[protocol]}
+                    </option>
+                  ),
+                )}
+              </select>
             </label>
           )}
 
@@ -568,6 +600,24 @@ export function SettingsPage() {
 
       <div className="card">
         <h3>AI Provider</h3>
+        <div className="tabs">
+          {(["all", "llm", "image", "video"] as const).map((filter) => (
+            <button
+              key={filter}
+              type="button"
+              className={modelFilter === filter ? "tab active" : "tab"}
+              onClick={() => setModelFilter(filter)}
+            >
+              {filter === "all"
+                ? "全部模型"
+                : filter === "llm"
+                  ? "文本模型"
+                  : filter === "image"
+                    ? "图片模型"
+                    : "视频模型"}
+            </button>
+          ))}
+        </div>
         {providers.length === 0 ? (
           <p className="muted">还没有 Provider，点击右上角添加。</p>
         ) : (
@@ -582,6 +632,7 @@ export function SettingsPage() {
                         provider.preset_key
                       : "自定义"}
                   </span>
+                  <span className="muted">{PROTOCOL_LABELS[provider.protocol]}</span>
                   <span className="muted">
                     {provider.has_api_key ? "密钥已配置" : "密钥未配置"}
                   </span>
@@ -699,6 +750,9 @@ export function SettingsPage() {
                   )}
                   {models
                     .filter((m) => m.provider_id === provider.id)
+                    .filter(
+                      (m) => modelFilter === "all" || m.model_type === modelFilter,
+                    )
                     .map((model) => (
                       <Fragment key={model.id}>
                         <div className="model-block">

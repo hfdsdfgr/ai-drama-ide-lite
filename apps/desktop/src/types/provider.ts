@@ -1,4 +1,20 @@
 export type ModelType = "llm" | "image" | "video";
+export type ProviderProtocol =
+  | "openai_compat"
+  | "dashscope"
+  | "sora"
+  | "openrouter_video"
+  | "zhipu_video"
+  | "siliconflow_video";
+
+export const PROTOCOL_LABELS: Record<ProviderProtocol, string> = {
+  openai_compat: "OpenAI 兼容",
+  dashscope: "阿里云百炼 / DashScope",
+  sora: "OpenAI Sora",
+  openrouter_video: "OpenRouter Video",
+  zhipu_video: "智谱 CogVideoX",
+  siliconflow_video: "SiliconFlow Video",
+};
 
 export type CapabilityKey =
   | "text_to_image"
@@ -46,6 +62,7 @@ export interface Preset {
   name: string;
   base_url: string;
   needs_key: boolean;
+  protocol: ProviderProtocol;
   discoverable: boolean;
 }
 
@@ -53,6 +70,7 @@ export interface Provider {
   id: string;
   name: string;
   preset_key: string | null;
+  protocol: ProviderProtocol;
   api_base_url: string;
   needs_key: boolean;
   enabled: boolean;
@@ -65,6 +83,7 @@ export interface Provider {
 export interface ProviderInput {
   name?: string;
   preset_key?: string;
+  protocol?: ProviderProtocol;
   api_base_url?: string;
   needs_key?: boolean;
   api_key?: string;
@@ -75,6 +94,8 @@ export interface Model {
   id: string;
   provider_id: string;
   provider_name: string;
+  provider_preset_key?: string | null;
+  provider_protocol?: ProviderProtocol;
   provider_base_url: string;
   provider_needs_key: boolean;
   provider_has_api_key: boolean;

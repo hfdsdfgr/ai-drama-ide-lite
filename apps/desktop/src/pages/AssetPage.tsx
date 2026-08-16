@@ -195,6 +195,7 @@ export function AssetPage({ active }: { active: boolean }) {
   >(null);
   const [versionBusy, setVersionBusy] = useState(false);
   const [zoomImageUrl, setZoomImageUrl] = useState<string | null>(null);
+  const [previewVersionId, setPreviewVersionId] = useState<string | null>(null);
   const pollRef = useRef<string | null>(null);
   const imagePollRef = useRef<string | null>(null);
   const selectedAssetIdRef = useRef("");
@@ -301,7 +302,12 @@ export function AssetPage({ active }: { active: boolean }) {
   const refreshVersions = useCallback(async () => {
     if (!projectId || !selected?.asset_id) return;
     try {
-      setVersions(await listAssetVersions(projectId, selected.asset_id));
+      const items = await listAssetVersions(projectId, selected.asset_id);
+      setVersions(items);
+      setPreviewVersionId((prev) => {
+        if (prev && items.some((v) => v.id === prev)) return prev;
+        return items.find((v) => v.is_current)?.id ?? items[0]?.id ?? null;
+      });
     } catch (e) {
       setError((e as Error).message);
     }
@@ -479,6 +485,8 @@ export function AssetPage({ active }: { active: boolean }) {
     }
   }
 
+  const previewVersion =
+    versions.find((v) => v.id === previewVersionId) ?? null;
   const spec = selected?.image_spec;
   const activeRatio = draft?.aspect_ratio || spec?.aspect_ratio || "2:3";
   const activeSpecOption =
@@ -607,14 +615,24 @@ export function AssetPage({ active }: { active: boolean }) {
               {spec && (
                 <div className="asset-spec-card">
                   <div
-                    className="asset-spec-box"
+                    className={`asset-spec-box${previewVersion ? " asset-spec-box-image" : ""}`}
                     style={{ aspectRatio: previewSpec.aspect_ratio }}
                   >
-                    <span className="asset-spec-label">{spec.label}</span>
-                    <span className="asset-spec-meta">
-                      {previewSpec.aspect_ratio} · {previewSpec.width}×
-                      {previewSpec.height}
-                    </span>
+                    {previewVersion ? (
+                      <img
+                        src={`${apiBase}${previewVersion.file_url}`}
+                        alt={`${spec.label} v${previewVersion.version}`}
+                        className="asset-reference-image"
+                      />
+                    ) : (
+                      <>
+                        <span className="asset-spec-label">{spec.label}</span>
+                        <span className="asset-spec-meta">
+                          {previewSpec.aspect_ratio} · {previewSpec.width}×
+                          {previewSpec.height}
+                        </span>
+                      </>
+                    )}
                   </div>
                   <div className="asset-spec-controls">
                     <label>
@@ -771,13 +789,20 @@ export function AssetPage({ active }: { active: boolean }) {
                     {versions.map((v) => (
                       <li
                         key={v.id}
-                        className={
-                          v.is_current
-                            ? "version-item version-item-current"
-                            : "version-item"
-                        }
+                        className={[
+                          "version-item",
+                          v.is_current ? "version-item-current" : "",
+                          v.id === previewVersionId ? "version-item-selected" : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
                       >
-                        <div className="version-thumb-wrap">
+                        <div
+                          className="version-thumb-wrap"
+                          onClick={() => setPreviewVersionId(v.id)}
+                          role="button"
+                          tabIndex={0}
+                        >
                           <img
                             src={`${apiBase}${v.file_url}`}
                             alt={`版本 v${v.version}`}
@@ -787,9 +812,10 @@ export function AssetPage({ active }: { active: boolean }) {
                             type="button"
                             className="version-zoom"
                             title="放大查看"
-                            onClick={() =>
-                              setZoomImageUrl(`${apiBase}${v.file_url}`)
-                            }
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setZoomImageUrl(`${apiBase}${v.file_url}`);
+                            }}
                           >
                             🔍
                           </button>

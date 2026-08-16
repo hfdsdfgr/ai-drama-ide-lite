@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   DndContext,
@@ -24,6 +24,11 @@ import {
   getCurrentImageVersion,
   getImageJob,
 } from "../api/images";
+import {
+  generateVideo,
+  getCurrentVideoVersion,
+  getVideoJob,
+} from "../api/videos";
 import { listNovels } from "../api/novels";
 import { listProjects } from "../api/projects";
 import { listModels } from "../api/providers";
@@ -145,16 +150,28 @@ export function StoryboardPage({ active }: { active: boolean }) {
   const [error, setError] = useState("");
   const [imageModels, setImageModels] = useState<Model[]>([]);
   const [imageModelId, setImageModelId] = useState("");
+  const [videoModels, setVideoModels] = useState<Model[]>([]);
+  const [videoModelId, setVideoModelId] = useState("");
+  const [videoPrompt, setVideoPrompt] = useState("");
+  const [videoDuration, setVideoDuration] = useState(5);
   const [shotVersions, setShotVersions] = useState<Record<string, AssetVersion>>(
     {},
   );
+  const [shotVideoVersion, setShotVideoVersion] =
+    useState<AssetVersion | null>(null);
   const [imageJob, setImageJob] = useState<GenerationJob | null>(null);
+  const [videoJob, setVideoJob] = useState<GenerationJob | null>(null);
   const [generatingShotId, setGeneratingShotId] = useState<string | null>(null);
+  const [generatingVideoShotId, setGeneratingVideoShotId] = useState<
+    string | null
+  >(null);
   const [apiBase, setApiBase] = useState("");
   const [referenceAssets, setReferenceAssets] = useState<ReferenceAsset[]>([]);
   const [selectedReferenceAssetIds, setSelectedReferenceAssetIds] = useState<
     string[]
   >([]);
+  const [zoomImageUrl, setZoomImageUrl] = useState<string | null>(null);
+  const autoMatchedShotIdRef = useRef<string | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -182,6 +199,17 @@ export function StoryboardPage({ active }: { active: boolean }) {
         );
       })
       .catch((e) => setError((e as Error).message));
+    listModels({ model_type: "video", enabled_only: true })
+      .then((models) => {
+        const usable = models
+          .filter((m) => m.capabilities.includes("image_to_video"))
+          .sort((a, b) => Number(b.is_default_video) - Number(a.is_default_video));
+        setVideoModels(usable);
+        setVideoModelId((prev) =>
+          usable.some((m) => m.id === prev) ? prev : (usable[0]?.id ?? ""),
+        );
+      })
+      .catch((e) => setError((e as Error).message));
   }, [active]);
 
   const refreshNovels = useCallback(async (pid: string) => {
@@ -196,8 +224,13 @@ export function StoryboardPage({ active }: { active: boolean }) {
   useEffect(() => {
     if (!projectId) return;
     setShotVersions({});
+    setShotVideoVersion(null);
     setGeneratingShotId(null);
+    setGeneratingVideoShotId(null);
     setImageJob(null);
+    setVideoJob(null);
+    setVideoPrompt("");
+    setVideoDuration(5);
     setReferenceAssets([]);
     setSelectedReferenceAssetIds([]);
     setNovelId("");
@@ -207,7 +240,7 @@ export function StoryboardPage({ active }: { active: boolean }) {
   }, [projectId, refreshNovels]);
 
   useEffect(() => {
-    if (!projectId || !apiBase) return;
+    if (!active || !projectId) return;
     setError("");
     listAssets(projectId)
       .then(async (assets) => {
@@ -228,7 +261,7 @@ export function StoryboardPage({ active }: { active: boolean }) {
         setReferenceAssets(references);
       })
       .catch((e) => setError((e as Error).message));
-  }, [projectId, apiBase]);
+  }, [active, projectId]);
 
   useEffect(() => {
     if (!projectId || !novelId) return;
@@ -280,13 +313,43 @@ export function StoryboardPage({ active }: { active: boolean }) {
     await loadEpisodeDetail(episodeId);
   }
 
+  const autoMatchReferenceAssets = useCallback(
+    (sceneId: string, shot: Shot): string[] => {
+      const scene = sceneDetails[sceneId];
+      const shotText = shot.characters || "";
+      const sceneText = `${scene?.scene.slugline || ""} ${scene?.scene.action || ""}`;
+      return referenceAssets
+        .filter((ref) => {
+          const name = ref.asset.name;
+          if (!name) return false;
+          if (ref.asset.asset_type === "character") {
+            return shotText.includes(name);
+          }
+          if (ref.asset.asset_type === "location") {
+            return sceneText.includes(name);
+          }
+          return false;
+        })
+        .map((ref) => ref.asset.asset_id);
+    },
+    [sceneDetails, referenceAssets],
+  );
+
   function openShotDetail(sceneId: string, shot: Shot) {
     setSelectedShotSceneId(sceneId);
     setSelectedShotId(shot.id);
     setShotDetailDraft({ ...shot });
     setConfirmShotDeleteId(null);
     setImageJob(null);
-    setSelectedReferenceAssetIds([]);
+    setVideoJob(null);
+    setVideoPrompt(shot.prompt || shot.action || "");
+    setVideoDuration(Math.max(5, Math.min(15, Math.round(shot.duration || 5))));
+    setSelectedReferenceAssetIds(autoMatchReferenceAssets(sceneId, shot));
+    autoMatchedShotIdRef.current = null;
+    setShotVideoVersion(null);
+    void getCurrentVideoVersion(projectId, shot.id)
+      .then(setShotVideoVersion)
+      .catch(() => setShotVideoVersion(null));
   }
 
   function closeShotDetail() {
@@ -294,7 +357,25 @@ export function StoryboardPage({ active }: { active: boolean }) {
     setSelectedShotId(null);
     setShotDetailDraft(null);
     setConfirmShotDeleteId(null);
+    setVideoJob(null);
+    setShotVideoVersion(null);
   }
+
+  useEffect(() => {
+    if (!selectedShotId || !selectedShotSceneId || !shotDetailDraft) return;
+    if (autoMatchedShotIdRef.current === selectedShotId) return;
+    if (referenceAssets.length === 0) return;
+    setSelectedReferenceAssetIds(
+      autoMatchReferenceAssets(selectedShotSceneId, shotDetailDraft),
+    );
+    autoMatchedShotIdRef.current = selectedShotId;
+  }, [
+    selectedShotId,
+    selectedShotSceneId,
+    shotDetailDraft,
+    referenceAssets,
+    autoMatchReferenceAssets,
+  ]);
 
   async function saveShotDetail() {
     if (
@@ -364,6 +445,48 @@ export function StoryboardPage({ active }: { active: boolean }) {
       setError((e as Error).message);
     } finally {
       setGeneratingShotId((prev) =>
+        prev === selectedShotId ? null : prev,
+      );
+    }
+  }
+
+  async function runShotVideoGeneration() {
+    if (!projectId || !selectedShotId || !videoModelId) return;
+    const prompt = videoPrompt.trim();
+    if (!prompt) {
+      setError("请输入视频生成提示词");
+      return;
+    }
+    setGeneratingVideoShotId(selectedShotId);
+    setVideoJob(null);
+    setError("");
+    try {
+      const job = await generateVideo(projectId, {
+        target_id: selectedShotId,
+        model_id: videoModelId,
+        prompt,
+        duration: videoDuration,
+      });
+      setVideoJob(job);
+      while (true) {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        const updated = await getVideoJob(projectId, job.job_id);
+        setVideoJob(updated);
+        if (["completed", "failed", "cancelled"].includes(updated.status)) {
+          if (updated.status === "completed") {
+            const version = await getCurrentVideoVersion(
+              projectId,
+              selectedShotId,
+            );
+            setShotVideoVersion(version);
+          }
+          break;
+        }
+      }
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setGeneratingVideoShotId((prev) =>
         prev === selectedShotId ? null : prev,
       );
     }
@@ -696,7 +819,7 @@ export function StoryboardPage({ active }: { active: boolean }) {
                 )}
                 <div className="reference-picker">
                   <div className="sidebar-head">
-                    <h4>参考图（可选）</h4>
+                    <h4>参考图</h4>
                   </div>
                   {referenceAssets.length === 0 ? (
                     <p className="muted">
@@ -725,6 +848,13 @@ export function StoryboardPage({ active }: { active: boolean }) {
                         <img
                           src={`${apiBase}${ref.version.file_url}`}
                           alt={ref.asset.name}
+                          className="reference-thumb"
+                          title="点击放大"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setZoomImageUrl(`${apiBase}${ref.version.file_url}`);
+                          }}
                         />
                         <span>
                           {ASSET_TYPE_LABELS[ref.asset.asset_type]} ·{" "}
@@ -755,6 +885,97 @@ export function StoryboardPage({ active }: { active: boolean }) {
                           ? "已取消"
                           : "排队中"}
                     {imageJob.error ? ` · ${imageJob.error}` : ""}
+                  </p>
+                )}
+              </div>
+              <div className="card image-generate-card">
+                <div className="sidebar-head">
+                  <h3>分镜视频</h3>
+                </div>
+                {videoModels.length > 0 ? (
+                  <>
+                    <label>
+                      视频模型
+                      <select
+                        value={videoModelId}
+                        onChange={(e) => setVideoModelId(e.target.value)}
+                        disabled={generatingVideoShotId === selectedShotId}
+                      >
+                        {videoModels.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.model_id}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      视频提示词
+                      <textarea
+                        value={videoPrompt}
+                        onChange={(e) => setVideoPrompt(e.target.value)}
+                        rows={3}
+                        placeholder="描述这张图片应如何动起来，例如镜头推进、人物回头、风吹动衣角"
+                        disabled={generatingVideoShotId === selectedShotId}
+                      />
+                    </label>
+                    <label>
+                      时长（秒）
+                      <select
+                        value={videoDuration}
+                        onChange={(e) =>
+                          setVideoDuration(Number(e.target.value))
+                        }
+                        disabled={generatingVideoShotId === selectedShotId}
+                      >
+                        {[5, 10, 15].map((value) => (
+                          <option key={value} value={value}>
+                            {value} 秒
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    {shotVersions[selectedShotId] ? (
+                      <button
+                        type="button"
+                        className="btn-primary"
+                        disabled={
+                          !videoModelId ||
+                          generatingVideoShotId === selectedShotId
+                        }
+                        onClick={runShotVideoGeneration}
+                      >
+                        {generatingVideoShotId === selectedShotId
+                          ? "生成中…"
+                          : "生成视频"}
+                      </button>
+                    ) : (
+                      <p className="muted">
+                        请先生成该镜头的分镜图片，再进行图生视频。
+                      </p>
+                    )}
+                    {videoJob && videoJob.status !== "completed" && (
+                      <p className="muted">
+                        {videoJob.status === "running"
+                          ? "生成中……"
+                          : videoJob.status === "failed"
+                            ? "生成失败"
+                            : videoJob.status === "cancelled"
+                              ? "已取消"
+                              : "排队中"}
+                        {videoJob.error ? ` · ${videoJob.error}` : ""}
+                      </p>
+                    )}
+                    {shotVideoVersion && (
+                      <video
+                        className="video-preview"
+                        controls
+                        src={`${apiBase}${shotVideoVersion.file_url}`}
+                      />
+                    )}
+                  </>
+                ) : (
+                  <p className="muted">
+                    还没有可用的视频模型，请先在「设置」启用一个支持图生视频的模型。
                   </p>
                 )}
               </div>
@@ -804,6 +1025,26 @@ export function StoryboardPage({ active }: { active: boolean }) {
           )}
         </aside>
       </div>
+      {zoomImageUrl && (
+        <div
+          className="image-lightbox"
+          onClick={() => setZoomImageUrl(null)}
+        >
+          <div
+            className="image-lightbox-inner"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img src={zoomImageUrl} alt="参考图放大预览" />
+            <button
+              type="button"
+              className="button-ghost"
+              onClick={() => setZoomImageUrl(null)}
+            >
+              关闭
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
