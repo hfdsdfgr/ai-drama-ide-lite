@@ -23,6 +23,8 @@ from app.services.capability_registry import (
     serialize,
     validate_capabilities,
 )
+from app.services.adapters.base import DEFAULT_PROTOCOL, SUPPORTED_PROTOCOLS
+from app.services.model_catalog import get_builtin_models
 from app.services.secret_store import SecretStore
 from app.services.vendor_presets import classify_model, get_preset
 
@@ -84,6 +86,9 @@ class ProviderRepository:
         preset = get_preset(data.preset_key) if data.preset_key else None
         if data.preset_key and preset is None:
             raise AppError(422, "unknown_preset", f"未知厂商预设: {data.preset_key}")
+        protocol = (data.protocol or (preset.protocol if preset else None) or DEFAULT_PROTOCOL)
+        if protocol not in SUPPORTED_PROTOCOLS:
+            raise AppError(422, "unsupported_protocol", f"不支持的协议类型: {protocol}")
 
         name = data.name or (preset.name if preset else None)
         if not name or not name.strip():
@@ -118,12 +123,13 @@ class ProviderRepository:
         try:
             with get_connection(self.db_path) as conn:
                 conn.execute(
-                    "INSERT INTO providers (id, name, preset_key, api_base_url, needs_key, enabled, key_ref, created_at, updated_at, deleted_at)"
-                    " VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, NULL)",
+                    "INSERT INTO providers (id, name, preset_key, protocol, api_base_url, needs_key, enabled, key_ref, created_at, updated_at, deleted_at)"
+                    " VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, NULL)",
                     (
                         provider_id,
                         name.strip(),
                         preset.key if preset else None,
+                        protocol,
                         base_url,
                         1 if needs_key else 0,
                         key_ref,
@@ -154,6 +160,11 @@ class ProviderRepository:
             if data.name is not None:
                 updates.append("name = ?")
                 values.append(data.name.strip())
+            if data.protocol is not None:
+                if data.protocol not in SUPPORTED_PROTOCOLS:
+                    raise AppError(422, "unsupported_protocol", f"不支持的协议类型: {data.protocol}")
+                updates.append("protocol = ?")
+                values.append(data.protocol)
             if data.api_base_url is not None:
                 updates.append("api_base_url = ?")
                 values.append(data.api_base_url.strip())
@@ -230,6 +241,7 @@ class ProviderRepository:
             rows = conn.execute(
                 f"""
                 SELECT m.*, p.name AS provider_name, p.preset_key AS provider_preset_key,
+                       p.protocol AS provider_protocol,
                        p.enabled AS provider_enabled, p.api_base_url AS provider_base_url,
                        p.needs_key AS provider_needs_key, p.key_ref AS provider_key_ref
                 FROM models m
@@ -255,6 +267,7 @@ class ProviderRepository:
             row = conn.execute(
                 """
                 SELECT m.*, p.name AS provider_name, p.preset_key AS provider_preset_key,
+                       p.protocol AS provider_protocol,
                        p.enabled AS provider_enabled, p.api_base_url AS provider_base_url,
                        p.needs_key AS provider_needs_key, p.key_ref AS provider_key_ref
                 FROM models m
@@ -385,10 +398,21 @@ class ProviderRepository:
                 "SELECT preset_key FROM providers WHERE id = ?", (provider_id,)
             ).fetchone()
         preset_key = row["preset_key"] if row else None
+        builtin = (
+            {item["id"]: item for item in get_builtin_models(preset_key or "")}
+            if preset_key
+            else {}
+        )
         now = _now_iso()
         for mid in model_ids:
-            model_type = classify_model(preset_key, mid)
-            capabilities = resolve_default_capabilities(preset_key, mid, model_type)
+            if mid in builtin:
+                model_type = builtin[mid].get("type") or classify_model(preset_key, mid)
+                capabilities = builtin[mid].get("capabilities") or resolve_default_capabilities(
+                    preset_key, mid, model_type
+                )
+            else:
+                model_type = classify_model(preset_key, mid)
+                capabilities = resolve_default_capabilities(preset_key, mid, model_type)
             with get_connection(self.db_path) as conn:
                 exists = conn.execute(
                     "SELECT 1 FROM models WHERE provider_id = ? AND model_id = ? AND deleted_at IS NULL",
@@ -423,6 +447,7 @@ def _provider_out(row, secret_store: SecretStore) -> ProviderOut:
         id=row["id"],
         name=row["name"],
         preset_key=row["preset_key"],
+        protocol=row["protocol"],
         api_base_url=row["api_base_url"],
         needs_key=bool(row["needs_key"]),
         enabled=bool(row["enabled"]),
@@ -441,6 +466,7 @@ def _model_out(row, secret_store: SecretStore) -> ModelOut:
         provider_id=row["provider_id"],
         provider_name=row["provider_name"],
         provider_preset_key=row["provider_preset_key"],
+        provider_protocol=row["provider_protocol"],
         provider_enabled=bool(row["provider_enabled"]),
         provider_base_url=row["provider_base_url"],
         provider_needs_key=bool(row["provider_needs_key"]),

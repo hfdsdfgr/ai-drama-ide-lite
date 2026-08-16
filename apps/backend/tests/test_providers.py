@@ -279,18 +279,22 @@ def test_discover_models_classification(client, monkeypatch):
     import app.api.routes.providers as routes
 
     monkeypatch.setattr(
-        routes, "fetch_model_ids", lambda base_url, api_key: ["gpt-4o", "gpt-image-1"]
+        routes,
+        "fetch_model_ids",
+        lambda base_url, api_key, protocol="openai_compat": [
+            "gpt-4o",
+            "gpt-image-1",
+        ],
     )
     response = client.post(f"/api/providers/{pid}/discover-models")
     assert response.status_code == 200
     types = {m["model_id"]: m["model_type"] for m in response.json()}
-    assert types == {
-        "gpt-4o": "llm",
-        "gpt-image-1": "image",
-    }
+    assert types["gpt-4o"] == "llm"
+    assert types["gpt-image-1"] == "image"
+    assert types["sora-2"] == "video"
     # 幂等：再次拉取不产生重复
     client.post(f"/api/providers/{pid}/discover-models")
-    assert len(client.get("/api/models", params={"provider_id": pid}).json()) == 2
+    assert len(client.get("/api/models", params={"provider_id": pid}).json()) == len(types)
 
 
 def test_discover_bailian_supported(client, monkeypatch):
@@ -304,16 +308,19 @@ def test_discover_bailian_supported(client, monkeypatch):
     monkeypatch.setattr(
         routes,
         "fetch_model_ids",
-        lambda base_url, api_key: ["qwen-plus", "qwen-image-plus", "wan2.1-t2v"],
+        lambda base_url, api_key, protocol="openai_compat": [
+            "qwen-plus",
+            "qwen-image-plus",
+            "wan2.1-t2v",
+        ],
     )
     response = client.post(f"/api/providers/{provider['id']}/discover-models")
     assert response.status_code == 200
     types = {m["model_id"]: m["model_type"] for m in response.json()}
-    assert types == {
-        "qwen-plus": "llm",
-        "qwen-image-plus": "image",
-        "wan2.1-t2v": "video",
-    }
+    assert types["qwen-plus"] == "llm"
+    assert types["qwen-image-plus"] == "image"
+    assert types["wan2.1-t2v"] == "video"
+    assert types["wan2.2-i2v-plus"] == "video"
 
 
 def test_preset_models_endpoint(client):

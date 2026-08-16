@@ -40,6 +40,7 @@ def list_presets() -> list[PresetOut]:
             name=p.name,
             base_url=p.base_url,
             needs_key=p.needs_key,
+            protocol=p.protocol,
             discoverable=p.discoverable,
         )
         for p in PRESETS.values()
@@ -104,7 +105,10 @@ def discover_models(provider_id: str, request: Request) -> list[ModelOut]:
     api_key = (
         repo.secret_store.get(f"provider:{provider_id}") if provider.needs_key else None
     )
-    model_ids = fetch_model_ids(provider.api_base_url, api_key)
+    model_ids = fetch_model_ids(provider.api_base_url, api_key, provider.protocol)
+    if preset:
+        builtin_ids = [item["id"] for item in get_builtin_models(preset.key)]
+        model_ids = list(dict.fromkeys(model_ids + builtin_ids))
     return repo.upsert_discovered(provider_id, model_ids)
 
 
@@ -129,6 +133,7 @@ def test_provider(provider_id: str, request: Request) -> ProviderTestOut:
         has_key=provider.has_api_key,
         discoverable=discoverable,
         models=models,
+        protocol=provider.protocol,
     )
 
 

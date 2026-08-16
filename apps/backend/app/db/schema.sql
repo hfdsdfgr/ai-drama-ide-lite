@@ -187,6 +187,7 @@ CREATE TABLE IF NOT EXISTS providers (
     id            TEXT PRIMARY KEY,
     name          TEXT NOT NULL,
     preset_key    TEXT,
+    protocol      TEXT NOT NULL DEFAULT 'openai_compat',
     api_base_url  TEXT NOT NULL DEFAULT '',
     needs_key     INTEGER NOT NULL DEFAULT 1,
     enabled       INTEGER NOT NULL DEFAULT 1,

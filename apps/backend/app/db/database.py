@@ -40,6 +40,10 @@ def init_db(db_path: Path) -> None:
             "INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES (2, ?)",
             (datetime.now(timezone.utc).isoformat(),),
         )
+        conn.execute(
+            "INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES (3, ?)",
+            (datetime.now(timezone.utc).isoformat(),),
+        )
     logger.info("Database ready: %s", db_path)
 
 
@@ -52,6 +56,7 @@ def _apply_safe_migrations(conn: sqlite3.Connection) -> None:
         "ALTER TABLE chapters ADD COLUMN deleted_at TEXT",
         "ALTER TABLE models ADD COLUMN capabilities TEXT NOT NULL DEFAULT ''",
         "ALTER TABLE models ADD COLUMN capability_source TEXT NOT NULL DEFAULT 'auto'",
+        "ALTER TABLE providers ADD COLUMN protocol TEXT NOT NULL DEFAULT 'openai_compat'",
         "ALTER TABLE episodes ADD COLUMN novel_id TEXT REFERENCES novels(id) ON DELETE SET NULL",
         "ALTER TABLE episodes ADD COLUMN order_index INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE episodes ADD COLUMN source_chapter_index INTEGER",
@@ -84,6 +89,14 @@ def _apply_safe_migrations(conn: sqlite3.Connection) -> None:
             conn.execute(statement)
         except sqlite3.OperationalError:
             pass
+    # 旧 Provider 按预设回填协议；自定义 Provider 保持 openai_compat。
+    from app.services.vendor_presets import PRESETS
+
+    for preset_key, preset in PRESETS.items():
+        conn.execute(
+            "UPDATE providers SET protocol = ? WHERE preset_key = ? AND protocol = 'openai_compat'",
+            (preset.protocol, preset_key),
+        )
     # 依赖新列的索引必须在加列之后创建（见 Phase 9 迁移顺序坑）
     try:
         conn.execute(
