@@ -15,6 +15,7 @@ ModelType = Literal["llm", "image", "video"]
 class ProviderCreate(BaseModel):
     name: str | None = Field(default=None, max_length=100)
     preset_key: str | None = None
+    protocol: str | None = None
     api_base_url: str = Field(default="", max_length=500)
     needs_key: bool = True
     api_key: str | None = Field(default=None, max_length=1000)
@@ -22,6 +23,7 @@ class ProviderCreate(BaseModel):
 
 class ProviderUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=100)
+    protocol: str | None = None
     api_base_url: str | None = Field(default=None, max_length=500)
     needs_key: bool | None = None
     enabled: bool | None = None
@@ -32,6 +34,7 @@ class ProviderOut(BaseModel):
     id: str
     name: str
     preset_key: str | None = None
+    protocol: str = "openai_compat"
     api_base_url: str = ""
     needs_key: bool = True
     enabled: bool = True
@@ -46,6 +49,7 @@ class PresetOut(BaseModel):
     name: str
     base_url: str
     needs_key: bool
+    protocol: str = "openai_compat"
     discoverable: bool = True
 
 
@@ -91,6 +95,7 @@ class ModelOut(BaseModel):
     provider_id: str
     provider_name: str
     provider_preset_key: str | None = None
+    provider_protocol: str = "openai_compat"
     provider_enabled: bool = True
     provider_base_url: str = ""
     provider_needs_key: bool = True

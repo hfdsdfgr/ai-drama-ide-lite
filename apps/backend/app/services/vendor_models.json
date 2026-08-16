@@ -39,7 +39,11 @@
     { "id": "deepseek/deepseek-v4-flash", "type": "llm" },
     { "id": "deepseek/deepseek-v4-pro", "type": "llm" },
     { "id": "z-ai/glm-4.5-air", "type": "llm" },
-    { "id": "nvidia/nemotron-3-nano-30b-a3b", "type": "llm" }
+    { "id": "nvidia/nemotron-3-nano-30b-a3b", "type": "llm" },
+    { "id": "google/veo-3.1", "type": "video", "capabilities": ["image_to_video", "text_to_video"] },
+    { "id": "google/veo-3.1-fast", "type": "video", "capabilities": ["image_to_video", "text_to_video"] },
+    { "id": "kwaivgi/kling-video-o1", "type": "video", "capabilities": ["image_to_video", "text_to_video"] },
+    { "id": "bytedance/seedance-1-5-pro", "type": "video", "capabilities": ["image_to_video", "text_to_video"] }
   ],
   "deepseek": [
     { "id": "deepseek-v4-flash", "type": "llm" },
@@ -66,6 +70,8 @@
     { "id": "z-image-turbo", "type": "image", "capabilities": ["text_to_image"] },
     { "id": "wan2.1-t2v", "type": "video", "capabilities": ["text_to_video"] },
     { "id": "wan2.2-t2v", "type": "video", "capabilities": ["text_to_video"] },
+    { "id": "wan2.2-i2v-plus", "type": "video", "capabilities": ["image_to_video"] },
+    { "id": "wan2.2-i2v-flash", "type": "video", "capabilities": ["image_to_video"] },
     { "id": "happyhorse-1.1-t2v", "type": "video", "capabilities": ["text_to_video"] }
   ],
   "zhipu": [
@@ -83,8 +89,7 @@
     { "id": "cogview-3", "type": "image", "capabilities": ["text_to_image"] },
     { "id": "cogview-3-plus", "type": "image", "capabilities": ["text_to_image"] },
     { "id": "cogview-3-flash", "type": "image", "capabilities": ["text_to_image"] },
-    { "id": "cogvideox", "type": "video", "capabilities": ["image_to_video", "text_to_video"] },
-    { "id": "cogvideox-flash", "type": "video", "capabilities": ["image_to_video", "text_to_video"] }
+    { "id": "cogvideox-3", "type": "video", "capabilities": ["image_to_video", "text_to_video"] }
   ],
   "siliconflow": [
     { "id": "deepseek-ai/DeepSeek-V3", "type": "llm" },
@@ -93,7 +98,9 @@
     { "id": "THUDM/GLM-4-9B-0414", "type": "llm" },
     { "id": "black-forest-labs/FLUX.1-schnell", "type": "image", "capabilities": ["text_to_image"] },
     { "id": "stabilityai/stable-diffusion-3-5-large", "type": "image", "capabilities": ["image_to_image", "text_to_image"] },
-    { "id": "Kwai-Kolors/Kolors", "type": "image", "capabilities": ["image_to_image", "reference_image", "text_to_image"] }
+    { "id": "Kwai-Kolors/Kolors", "type": "image", "capabilities": ["image_to_image", "reference_image", "text_to_image"] },
+    { "id": "Wan-AI/Wan2.2-T2V-A14B", "type": "video", "capabilities": ["text_to_video"] },
+    { "id": "Wan-AI/Wan2.2-I2V-A14B", "type": "video", "capabilities": ["image_to_video"] }
   ],
   "ollama": []
 }

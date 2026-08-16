@@ -21,6 +21,7 @@ from app.services.adapters.base import (
     JobStatus,
     ProviderContext,
 )
+from app.services.adapters.openai_compat import OpenAICompatAdapter
 
 _STATUS_MAP = {
     "PENDING": "queued",
@@ -40,8 +41,9 @@ def _native_base(compatible_base: str) -> str:
     return compatible_base.rstrip("/")
 
 
-class DashScopeAdapter(Adapter):
+class DashScopeAdapter(OpenAICompatAdapter):
     name = "dashscope"
+    protocol = "dashscope"
     provider_label = "阿里云百炼"
 
     def generate(
@@ -153,7 +155,7 @@ class DashScopeAdapter(Adapter):
                     "image_required",
                     f"{ctx.provider_name} 的 {ctx.model_id} 图生视频需要一张输入图片 URL",
                 )
-            path = "/api/v1/services/aigc/image2video/video-synthesis"
+            path = "/api/v1/services/aigc/video-generation/video-synthesis"
         else:
             raise AdapterError(
                 422,
@@ -161,21 +163,34 @@ class DashScopeAdapter(Adapter):
                 f"{ctx.provider_name}（{ctx.model_id}）暂不支持能力: {capability}",
             )
 
-        body: dict = {
-            "model": ctx.model_id,
-            "input": {"prompt": request.prompt},
-            "parameters": {
-                "size": request.aspect_ratio or "832*480",
-                "prompt_extend": True,
-                "watermark": False,
-            },
-        }
-        if request.duration:
-            body["parameters"]["duration"] = request.duration
+        if capability == "image_to_video":
+            body: dict = {
+                "model": ctx.model_id,
+                "input": {
+                    "prompt": request.prompt,
+                    "img_url": self._image_input(request.images[0]),
+                },
+                "parameters": {
+                    "resolution": request.aspect_ratio or "720P",
+                    "duration": request.duration or 5,
+                    "prompt_extend": True,
+                    "watermark": False,
+                },
+            }
+        else:
+            body = {
+                "model": ctx.model_id,
+                "input": {"prompt": request.prompt},
+                "parameters": {
+                    "size": request.aspect_ratio or "832*480",
+                    "prompt_extend": True,
+                    "watermark": False,
+                },
+            }
+            if request.duration:
+                body["parameters"]["duration"] = request.duration
         if request.negative_prompt:
             body["input"]["negative_prompt"] = request.negative_prompt
-        if capability == "image_to_video":
-            body["input"]["img_url"] = request.images[0]
 
         headers = {
             "Authorization": f"Bearer {ctx.api_key}",

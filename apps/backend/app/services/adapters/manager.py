@@ -4,21 +4,32 @@ from app.core.errors import AppError
 from app.schemas.provider import ModelOut
 from app.services.adapters.base import (
     Adapter,
+    DEFAULT_PROTOCOL,
     GenerationRequest,
     GenerationResult,
     ProviderContext,
 )
 from app.services.adapters.dashscope import DashScopeAdapter
 from app.services.adapters.openai_compat import OpenAICompatAdapter
-from app.services.capability_registry import IMAGE_CAPABILITIES, VIDEO_CAPABILITIES
+from app.services.adapters.openrouter_video import OpenRouterVideoAdapter
+from app.services.adapters.siliconflow_video import SiliconFlowVideoAdapter
+from app.services.adapters.sora import SoraVideoAdapter
+from app.services.adapters.zhipu_video import ZhipuVideoAdapter
+from app.services.capability_registry import VIDEO_CAPABILITIES
 from app.services.provider_repo import ProviderRepository
 
 
 class ProviderManager:
     def __init__(self, repo: ProviderRepository) -> None:
         self.repo = repo
-        self._openai = OpenAICompatAdapter()
-        self._dashscope = DashScopeAdapter()
+        self._adapters: dict[str, Adapter] = {
+            "openai_compat": OpenAICompatAdapter(),
+            "dashscope": DashScopeAdapter(),
+            "sora": SoraVideoAdapter(),
+            "openrouter_video": OpenRouterVideoAdapter(),
+            "zhipu_video": ZhipuVideoAdapter(),
+            "siliconflow_video": SiliconFlowVideoAdapter(),
+        }
 
     # ---------- 校验与上下文 ----------
 
@@ -49,15 +60,19 @@ class ProviderManager:
             base_url=model.provider_base_url,
             api_key=api_key,
             model_id=model.model_id,
+            protocol=model.provider_protocol or DEFAULT_PROTOCOL,
         )
 
-    def _adapter(self, model: ModelOut, capability: str) -> Adapter:
-        if capability in (VIDEO_CAPABILITIES | IMAGE_CAPABILITIES) and model.provider_preset_key in (
-            "bailian",
-            "bailian-intl",
-        ):
-            return self._dashscope
-        return self._openai
+    def _adapter(self, model: ModelOut, capability: str | None = None) -> Adapter:
+        protocol = model.provider_protocol or DEFAULT_PROTOCOL
+        adapter = self._adapters.get(protocol)
+        if adapter is None:
+            raise AppError(
+                422,
+                "protocol_not_supported",
+                f"Provider「{model.provider_name}」使用不支持的协议: {protocol}",
+            )
+        return adapter
 
     # ---------- 对外：文本 ----------
 
@@ -72,7 +87,9 @@ class ProviderManager:
         if model.model_type != "llm":
             raise AppError(422, "not_llm_model", "请选择文本模型（LLM）")
         self._check_model(model, None)
-        return self._openai.chat(self._ctx(model), messages, temperature, timeout)
+        return self._adapter(model).chat(
+            self._ctx(model), messages, temperature, timeout
+        )
 
     def chat_stream(
         self,
@@ -85,7 +102,7 @@ class ProviderManager:
         if model.model_type != "llm":
             raise AppError(422, "not_llm_model", "请选择文本模型（LLM）")
         self._check_model(model, None)
-        yield from self._openai.chat_stream(
+        yield from self._adapter(model).chat_stream(
             self._ctx(model), messages, temperature, timeout
         )
 
@@ -118,16 +135,7 @@ class ProviderManager:
         """启动一次生成：异步厂商提交任务；同步厂商直接生成并返回结果。"""
         adapter = self.adapter_for(model_id, capability)
         ctx = self.ctx_for(model_id)
-        if capability in IMAGE_CAPABILITIES:
-            result = adapter.generate(ctx, capability, request)
-            return {
-                "mode": "sync",
-                "adapter": adapter,
-                "ctx": ctx,
-                "task_id": None,
-                "result": result,
-            }
-        if isinstance(adapter, DashScopeAdapter):
+        if capability in VIDEO_CAPABILITIES:
             task_id = adapter.submit(ctx, capability, request)
             return {
                 "mode": "async",

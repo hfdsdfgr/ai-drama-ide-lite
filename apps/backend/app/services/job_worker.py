@@ -20,7 +20,7 @@ from app.core.logging import get_logger
 from app.services.adapters.base import GenerationRequest, GenerationResult
 from app.services.adapters.manager import ProviderManager
 from app.services.asset_service import run_asset_completion
-from app.services.capability_registry import IMAGE_CAPABILITIES
+from app.services.capability_registry import IMAGE_CAPABILITIES, VIDEO_CAPABILITIES
 from app.services.job_store import (
     CATEGORY_PERMANENT,
     CATEGORY_RETRYABLE,
@@ -225,7 +225,7 @@ class JobWorker:
             return
         if job.type != JOB_TYPE_GENERATION:
             return
-        if job.capability not in IMAGE_CAPABILITIES:
+        if job.capability not in (IMAGE_CAPABILITIES | VIDEO_CAPABILITIES):
             return
         if not isinstance(result, GenerationResult):
             return

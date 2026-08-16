@@ -143,7 +143,7 @@ def test_chat_auth_fail(monkeypatch):
         adapter.chat(_ctx(), [{"role": "user", "content": "hi"}])
 
 
-def test_chat_region_hint_for_dashscope(monkeypatch):
+def test_chat_auth_error_is_generic(monkeypatch):
     _patch_client(monkeypatch, status_code=401, payload={})
     adapter = OpenAICompatAdapter()
     with pytest.raises(AppError) as exc:
@@ -151,7 +151,7 @@ def test_chat_region_hint_for_dashscope(monkeypatch):
             _ctx(base_url="https://dashscope.aliyuncs.com/compatible-mode/v1"),
             [{"role": "user", "content": "hi"}],
         )
-    assert "dashscope" in str(exc.value.message)
+    assert "API Key 无效" in str(exc.value.message)
 
 
 # ---------- OpenAI 兼容：图片 ----------

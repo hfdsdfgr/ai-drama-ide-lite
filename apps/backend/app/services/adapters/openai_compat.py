@@ -5,6 +5,7 @@
 
 import base64
 import json
+import mimetypes
 import uuid
 from pathlib import Path
 
@@ -19,17 +20,23 @@ from app.services.adapters.base import (
 )
 
 
-def _region_hint(base_url: str) -> str:
-    if "dashscope" in base_url:
-        return "；如为阿里云百炼，请确认 Key 所属站点与 Base URL 匹配（国内 dashscope.aliyuncs.com / 国际 dashscope-intl.aliyuncs.com）"
-    return ""
-
-
 def _persist_b64_image(b64: str, output_dir: Path) -> str:
     output_dir.mkdir(parents=True, exist_ok=True)
     name = f"gen_{uuid.uuid4().hex[:12]}.png"
     (output_dir / name).write_bytes(base64.b64decode(b64))
     return str(output_dir / name)
+
+
+def image_to_data_url(value: str) -> str:
+    """把本地图片路径转成 data URL；http(s)/data 地址原样返回。"""
+    if value.startswith(("http://", "https://", "data:")):
+        return value
+    path = Path(value)
+    if not path.is_file():
+        raise AdapterError(422, "image_file_not_found", f"输入图片不存在: {value}")
+    mime = mimetypes.guess_type(path.name)[0] or "image/png"
+    data = base64.b64encode(path.read_bytes()).decode("ascii")
+    return f"data:{mime};base64,{data}"
 
 
 class OpenAICompatAdapter(Adapter):
@@ -220,7 +227,7 @@ class OpenAICompatAdapter(Adapter):
     @staticmethod
     def _http_detail(status: int, base_url: str) -> str:
         if status in (401, 403):
-            return f"API Key 无效或没有权限（HTTP {status}）{_region_hint(base_url)}"
+            return f"API Key 无效或没有权限（HTTP {status}）"
         if status == 404:
             return "接口或模型不存在（HTTP 404）：请检查 Base URL / 模型 ID"
         if status == 429:

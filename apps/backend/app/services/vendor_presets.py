@@ -9,6 +9,7 @@ class VendorPreset:
     name: str
     base_url: str
     needs_key: bool
+    protocol: str = "openai_compat"
     # 是否支持自动拉取模型列表（OpenAI 兼容 /models）
     discoverable: bool = True
     # 内置模型目录复用另一个 preset 的目录（如 bailian-intl 复用 bailian）
@@ -37,6 +38,7 @@ PRESETS: dict[str, VendorPreset] = {
         name="OpenAI",
         base_url="https://api.openai.com/v1",
         needs_key=True,
+        protocol="sora",
         type_rules=(
             ("gpt-image", "image"),
             ("dall-e", "image"),
@@ -50,10 +52,12 @@ PRESETS: dict[str, VendorPreset] = {
         name="OpenRouter",
         base_url="https://openrouter.ai/api/v1",
         needs_key=True,
+        protocol="openrouter_video",
         type_rules=(
             ("kling", "video"),
             ("veo", "video"),
             ("pika", "video"),
+            ("seedance", "video"),
             ("flux", "image"),
             ("dall-e", "image"),
             ("gpt-image", "image"),
@@ -72,6 +76,7 @@ PRESETS: dict[str, VendorPreset] = {
         name="阿里云百炼（国内站）",
         base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
         needs_key=True,
+        protocol="dashscope",
         discoverable=True,
         type_rules=_BAILIAN_TYPE_RULES,
     ),
@@ -80,6 +85,7 @@ PRESETS: dict[str, VendorPreset] = {
         name="阿里云百炼（国际站）",
         base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
         needs_key=True,
+        protocol="dashscope",
         discoverable=True,
         catalog_key="bailian",
         type_rules=_BAILIAN_TYPE_RULES,
@@ -89,6 +95,7 @@ PRESETS: dict[str, VendorPreset] = {
         name="智谱",
         base_url="https://open.bigmodel.cn/api/paas/v4",
         needs_key=True,
+        protocol="zhipu_video",
         type_rules=(
             ("cogvideox", "video"),
             ("cogview", "image"),
@@ -101,8 +108,10 @@ PRESETS: dict[str, VendorPreset] = {
         name="硅基流动",
         base_url="https://api.siliconflow.cn/v1",
         needs_key=True,
+        protocol="siliconflow_video",
         type_rules=(
             ("wan2.2-t2v", "video"),
+            ("wan2.2-i2v", "video"),
             ("wan2.1-t2v", "video"),
             ("wan-video", "video"),
             ("flux", "image"),

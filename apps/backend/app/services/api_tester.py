@@ -30,7 +30,9 @@ def _network_detail(exc: Exception) -> str:
     return f"请求异常：{exc}"
 
 
-def _fetch_models(base_url: str, api_key: str | None) -> tuple[str, str, list[str]]:
+def _fetch_models(
+    base_url: str, api_key: str | None, protocol: str = "openai_compat"
+) -> tuple[str, str, list[str]]:
     """请求 /models。返回 (status, detail, ids)；status: ok|auth_fail|endpoint_missing|http_error|network_error。"""
     url = base_url.rstrip("/") + "/models"
     headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
@@ -42,14 +44,9 @@ def _fetch_models(base_url: str, api_key: str | None) -> tuple[str, str, list[st
 
     status = response.status_code
     if status in (401, 403):
-        region_hint = (
-            "；如为阿里云百炼，请确认 Key 所属站点与 Base URL 匹配（国内 dashscope.aliyuncs.com / 国际 dashscope-intl.aliyuncs.com）"
-            if "dashscope" in base_url
-            else ""
-        )
         return (
             "auth_fail",
-            f"鉴权失败（HTTP {status}）：API Key 无效或没有权限{region_hint}",
+            f"鉴权失败（HTTP {status}）：API Key 无效或没有权限",
             [],
         )
     if status == 404:
@@ -83,6 +80,7 @@ def run_provider_test(
     has_key: bool,
     discoverable: bool,
     models: list,
+    protocol: str = "openai_compat",
 ) -> ProviderTestOut:
     """执行 L1/L2 测试；models 为已启用模型列表（任意含 model_id 的对象）。"""
     checks: list[ProviderCheckOut] = []
@@ -114,7 +112,7 @@ def run_provider_test(
         )
 
     if discoverable:
-        status, detail, ids = _fetch_models(base_url, api_key)
+        status, detail, ids = _fetch_models(base_url, api_key, protocol)
         if status == "network_error":
             checks.append(
                 ProviderCheckOut(

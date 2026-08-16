@@ -1,0 +1,11 @@
+"""Phase 14 M1 - Video generation request schema."""
+
+from pydantic import BaseModel, Field
+
+
+class VideoGenerateRequest(BaseModel):
+    target_id: str = Field(min_length=1, max_length=100)
+    model_id: str = Field(min_length=1, max_length=100)
+    prompt: str = Field(min_length=1, max_length=2000)
+    duration: int = Field(default=5, ge=2, le=15)
+    aspect_ratio: str | None = Field(default=None, max_length=20)

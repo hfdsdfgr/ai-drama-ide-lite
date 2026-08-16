@@ -5,7 +5,9 @@ import httpx
 from app.core.errors import AppError
 
 
-def fetch_model_ids(base_url: str, api_key: str | None) -> list[str]:
+def fetch_model_ids(
+    base_url: str, api_key: str | None, protocol: str = "openai_compat"
+) -> list[str]:
     url = base_url.rstrip("/") + "/models"
     headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
     try:
@@ -18,12 +20,7 @@ def fetch_model_ids(base_url: str, api_key: str | None) -> list[str]:
     except httpx.HTTPStatusError as exc:
         status = exc.response.status_code
         if status in (401, 403):
-            region_hint = (
-                "；如为阿里云百炼，请确认 Key 所属站点与 Base URL 匹配（国内 dashscope.aliyuncs.com / 国际 dashscope-intl.aliyuncs.com）"
-                if "dashscope" in base_url
-                else ""
-            )
-            detail = f"API Key 无效或没有权限{region_hint}"
+            detail = "API Key 无效或没有权限"
         else:
             detail = f"提供商返回 HTTP {status}"
         raise AppError(502, "discovery_failed", f"获取模型列表失败：{detail}") from exc

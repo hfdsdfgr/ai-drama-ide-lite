@@ -26,6 +26,9 @@ def _extension_from_content_type(content_type: str | None) -> str:
         "image/webp": "webp",
         "image/bmp": "bmp",
         "image/gif": "gif",
+        "video/mp4": "mp4",
+        "video/webm": "webm",
+        "video/quicktime": "mov",
     }.get(normalized, "png")
 
 
@@ -37,16 +40,20 @@ class ImageResultService:
 
     def persist(self, job, result: GenerationResult) -> list:
         """把一次图片 GenerationResult 落为本地版本并写生产边。"""
+        capability = getattr(job, "capability", "")
         extra = (job.input_payload or {}).get("extra") or {}
         target_type = extra.get("target_type")
         target_id = extra.get("target_id")
         if not target_type or not target_id:
             return []
 
-        entity_type = self._entity_type_for_target(job.project_id, target_type, target_id)
+        entity_type = self._entity_type_for_target(
+            job.project_id, target_type, target_id, capability
+        )
         records = []
+        download_headers = getattr(result, "download_headers", None) or {}
         for url in result.urls:
-            file_bytes, source_path, file_ext = self._materialize(url)
+            file_bytes, source_path, file_ext = self._materialize(url, download_headers)
             record = self.versions.add_version(
                 job.project_id,
                 entity_type,
@@ -58,6 +65,7 @@ class ImageResultService:
                 provider_id=job.provider_id,
                 job_id=job.id,
                 payload={
+                    "capability": capability,
                     "prompt": (job.input_payload or {}).get("prompt", ""),
                     "negative_prompt": (job.input_payload or {}).get("negative_prompt", ""),
                     "aspect_ratio": (job.input_payload or {}).get("aspect_ratio", ""),
@@ -68,22 +76,40 @@ class ImageResultService:
                 },
             )
             records.append(record)
-            self._write_edges(job.project_id, target_type, target_id, record, extra)
+            self._write_edges(
+                job.project_id,
+                target_type,
+                target_id,
+                record,
+                extra,
+                capability,
+            )
         return records
 
     def _entity_type_for_target(
-        self, project_id: str, target_type: str, target_id: str
+        self,
+        project_id: str,
+        target_type: str,
+        target_id: str,
+        capability: str = "",
     ) -> str:
         if target_type == "shot":
-            return "shot"
+            return "shot_video" if capability in {"text_to_video", "image_to_video", "video_to_video"} else "shot"
         if target_type == "asset":
             for asset in StoryRepository(self.db_path).list_assets(project_id):
                 if asset.get("asset_id") == target_id:
-                    return asset["asset_type"]
+                    base = asset["asset_type"]
+                    return (
+                        f"{base}_video"
+                        if capability in {"text_to_video", "image_to_video", "video_to_video"}
+                        else base
+                    )
             raise AppError(404, "asset_not_found", f"资产不存在: {target_id}")
         raise AppError(422, "invalid_image_target", f"未知图片目标类型: {target_type}")
 
-    def _materialize(self, url: str) -> tuple[bytes | None, Path | None, str]:
+    def _materialize(
+        self, url: str, headers: dict | None = None
+    ) -> tuple[bytes | None, Path | None, str]:
         path = Path(url)
         if path.is_absolute() and path.is_file():
             ext = path.suffix.lstrip(".") or "png"
@@ -91,7 +117,7 @@ class ImageResultService:
         if url.startswith(("http://", "https://")):
             try:
                 with httpx.Client(timeout=60, follow_redirects=True) as client:
-                    response = client.get(url)
+                    response = client.get(url, headers=headers or None)
                     response.raise_for_status()
             except httpx.TimeoutException as exc:
                 raise AppError(
@@ -120,18 +146,20 @@ class ImageResultService:
         target_id: str,
         record,
         extra: dict,
+        capability: str,
     ) -> None:
         upstream_type = "asset" if target_type == "asset" else "shot"
-        relation = (
-            "image_generated_from_asset"
-            if target_type == "asset"
-            else "image_generated_from_shot"
-        )
+        is_video = capability in {"text_to_video", "image_to_video", "video_to_video"}
+        version_type = "video_version" if is_video else "image_version"
+        if target_type == "asset":
+            relation = "video_generated_from_asset" if is_video else "image_generated_from_asset"
+        else:
+            relation = "video_generated_from_shot" if is_video else "image_generated_from_shot"
         self.graph.add_edge(
             project_id,
             upstream_type,
             target_id,
-            "image_version",
+            version_type,
             record.id,
             relation=relation,
         )
@@ -146,7 +174,11 @@ class ImageResultService:
                 project_id,
                 "asset",
                 ref_id,
-                "image_version",
+                version_type,
                 record.id,
-                relation="image_generated_from_asset",
+                relation=(
+                    "video_generated_from_asset"
+                    if is_video
+                    else "image_generated_from_asset"
+                ),
             )

@@ -18,6 +18,7 @@ from app.api.routes import (
     providers,
     script,
     story,
+    videos,
 )
 from app.core.config import Settings, get_settings
 from app.core.errors import register_exception_handlers
@@ -38,6 +39,7 @@ from app.services.production_graph import ProductionGraphService
 from app.services.provider_repo import ProviderRepository
 from app.services.secret_store import KeyringSecretStore, SecretStore
 from app.services.story_analysis import StoryAnalysisService
+from app.services.video_generation_service import VideoGenerationService
 
 logger = get_logger("main")
 
@@ -90,6 +92,11 @@ def create_app(
         config.db_path,
         app.state.asset_version_service,
     )
+    app.state.video_generation_service = VideoGenerationService(
+        app.state.generation_service,
+        config.db_path,
+        app.state.asset_version_service,
+    )
     app.state.story_service = StoryAnalysisService(
         app.state.provider_manager, config.db_path
     )
@@ -124,6 +131,7 @@ def create_app(
     app.include_router(assets.router)
     app.include_router(asset_versions.router)
     app.include_router(production_graph.router)
+    app.include_router(videos.router)
     logger.info("Application started (env=%s)", config.env)
     return app
 

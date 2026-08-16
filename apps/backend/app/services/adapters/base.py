@@ -4,6 +4,18 @@ from dataclasses import dataclass, field
 
 from app.core.errors import AppError
 
+DEFAULT_PROTOCOL = "openai_compat"
+SUPPORTED_PROTOCOLS = frozenset(
+    {
+        "openai_compat",
+        "dashscope",
+        "sora",
+        "openrouter_video",
+        "zhipu_video",
+        "siliconflow_video",
+    }
+)
+
 
 class AdapterError(AppError):
     """适配层错误：message 已带厂商与模型上下文，可直接展示给用户。"""
@@ -19,6 +31,7 @@ class ProviderContext:
     base_url: str
     api_key: str | None
     model_id: str
+    protocol: str = DEFAULT_PROTOCOL
 
 
 @dataclass
@@ -37,6 +50,7 @@ class GenerationRequest:
 class GenerationResult:
     urls: list[str] = field(default_factory=list)
     meta: dict = field(default_factory=dict)
+    download_headers: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -56,6 +70,7 @@ class Adapter:
 
     name: str = "base"
     provider_label: str = "未知厂商"
+    protocol: str = DEFAULT_PROTOCOL
 
     def chat(
         self,
