@@ -35,6 +35,7 @@ import type {
 import { PROTOCOL_LABELS } from "../types/provider";
 import type { GenerationJob } from "../types/generation";
 import {
+  AUDIO_CAPABILITIES,
   CAPABILITY_LABELS,
   IMAGE_CAPABILITIES,
   VIDEO_CAPABILITIES,
@@ -46,6 +47,7 @@ const TYPE_LABEL: Record<ModelType, string> = {
   llm: "文本模型",
   image: "图片模型",
   video: "视频模型",
+  audio: "音频模型",
 };
 
 const GEN_STATUS_LABEL: Record<GenerationJob["status"], string> = {
@@ -204,7 +206,11 @@ export function SettingsPage() {
 
   function openGenPanel(model: Model) {
     const defaultCap =
-      model.model_type === "video" ? "text_to_video" : "text_to_image";
+      model.model_type === "video"
+        ? "text_to_video"
+        : model.model_type === "audio"
+          ? "text_to_speech"
+          : "text_to_image";
     setGenPanel({
       modelId: model.id,
       prompt: "一只小猫在月光下奔跑",
@@ -392,7 +398,7 @@ export function SettingsPage() {
   }
 
   async function handleDefault(model: Model) {
-    if (model.model_type === "llm") return;
+    if (model.model_type !== "image" && model.model_type !== "video") return;
     setError("");
     try {
       await setDefaultModel(model.id, model.model_type);
@@ -601,7 +607,7 @@ export function SettingsPage() {
       <div className="card">
         <h3>AI Provider</h3>
         <div className="tabs">
-          {(["all", "llm", "image", "video"] as const).map((filter) => (
+          {(["all", "llm", "image", "video", "audio"] as const).map((filter) => (
             <button
               key={filter}
               type="button"
@@ -614,7 +620,9 @@ export function SettingsPage() {
                   ? "文本模型"
                   : filter === "image"
                     ? "图片模型"
-                    : "视频模型"}
+                    : filter === "video"
+                      ? "视频模型"
+                      : "音频模型"}
             </button>
           ))}
         </div>
@@ -772,6 +780,8 @@ export function SettingsPage() {
                                 ? IMAGE_CAPABILITIES
                                 : model.model_type === "video"
                                   ? VIDEO_CAPABILITIES
+                                  : model.model_type === "audio"
+                                    ? AUDIO_CAPABILITIES
                                   : []
                               ).map((cap) => (
                                 <span
@@ -800,12 +810,14 @@ export function SettingsPage() {
                             >
                               {model.enabled ? "禁用" : "启用"}
                             </button>
-                            {model.model_type !== "llm" && (
+                            {(model.model_type === "image" ||
+                              model.model_type === "video") && (
                               <button type="button" onClick={() => handleDefault(model)}>
                                 设默认
                               </button>
                             )}
-                            {model.model_type !== "llm" && (
+                            {(model.model_type === "image" ||
+                              model.model_type === "video") && (
                               <button type="button" onClick={() => openGenPanel(model)}>
                                 生成测试
                               </button>
@@ -988,6 +1000,7 @@ export function SettingsPage() {
                       <option value="llm">文本模型（LLM）</option>
                       <option value="image">图片模型（Image）</option>
                       <option value="video">视频模型（Video）</option>
+                      <option value="audio">音频模型（Audio）</option>
                     </select>
                     <button type="submit">添加</button>
                     <button

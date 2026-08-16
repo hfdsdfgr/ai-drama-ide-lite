@@ -24,6 +24,7 @@ def test_generate_shot_video_route(client, monkeypatch):
         *,
         duration=5,
         aspect_ratio=None,
+        with_audio=False,
     ):
         calls.update(
             {
@@ -32,6 +33,7 @@ def test_generate_shot_video_route(client, monkeypatch):
                 "model_id": model_id,
                 "prompt": prompt,
                 "duration": duration,
+                "with_audio": with_audio,
             }
         )
         return _job_out(model_id)

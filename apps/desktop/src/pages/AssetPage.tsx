@@ -153,6 +153,8 @@ function buildDraft(asset: AssetCard): Record<string, string> {
     reference_prompt: asset.reference_prompt,
     aspect_ratio: String(fields["aspect_ratio"] ?? ""),
     art_style: String(fields["art_style"] ?? ""),
+    voice_id: String(fields["voice_id"] ?? ""),
+    voice_provider: String(fields["voice_provider"] ?? ""),
   };
   for (const field of FIELD_SETS[asset.asset_type]) {
     draft[field.key] = String(fields[field.key] ?? "");
@@ -721,6 +723,30 @@ export function AssetPage({ active }: { active: boolean }) {
                   </label>
                 ))}
               </div>
+
+              {selected.asset_type === "character" && (
+                <div className="card">
+                  <div className="sidebar-head">
+                    <h3>配音音色</h3>
+                    <span className="badge badge-audio">Voice</span>
+                  </div>
+                  <label>
+                    音色 ID
+                    <input
+                      value={draft?.voice_id ?? ""}
+                      onChange={(e) =>
+                        setDraft((prev) =>
+                          prev ? { ...prev, voice_id: e.target.value } : prev,
+                        )
+                      }
+                      placeholder="例如：tongtong、chuichui、alloy；留空使用默认音色"
+                    />
+                  </label>
+                  <p className="muted">
+                    分镜配音时会按角色自动匹配这里的音色。
+                  </p>
+                </div>
+              )}
 
               <div className="card">
                 <div className="sidebar-head">

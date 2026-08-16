@@ -13,6 +13,7 @@ from app.api.routes import (
     images,
     jobs,
     novels,
+    overview,
     production_graph,
     projects,
     providers,
@@ -28,6 +29,7 @@ from app.services.adapters.manager import ProviderManager
 from app.services.ai_novel import AiNovelService
 from app.services.ai_script import AiScriptService
 from app.services.asset_service import AssetGenerationService
+from app.services.audio_dubbing_service import AudioDubbingService
 from app.services.asset_version_service import AssetVersionService
 from app.services.generation_service import GenerationService
 from app.services.image_generation_service import ImageGenerationService
@@ -69,22 +71,29 @@ def create_app(
         ProviderRepository(config.db_path, app.state.secret_store)
     )
     app.state.job_store = JobStore(config.db_path)
+    app.state.asset_version_service = AssetVersionService(
+        config.db_path, config.projects_dir
+    )
     app.state.image_result_service = ImageResultService(
         config.db_path, config.projects_dir
+    )
+    app.state.audio_dubbing_service = AudioDubbingService(
+        config.db_path,
+        app.state.provider_manager,
+        app.state.asset_version_service,
+        config.projects_dir,
     )
     app.state.job_worker = JobWorker(
         app.state.job_store,
         app.state.provider_manager,
         config.data_dir / "generation_tests",
         image_result_service=app.state.image_result_service,
+        audio_dubbing_service=app.state.audio_dubbing_service,
     )
     app.state.generation_service = GenerationService(
         app.state.job_store,
         app.state.provider_manager,
         config.data_dir / "generation_tests",
-    )
-    app.state.asset_version_service = AssetVersionService(
-        config.db_path, config.projects_dir
     )
     app.state.image_generation_service = ImageGenerationService(
         app.state.generation_service,
@@ -130,6 +139,7 @@ def create_app(
     app.include_router(script.router)
     app.include_router(assets.router)
     app.include_router(asset_versions.router)
+    app.include_router(overview.router)
     app.include_router(production_graph.router)
     app.include_router(videos.router)
     logger.info("Application started (env=%s)", config.env)

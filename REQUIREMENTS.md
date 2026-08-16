@@ -53,6 +53,8 @@
 - python-docx `>=1.1`
 - httpx `>=0.27`
 - keyring `>=25.0`
+- imageio-ffmpeg `>=0.6`（提供静态 FFmpeg 二进制，用于配音音视频合成）
+- python-multipart `>=0.0.9`（音频文件上传）
 
 ### requirements-dev.txt（开发额外）
 

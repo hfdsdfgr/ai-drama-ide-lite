@@ -201,7 +201,7 @@ CREATE TABLE IF NOT EXISTS models (
     id               TEXT PRIMARY KEY,
     provider_id      TEXT NOT NULL REFERENCES providers(id) ON DELETE CASCADE,
     model_id         TEXT NOT NULL,
-    model_type       TEXT NOT NULL DEFAULT 'llm' CHECK (model_type IN ('llm', 'image', 'video')),
+    model_type       TEXT NOT NULL DEFAULT 'llm' CHECK (model_type IN ('llm', 'image', 'video', 'audio')),
     capabilities     TEXT NOT NULL DEFAULT '',
     capability_source TEXT NOT NULL DEFAULT 'auto',
     enabled          INTEGER NOT NULL DEFAULT 1,

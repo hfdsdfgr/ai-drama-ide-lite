@@ -58,6 +58,9 @@ class BibleCharacter(BaseModel):
     art_style: str = Field(default="", max_length=50)  # 生图画风，空 = 跟随资产卡
     reference_prompt: str = Field(default="", max_length=4000)
     asset_id: str = Field(default="", max_length=100)
+    # Phase 14 M2 配音：角色绑定的 TTS 音色（voice id + provider），空 = 未绑定
+    voice_id: str = Field(default="", max_length=200)
+    voice_provider: str = Field(default="", max_length=100)
 
 
 class BibleLocation(BaseModel):

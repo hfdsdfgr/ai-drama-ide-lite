@@ -627,6 +627,53 @@ Image → Video
 
 > 单模型生成：一次 Job 只用一个 Model / 一个 Provider；不做多模型并行。自动 Model Router 留到 Phase 17（P1）。
 
+M2 — Audio / BGM（角色自动配音与配乐）
+
+目标：
+
+把声音统一到一个合成环节：支持音效的视频模型自动生成音效（不含台词），台词统一由 TTS 模型配音，音效 / BGM 可导入本地文件，最后 FFmpeg 一次混音。
+
+Pipeline
+
+Shot Video（无声 / 可选模型自带 AI 音效）
+ ↓
+声音合成（统一入口）
+ ├─ 对白：有台词 → 台词归属 + 逐角色 TTS
+ ├─ 音效 / BGM：可选本地音频文件
+ └─ 视频原音轨（若模型已生成音效）
+ ↓
+FFmpeg 统一混音
+ ↓
+有声视频版本（shot_video_voiced）
+
+Tasks
+
+- [ ] model_type 增加 `audio`（SQLite CHECK 约束迁移）
+- [ ] capability 增加 `text_to_speech`（预留 `voice_clone` / `voice_design`，本期不实现）
+- [ ] TTS Adapter：智谱 `glm-tts` + OpenAI 兼容 `/audio/speech`
+- [ ] FFmpeg 引入与打包（Windows sidecar）
+- [ ] 角色音色：`characters` 增加 `voice_id` / `voice_provider`，Story Bible 角色卡支持选择音色
+- [ ] 台词归属：配音时将 `shot.dialogue + shot.characters` 解析为 `[{character, text}]`（结合 Story Bible 唯一名称）
+- [ ] 视频音效能力 `video_audio`：智谱 `with_audio` / OpenRouter `generate_audio` 自动开启
+- [ ] 音频文件上传（音效 / BGM），无台词分镜可仅混入音频文件
+- [ ] 配音 Job：输入 shot_id + 可选音效/BGM，自动匹配角色音色、生成多段对白并合成有声视频
+- [ ] 合成保留视频原音轨 + 对白 + 音效/BGM，避免音效与对白打架
+- [ ] 有声视频版本写 `versions`（entity_type `shot_video_voiced`）+ `production_graph` 依赖边
+- [ ] 分镜页声音入口（配音 / 导入音频）、生成进度、有声视频预览
+- [ ] 分镜卡片优先播放有声版本（有则播有声，否则播无声）
+
+完成标准
+
+- 后端：TTS 封装为 Adapter；角色音色可配置并持久化；支持音效的视频模型自动开启音效；配音 Job 统一完成台词归属、逐角色 TTS、本地音效/BGM、视频原音轨的 FFmpeg 混音，结果写版本系统与生产依赖图。
+- 前端：分镜页声音入口自动识别当前视频模型是否支持音效并给出提示；完成后播放有声视频；分镜卡片自动优先展示有声版本。
+- 测试：台词归属解析、TTS Adapter（mock）、音效参数传递、FFmpeg 多路混音、配音 Job、版本写入；前端 lint / vitest / build。
+
+本轮边界
+
+- 视频音效来自模型自带能力（智谱 / OpenRouter 支持时自动开启）；台词始终由 TTS 统一处理，不把台词交给视频模型。
+- 音效 / BGM 先按本地文件导入；AI 音乐生成、独立音效生成、语音克隆/声音设计仍 P2。
+- 不做逐句精确时间轴；整集时间轴与自动剪辑（Timeline / Auto Editing）仍 P2。
+
 Phase 15 — Generation Center
 
 目标：
@@ -813,6 +860,8 @@ Storyboard
 Images
  ↓
 Videos
+ ↓
+Audio / Mix
 
 用户可以随时：
 
@@ -927,8 +976,8 @@ Quality Agent
 Advanced Asset Control
 P2 — 后续
 
-Voice
-Music
+Voice（角色自动配音已提前到 Phase 14 M2；此处指语音克隆/声音设计等更完整语音系统）
+Music（BGM 本地文件混入已在 Phase 14 M2；AI 音乐生成仍留此处）
 Sound Effects
 Timeline
 Auto Editing

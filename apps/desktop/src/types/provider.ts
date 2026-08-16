@@ -1,4 +1,4 @@
-export type ModelType = "llm" | "image" | "video";
+export type ModelType = "llm" | "image" | "video" | "audio";
 export type ProviderProtocol =
   | "openai_compat"
   | "dashscope"
@@ -26,7 +26,11 @@ export type CapabilityKey =
   | "video_to_video"
   | "first_frame"
   | "last_frame"
-  | "first_last_frame";
+  | "first_last_frame"
+  | "video_audio"
+  | "text_to_speech"
+  | "voice_clone"
+  | "voice_design";
 
 export const CAPABILITY_LABELS: Record<CapabilityKey, string> = {
   text_to_image: "文生图",
@@ -39,6 +43,10 @@ export const CAPABILITY_LABELS: Record<CapabilityKey, string> = {
   first_frame: "首帧控制",
   last_frame: "尾帧控制",
   first_last_frame: "首尾帧控制",
+  video_audio: "视频自带音效",
+  text_to_speech: "文本转语音",
+  voice_clone: "声音复刻",
+  voice_design: "声音设计",
 };
 
 export const IMAGE_CAPABILITIES: CapabilityKey[] = [
@@ -55,6 +63,13 @@ export const VIDEO_CAPABILITIES: CapabilityKey[] = [
   "first_frame",
   "last_frame",
   "first_last_frame",
+  "video_audio",
+];
+
+export const AUDIO_CAPABILITIES: CapabilityKey[] = [
+  "text_to_speech",
+  "voice_clone",
+  "voice_design",
 ];
 
 export interface Preset {

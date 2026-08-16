@@ -51,7 +51,7 @@ class OpenRouterVideoAdapter(OpenAICompatAdapter):
             "model": ctx.model_id,
             "prompt": request.prompt,
             "duration": request.duration or 5,
-            "generate_audio": False,
+            "generate_audio": bool(request.extra.get("with_audio", False)),
         }
         if request.aspect_ratio and ":" in request.aspect_ratio:
             body["aspect_ratio"] = request.aspect_ratio

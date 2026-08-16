@@ -46,7 +46,7 @@ class ZhipuVideoAdapter(OpenAICompatAdapter):
             "model": ctx.model_id,
             "prompt": request.prompt,
             "quality": "speed",
-            "with_audio": False,
+            "with_audio": bool(request.extra.get("with_audio", False)),
             "watermark": False,
         }
         if request.duration:

@@ -414,11 +414,17 @@ class ProviderRepository:
                 model_type = classify_model(preset_key, mid)
                 capabilities = resolve_default_capabilities(preset_key, mid, model_type)
             with get_connection(self.db_path) as conn:
-                exists = conn.execute(
-                    "SELECT 1 FROM models WHERE provider_id = ? AND model_id = ? AND deleted_at IS NULL",
+                existing = conn.execute(
+                    "SELECT id, capability_source FROM models WHERE provider_id = ? AND model_id = ? AND deleted_at IS NULL",
                     (provider_id, mid),
                 ).fetchone()
-                if not exists:
+                if existing:
+                    if existing["capability_source"] == "auto":
+                        conn.execute(
+                            "UPDATE models SET model_type = ?, capabilities = ?, updated_at = ? WHERE id = ?",
+                            (model_type, serialize(capabilities), now, existing["id"]),
+                        )
+                else:
                     conn.execute(
                         "INSERT INTO models (id, provider_id, model_id, model_type, capabilities, capability_source, enabled, is_default_image, is_default_video, created_at, updated_at, deleted_at)"
                         " VALUES (?, ?, ?, ?, ?, 'auto', 1, 0, 0, ?, ?, NULL)",

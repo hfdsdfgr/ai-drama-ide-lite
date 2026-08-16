@@ -131,6 +131,8 @@ class OpenAICompatAdapter(Adapter):
             return self._text_to_image(ctx, request)
         if capability in ("image_to_image", "reference_image"):
             return self._edit_image(ctx, request)
+        if capability == "text_to_speech":
+            return self._text_to_speech(ctx, request)
         raise AdapterError(
             422,
             "generation_not_supported",
@@ -204,6 +206,57 @@ class OpenAICompatAdapter(Adapter):
             for _, handle, _ in files:
                 handle.close()
         return self._normalize_image_response(payload, request.extra.get("output_dir"))
+
+    def _text_to_speech(
+        self, ctx: ProviderContext, request: GenerationRequest
+    ) -> GenerationResult:
+        """OpenAI 兼容 TTS：POST /audio/speech，返回二进制音频并落盘为本地文件。"""
+        url = ctx.base_url.rstrip("/") + "/audio/speech"
+        headers = {"Authorization": f"Bearer {ctx.api_key}"} if ctx.api_key else {}
+        response_format = request.extra.get("response_format") or "wav"
+        payload: dict = {
+            "model": ctx.model_id,
+            "input": request.prompt,
+            "response_format": response_format,
+        }
+        voice = request.extra.get("voice")
+        if voice:
+            payload["voice"] = voice
+
+        try:
+            with httpx.Client(timeout=90) as client:
+                response = client.post(url, headers=headers, json=payload)
+                response.raise_for_status()
+                content = response.content
+        except httpx.TimeoutException as exc:
+            raise AdapterError(504, "tts_timeout", f"{ctx.provider_name} 语音合成超时") from exc
+        except httpx.HTTPStatusError as exc:
+            detail = self._http_detail(exc.response.status_code, ctx.base_url)
+            raise AdapterError(
+                exc.response.status_code,
+                "tts_failed",
+                f"{ctx.provider_name} 语音合成失败：{detail}",
+            ) from exc
+        except Exception as exc:
+            raise AdapterError(502, "tts_failed", f"无法连接 {ctx.provider_name}，请检查网络与配置") from exc
+
+        if not content:
+            raise AdapterError(502, "tts_empty", f"{ctx.provider_name} 未返回音频内容")
+
+        output_dir = Path(request.extra.get("output_dir") or ".")
+        output_dir.mkdir(parents=True, exist_ok=True)
+        ext = response_format if response_format in ("wav", "mp3", "flac", "aac", "opus", "pcm") else "wav"
+        name = f"tts_{uuid.uuid4().hex[:12]}.{ext}"
+        target = output_dir / name
+        target.write_bytes(content)
+        return GenerationResult(
+            urls=[str(target)],
+            meta={
+                "format": response_format,
+                "voice": voice or "",
+                "bytes": len(content),
+            },
+        )
 
     @staticmethod
     def _normalize_image_response(data: dict, output_dir: str | None) -> GenerationResult:

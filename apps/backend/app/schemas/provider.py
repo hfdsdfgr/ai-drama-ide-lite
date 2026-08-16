@@ -9,7 +9,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-ModelType = Literal["llm", "image", "video"]
+ModelType = Literal["llm", "image", "video", "audio"]
 
 
 class ProviderCreate(BaseModel):

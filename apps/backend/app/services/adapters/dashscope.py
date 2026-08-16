@@ -9,6 +9,7 @@
 
 import base64
 import mimetypes
+import uuid
 from pathlib import Path
 
 import httpx
@@ -52,6 +53,8 @@ class DashScopeAdapter(OpenAICompatAdapter):
         capability: str,
         request: GenerationRequest,
     ) -> GenerationResult:
+        if capability == "text_to_speech":
+            return self._text_to_speech(ctx, request)
         if capability not in {
             "text_to_image",
             "image_to_image",
@@ -138,6 +141,64 @@ class DashScopeAdapter(OpenAICompatAdapter):
             urls=urls,
             meta={"provider": ctx.provider_name, "model": ctx.model_id},
         )
+
+    def _text_to_speech(
+        self, ctx: ProviderContext, request: GenerationRequest
+    ) -> GenerationResult:
+        base = _native_base(ctx.base_url)
+        path = "/api/v1/services/aigc/multimodal-generation/generation"
+        voice = request.extra.get("voice") or "Cherry"
+        body = {
+            "model": ctx.model_id,
+            "input": {
+                "text": request.prompt,
+                "voice": voice,
+                "language_type": request.extra.get("language_type") or "Chinese",
+            },
+        }
+        headers = {
+            "Authorization": f"Bearer {ctx.api_key}",
+            "Content-Type": "application/json",
+        }
+        try:
+            with httpx.Client(timeout=90) as client:
+                response = client.post(base + path, headers=headers, json=body)
+                response.raise_for_status()
+                payload = response.json()
+        except httpx.TimeoutException as exc:
+            raise AdapterError(504, "tts_timeout", f"{ctx.provider_name} 语音合成超时") from exc
+        except httpx.HTTPStatusError as exc:
+            raise AdapterError(
+                exc.response.status_code,
+                "tts_failed",
+                f"{ctx.provider_name} 语音合成失败：{self._http_detail(exc.response.status_code, ctx.provider_name)}",
+            ) from exc
+        except Exception as exc:
+            raise AdapterError(502, "tts_failed", f"无法连接 {ctx.provider_name}，请检查网络与配置") from exc
+
+        output = payload.get("output") if isinstance(payload, dict) else None
+        audio = output.get("audio") if isinstance(output, dict) else None
+        url = audio.get("url") if isinstance(audio, dict) else None
+        data_b64 = audio.get("data") if isinstance(audio, dict) else None
+        if not url and not data_b64:
+            raise AdapterError(502, "tts_no_output", f"{ctx.provider_name} 未返回音频结果")
+
+        output_dir = Path(request.extra.get("output_dir") or ".")
+        output_dir.mkdir(parents=True, exist_ok=True)
+        target = output_dir / f"tts_{uuid.uuid4().hex[:12]}.wav"
+        if data_b64:
+            target.write_bytes(base64.b64decode(data_b64))
+        else:
+            try:
+                with httpx.Client(timeout=60, follow_redirects=True) as client:
+                    download = client.get(url)
+                    download.raise_for_status()
+                    target.write_bytes(download.content)
+            except Exception as exc:
+                raise AdapterError(
+                    502, "tts_download_failed", f"{ctx.provider_name} 音频下载失败"
+                ) from exc
+        return GenerationResult(urls=[str(target)], meta={"voice": voice})
 
     def submit(
         self,

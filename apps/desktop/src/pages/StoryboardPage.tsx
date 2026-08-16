@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+} from "react";
 
 import {
   DndContext,
@@ -25,10 +31,14 @@ import {
   getImageJob,
 } from "../api/images";
 import {
+  dubShot,
   generateVideo,
+  getCurrentVoicedVersion,
   getCurrentVideoVersion,
   getVideoJob,
+  uploadAudioFile,
 } from "../api/videos";
+import { getJob } from "../api/jobs";
 import { listNovels } from "../api/novels";
 import { listProjects } from "../api/projects";
 import { listModels } from "../api/providers";
@@ -42,6 +52,7 @@ import {
 } from "../api/script";
 import type { AssetVersion } from "../types/asset_version";
 import type { GenerationJob } from "../types/generation";
+import type { JobOut } from "../types/job";
 import type { Novel } from "../types/novel";
 import type { Project } from "../types/project";
 import type { Model } from "../types/provider";
@@ -70,14 +81,18 @@ function SortableShotCard({
   isSelected,
   imageUrl,
   generating,
+  videoUrl,
   onOpen,
+  onPlayVideo,
 }: {
   shot: Shot;
   sceneId: string;
   isSelected: boolean;
   imageUrl: string | null;
   generating: boolean;
+  videoUrl: string | null;
   onOpen: (sceneId: string, shot: Shot) => void;
+  onPlayVideo: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: shot.id });
@@ -105,6 +120,20 @@ function SortableShotCard({
           <img src={imageUrl} alt={`Shot ${shot.shot_number ?? "-"}`} />
         ) : (
           <span>{generating ? "生成中…" : "待生成"}</span>
+        )}
+        {videoUrl && (
+          <button
+            type="button"
+            className="shot-video-badge"
+            title="播放视频"
+            onClick={(e) => {
+              e.stopPropagation();
+              onPlayVideo();
+            }}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            ▶
+          </button>
         )}
       </div>
       <div className="shot-meta">
@@ -154,23 +183,40 @@ export function StoryboardPage({ active }: { active: boolean }) {
   const [videoModelId, setVideoModelId] = useState("");
   const [videoPrompt, setVideoPrompt] = useState("");
   const [videoDuration, setVideoDuration] = useState(5);
+  const [audioModels, setAudioModels] = useState<Model[]>([]);
+  const [voiceModelId, setVoiceModelId] = useState("");
   const [shotVersions, setShotVersions] = useState<Record<string, AssetVersion>>(
     {},
   );
+  const [shotVideoVersions, setShotVideoVersions] = useState<
+    Record<string, AssetVersion>
+  >({});
+  const [shotVoicedVersions, setShotVoicedVersions] = useState<
+    Record<string, AssetVersion>
+  >({});
   const [shotVideoVersion, setShotVideoVersion] =
+    useState<AssetVersion | null>(null);
+  const [shotVoicedVersion, setShotVoicedVersion] =
     useState<AssetVersion | null>(null);
   const [imageJob, setImageJob] = useState<GenerationJob | null>(null);
   const [videoJob, setVideoJob] = useState<GenerationJob | null>(null);
+  const [dubJob, setDubJob] = useState<JobOut | null>(null);
+  const [audioFilePath, setAudioFilePath] = useState("");
+  const [audioFileName, setAudioFileName] = useState("");
   const [generatingShotId, setGeneratingShotId] = useState<string | null>(null);
   const [generatingVideoShotId, setGeneratingVideoShotId] = useState<
     string | null
   >(null);
+  const [generatingDubShotId, setGeneratingDubShotId] = useState<string | null>(
+    null,
+  );
   const [apiBase, setApiBase] = useState("");
   const [referenceAssets, setReferenceAssets] = useState<ReferenceAsset[]>([]);
   const [selectedReferenceAssetIds, setSelectedReferenceAssetIds] = useState<
     string[]
   >([]);
   const [zoomImageUrl, setZoomImageUrl] = useState<string | null>(null);
+  const [zoomVideoUrl, setZoomVideoUrl] = useState<string | null>(null);
   const autoMatchedShotIdRef = useRef<string | null>(null);
 
   const sensors = useSensors(
@@ -210,6 +256,17 @@ export function StoryboardPage({ active }: { active: boolean }) {
         );
       })
       .catch((e) => setError((e as Error).message));
+    listModels({ model_type: "audio", enabled_only: true })
+      .then((models) => {
+        const usable = models.filter((m) =>
+          m.capabilities.includes("text_to_speech"),
+        );
+        setAudioModels(usable);
+        setVoiceModelId((prev) =>
+          usable.some((m) => m.id === prev) ? prev : (usable[0]?.id ?? ""),
+        );
+      })
+      .catch((e) => setError((e as Error).message));
   }, [active]);
 
   const refreshNovels = useCallback(async (pid: string) => {
@@ -224,11 +281,18 @@ export function StoryboardPage({ active }: { active: boolean }) {
   useEffect(() => {
     if (!projectId) return;
     setShotVersions({});
+    setShotVideoVersions({});
+    setShotVoicedVersions({});
     setShotVideoVersion(null);
+    setShotVoicedVersion(null);
     setGeneratingShotId(null);
     setGeneratingVideoShotId(null);
+    setGeneratingDubShotId(null);
     setImageJob(null);
     setVideoJob(null);
+    setDubJob(null);
+    setAudioFilePath("");
+    setAudioFileName("");
     setVideoPrompt("");
     setVideoDuration(5);
     setReferenceAssets([]);
@@ -301,6 +365,26 @@ export function StoryboardPage({ active }: { active: boolean }) {
           }
         });
         setShotVersions(versionMap);
+        const videoMap: Record<string, AssetVersion> = {};
+        const videoResults = await Promise.allSettled(
+          shots.map((shot) => getCurrentVideoVersion(projectId, shot.id)),
+        );
+        videoResults.forEach((result, index) => {
+          if (result.status === "fulfilled" && result.value) {
+            videoMap[shots[index].id] = result.value;
+          }
+        });
+        setShotVideoVersions(videoMap);
+        const voicedMap: Record<string, AssetVersion> = {};
+        const voicedResults = await Promise.allSettled(
+          shots.map((shot) => getCurrentVoicedVersion(projectId, shot.id)),
+        );
+        voicedResults.forEach((result, index) => {
+          if (result.status === "fulfilled" && result.value) {
+            voicedMap[shots[index].id] = result.value;
+          }
+        });
+        setShotVoicedVersions(voicedMap);
       } catch (e) {
         setError((e as Error).message);
       }
@@ -347,9 +431,16 @@ export function StoryboardPage({ active }: { active: boolean }) {
     setSelectedReferenceAssetIds(autoMatchReferenceAssets(sceneId, shot));
     autoMatchedShotIdRef.current = null;
     setShotVideoVersion(null);
+    setShotVoicedVersion(null);
+    setDubJob(null);
+    setAudioFilePath("");
+    setAudioFileName("");
     void getCurrentVideoVersion(projectId, shot.id)
       .then(setShotVideoVersion)
       .catch(() => setShotVideoVersion(null));
+    void getCurrentVoicedVersion(projectId, shot.id)
+      .then(setShotVoicedVersion)
+      .catch(() => setShotVoicedVersion(null));
   }
 
   function closeShotDetail() {
@@ -359,6 +450,8 @@ export function StoryboardPage({ active }: { active: boolean }) {
     setConfirmShotDeleteId(null);
     setVideoJob(null);
     setShotVideoVersion(null);
+    setShotVoicedVersion(null);
+    setDubJob(null);
   }
 
   useEffect(() => {
@@ -461,11 +554,14 @@ export function StoryboardPage({ active }: { active: boolean }) {
     setVideoJob(null);
     setError("");
     try {
+      const videoModel = videoModels.find((m) => m.id === videoModelId);
+      const withAudio = videoModel?.capabilities.includes("video_audio") ?? false;
       const job = await generateVideo(projectId, {
         target_id: selectedShotId,
         model_id: videoModelId,
         prompt,
         duration: videoDuration,
+        with_audio: withAudio,
       });
       setVideoJob(job);
       while (true) {
@@ -489,6 +585,65 @@ export function StoryboardPage({ active }: { active: boolean }) {
       setGeneratingVideoShotId((prev) =>
         prev === selectedShotId ? null : prev,
       );
+    }
+  }
+
+  async function runDub() {
+    if (!projectId || !selectedShotId) return;
+    const hasDialogue = Boolean(shotDetailDraft?.dialogue?.trim());
+    if (hasDialogue && !voiceModelId) {
+      setError("请先选择语音模型");
+      return;
+    }
+    setGeneratingDubShotId(selectedShotId);
+    setDubJob(null);
+    setError("");
+    try {
+      const job = await dubShot(projectId, selectedShotId, {
+        voice_model_id: hasDialogue ? voiceModelId : "",
+        bgm_path: audioFilePath || undefined,
+      });
+      setDubJob(job);
+      while (true) {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        const updated = await getJob(job.job_id);
+        setDubJob(updated);
+        if (["completed", "failed", "cancelled"].includes(updated.status)) {
+          if (updated.status === "completed") {
+            const version = await getCurrentVoicedVersion(
+              projectId,
+              selectedShotId,
+            );
+            setShotVoicedVersion(version);
+            setShotVoicedVersions((prev) => {
+              const next = { ...prev };
+              if (version) next[selectedShotId] = version;
+              else delete next[selectedShotId];
+              return next;
+            });
+          }
+          break;
+        }
+      }
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setGeneratingDubShotId((prev) =>
+        prev === selectedShotId ? null : prev,
+      );
+    }
+  }
+
+  async function handleAudioFileChange(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !projectId) return;
+    setError("");
+    try {
+      const uploaded = await uploadAudioFile(projectId, file);
+      setAudioFilePath(uploaded.file_path);
+      setAudioFileName(uploaded.file_name);
+    } catch (err) {
+      setError((err as Error).message);
     }
   }
 
@@ -540,6 +695,8 @@ export function StoryboardPage({ active }: { active: boolean }) {
     }));
     void persistReorder(sceneId, reordered.map((s) => s.id));
   }
+
+  const hasDialogue = Boolean(shotDetailDraft?.dialogue?.trim());
 
   return (
     <div className="page storyboard-page">
@@ -652,6 +809,12 @@ export function StoryboardPage({ active }: { active: boolean }) {
                                 const imageUrl = version
                                   ? `${apiBase}${version.file_url}`
                                   : null;
+                                const voiced = shotVoicedVersions[shot.id];
+                                const silent = shotVideoVersions[shot.id];
+                                const playVersion = voiced ?? silent;
+                                const videoUrl = playVersion
+                                  ? `${apiBase}${playVersion.file_url}`
+                                  : null;
                                 return (
                                   <SortableShotCard
                                     key={shot.id}
@@ -660,7 +823,11 @@ export function StoryboardPage({ active }: { active: boolean }) {
                                     isSelected={selectedShotId === shot.id}
                                     imageUrl={imageUrl}
                                     generating={generatingShotId === shot.id}
+                                    videoUrl={videoUrl}
                                     onOpen={openShotDetail}
+                                    onPlayVideo={() =>
+                                      setZoomVideoUrl(videoUrl)
+                                    }
                                   />
                                 );
                               })}
@@ -908,6 +1075,15 @@ export function StoryboardPage({ active }: { active: boolean }) {
                         ))}
                       </select>
                     </label>
+                    {videoModelId && (
+                      <p className="muted">
+                        {videoModels
+                          .find((m) => m.id === videoModelId)
+                          ?.capabilities.includes("video_audio")
+                          ? "该模型将自动生成 AI 音效（不含台词），台词由下方配音统一合成。"
+                          : "该模型仅生成无声视频；台词请用下方语音模型配音。"}
+                      </p>
+                    )}
                     <label>
                       视频提示词
                       <textarea
@@ -979,6 +1155,91 @@ export function StoryboardPage({ active }: { active: boolean }) {
                   </p>
                 )}
               </div>
+              <div className="card image-generate-card">
+                <div className="sidebar-head">
+                  <h3>声音</h3>
+                  <p className="muted">对白自动配音；音效 / BGM 可导入本地音频统一混音。</p>
+                </div>
+                {shotVideoVersion ? (
+                  <>
+                    {hasDialogue ? (
+                      audioModels.length > 0 ? (
+                        <label>
+                          语音模型
+                          <select
+                            value={voiceModelId}
+                            onChange={(e) => setVoiceModelId(e.target.value)}
+                            disabled={generatingDubShotId === selectedShotId}
+                          >
+                            {audioModels.map((m) => (
+                              <option key={m.id} value={m.id}>
+                                {m.model_id}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      ) : (
+                        <p className="muted">
+                          该镜头有台词，但还没有可用语音模型，请先在「设置」启用。
+                        </p>
+                      )
+                    ) : (
+                      <p className="muted">该镜头没有台词，可只导入音效或背景音乐。</p>
+                    )}
+                    <label>
+                      音效 / BGM（可选）
+                      <input
+                        type="file"
+                        accept="audio/*"
+                        onChange={handleAudioFileChange}
+                        disabled={generatingDubShotId === selectedShotId}
+                      />
+                      {audioFileName && (
+                        <span className="muted">已选：{audioFileName}</span>
+                      )}
+                    </label>
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      disabled={
+                        (hasDialogue && !voiceModelId) ||
+                        generatingDubShotId === selectedShotId
+                      }
+                      onClick={runDub}
+                    >
+                      {generatingDubShotId === selectedShotId
+                        ? "合成中…"
+                        : "生成声音"}
+                    </button>
+                    {dubJob && dubJob.status !== "completed" && (
+                      <p className="muted">
+                        {dubJob.status === "running"
+                          ? "配音中……"
+                          : dubJob.status === "failed"
+                            ? "配音失败"
+                            : dubJob.status === "cancelled"
+                              ? "已取消"
+                              : "排队中"}
+                        {dubJob.error ? ` · ${dubJob.error}` : ""}
+                      </p>
+                    )}
+                    {shotVoicedVersion && (
+                      <video
+                        className="video-preview"
+                        controls
+                        src={`${apiBase}${shotVoicedVersion.file_url}`}
+                      />
+                    )}
+                    <p className="muted">
+                      有台词时合成会调用语音合成 API，可能产生费用。
+                    </p>
+                  </>
+                ) : (
+                  <p className="muted">
+                    请先生成该镜头的分镜视频，再进行声音合成。
+                  </p>
+                )}
+              </div>
               <div className="toolbar">
                 <button
                   type="button"
@@ -1039,6 +1300,31 @@ export function StoryboardPage({ active }: { active: boolean }) {
               type="button"
               className="button-ghost"
               onClick={() => setZoomImageUrl(null)}
+            >
+              关闭
+            </button>
+          </div>
+        </div>
+      )}
+      {zoomVideoUrl && (
+        <div
+          className="image-lightbox"
+          onClick={() => setZoomVideoUrl(null)}
+        >
+          <div
+            className="image-lightbox-inner"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <video
+              className="video-lightbox-player"
+              controls
+              autoPlay
+              src={zoomVideoUrl}
+            />
+            <button
+              type="button"
+              className="button-ghost"
+              onClick={() => setZoomVideoUrl(null)}
             >
               关闭
             </button>

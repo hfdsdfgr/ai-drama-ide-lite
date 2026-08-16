@@ -62,6 +62,7 @@ class JobWorker:
         scan_interval: float = 2.0,
         poll_interval: float = 3.0,
         image_result_service=None,
+        audio_dubbing_service=None,
     ) -> None:
         self.store = store
         self.manager = manager
@@ -69,6 +70,7 @@ class JobWorker:
         self.scan_interval = scan_interval
         self.poll_interval = poll_interval
         self.image_result_service = image_result_service
+        self.audio_dubbing_service = audio_dubbing_service
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
 
@@ -118,6 +120,8 @@ class JobWorker:
                 self._run_generation(job)
             elif job.type == JOB_TYPE_ASSET_COMPLETION:
                 self._run_asset_completion(job)
+            elif job.type == "dubbing":
+                self._run_dubbing(job)
             else:
                 self.store.mark_failed(
                     job.id, f"未知任务类型: {job.type}", CATEGORY_PERMANENT
@@ -133,6 +137,8 @@ class JobWorker:
 
     def _run_generation(self, job) -> None:
         payload = job.input_payload or {}
+        request_extra = dict(payload.get("extra") or {})
+        request_extra["output_dir"] = str(self.output_dir)
         request = GenerationRequest(
             capability=job.capability,
             prompt=payload.get("prompt", ""),
@@ -141,7 +147,7 @@ class JobWorker:
             aspect_ratio=payload.get("aspect_ratio"),
             duration=payload.get("duration"),
             negative_prompt=payload.get("negative_prompt", ""),
-            extra={"output_dir": str(self.output_dir)},
+            extra=request_extra,
         )
         started = self.manager.start_job(job.model_id, job.capability, request)
         if started["mode"] == "sync":
@@ -167,6 +173,16 @@ class JobWorker:
         self.store.mark_completed(
             job.id, result_payload={"detail": detail}
         )
+
+    def _run_dubbing(self, job) -> None:
+        """配音任务：台词归属 + 逐角色 TTS + FFmpeg 合成 + 写有声版本。"""
+        if self.audio_dubbing_service is None:
+            self.store.mark_failed(
+                job.id, "配音服务未初始化", CATEGORY_PERMANENT
+            )
+            return
+        result = self.audio_dubbing_service.run(job)
+        self.store.mark_completed(job.id, result_payload=result)
 
     def _finish_sync(self, job, result) -> None:
         self._persist_image_result(job, result)

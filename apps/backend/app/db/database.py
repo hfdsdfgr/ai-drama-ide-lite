@@ -50,6 +50,7 @@ def init_db(db_path: Path) -> None:
 def _apply_safe_migrations(conn: sqlite3.Connection) -> None:
     """幂等加列迁移：旧库补列，已存在则静默跳过（见 DEVELOPMENT_PITFALLS.md）。"""
     _migrate_jobs_table(conn)
+    _migrate_models_audio_type(conn)
     statements = [
         "ALTER TABLE novels ADD COLUMN deleted_at TEXT",
         "ALTER TABLE novels ADD COLUMN ai_brief TEXT NOT NULL DEFAULT ''",
@@ -179,6 +180,53 @@ def _migrate_jobs_table(conn: sqlite3.Connection) -> None:
         """
     )
     conn.execute("DROP TABLE jobs_old")
+
+
+def _migrate_models_audio_type(conn: sqlite3.Connection) -> None:
+    """把 models.model_type 的 CHECK 约束扩展为支持 audio（旧库需重建表）。"""
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'models'"
+    ).fetchone()
+    if row and "audio" in (row["sql"] or ""):
+        return
+    conn.execute("DROP INDEX IF EXISTS idx_models_provider")
+    conn.execute("DROP INDEX IF EXISTS idx_models_type")
+    conn.execute("ALTER TABLE models RENAME TO models_old")
+    conn.executescript(
+        """
+        CREATE TABLE models (
+            id               TEXT PRIMARY KEY,
+            provider_id      TEXT NOT NULL REFERENCES providers(id) ON DELETE CASCADE,
+            model_id         TEXT NOT NULL,
+            model_type       TEXT NOT NULL DEFAULT 'llm' CHECK (model_type IN ('llm', 'image', 'video', 'audio')),
+            capabilities     TEXT NOT NULL DEFAULT '',
+            capability_source TEXT NOT NULL DEFAULT 'auto',
+            enabled          INTEGER NOT NULL DEFAULT 1,
+            is_default_image INTEGER NOT NULL DEFAULT 0,
+            is_default_video INTEGER NOT NULL DEFAULT 0,
+            created_at       TEXT NOT NULL,
+            updated_at       TEXT NOT NULL,
+            deleted_at       TEXT,
+            UNIQUE (provider_id, model_id)
+        );
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO models (
+            id, provider_id, model_id, model_type, capabilities,
+            capability_source, enabled, is_default_image, is_default_video,
+            created_at, updated_at, deleted_at
+        )
+        SELECT id, provider_id, model_id, model_type, capabilities,
+               capability_source, enabled, is_default_image, is_default_video,
+               created_at, updated_at, deleted_at
+        FROM models_old
+        """
+    )
+    conn.execute("DROP TABLE models_old")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_models_provider ON models(provider_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_models_type ON models(model_type)")
 
 
 def _backfill_model_capabilities(conn: sqlite3.Connection) -> None:

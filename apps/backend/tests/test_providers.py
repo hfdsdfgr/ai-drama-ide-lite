@@ -163,9 +163,16 @@ def test_model_crud_and_duplicate(client):
 
     bad = client.post(
         "/api/models",
-        json={"provider_id": pid, "model_id": "x", "model_type": "audio"},
+        json={"provider_id": pid, "model_id": "x", "model_type": "embedding"},
     )
     assert bad.status_code == 422
+
+    audio = client.post(
+        "/api/models",
+        json={"provider_id": pid, "model_id": "glm-tts", "model_type": "audio"},
+    )
+    assert audio.status_code == 201
+    assert "text_to_speech" in audio.json()["capabilities"]
 
     mid = body["id"]
     assert client.delete(f"/api/models/{mid}").status_code == 204

@@ -569,6 +569,7 @@ button:disabled {
 }
 
 .shot-frame {
+  position: relative;
   aspect-ratio: 16 / 9;
   display: flex;
   align-items: center;
@@ -585,6 +586,30 @@ button:disabled {
   height: 100%;
   object-fit: cover;
   border-radius: var(--radius-sm);
+}
+
+.shot-video-badge {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  background: rgba(0, 0, 0, 0.58);
+  color: #fff;
+  font-size: 0.72rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.shot-video-badge:hover {
+  background: rgba(0, 0, 0, 0.78);
+  border-color: var(--accent);
 }
 
 .shot-meta {
@@ -947,6 +972,11 @@ button:disabled {
 .badge-video {
   border-color: #7a5bd6;
   color: #7a5bd6;
+}
+
+.badge-audio {
+  border-color: #d77a3b;
+  color: #d77a3b;
 }
 
 .badge-llm {
@@ -1488,6 +1518,90 @@ button:disabled {
   align-items: center;
 }
 
+.generation-layout {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.overview-panel {
+  position: sticky;
+  top: 0;
+}
+
+.overview-stepper {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.overview-step {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+}
+
+.overview-step-icon {
+  flex-shrink: 0;
+  width: 1.2em;
+  text-align: center;
+  font-weight: 700;
+}
+
+.overview-step-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.overview-step-label {
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.overview-step-detail {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+.overview-step-pending .overview-step-icon,
+.overview-step-pending .overview-step-label {
+  color: var(--text-faint);
+}
+
+.overview-step-active {
+  color: var(--accent);
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+}
+
+.overview-step-active .overview-step-icon {
+  color: var(--accent);
+}
+
+.overview-step-active .overview-step-label {
+  color: var(--text-h);
+}
+
+.overview-step-completed .overview-step-icon {
+  color: var(--success);
+}
+
+.generation-jobs {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
 /* ---- 资产图片版本 ---- */
 .version-list {
   list-style: none;
@@ -1584,6 +1698,14 @@ button:disabled {
   object-fit: contain;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-strong);
+}
+
+.video-lightbox-player {
+  max-width: min(90vw, 1100px);
+  max-height: calc(88vh - 48px);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-strong);
+  background: #000;
 }
 
 .image-lightbox-inner button {

@@ -22,6 +22,10 @@ CAPABILITY_LABELS: dict[str, str] = {
     "first_frame": "首帧控制",
     "last_frame": "尾帧控制",
     "first_last_frame": "首尾帧控制",
+    "video_audio": "视频自带音效",
+    "text_to_speech": "文本转语音",
+    "voice_clone": "声音复刻",
+    "voice_design": "声音设计",
 }
 
 IMAGE_CAPABILITIES = frozenset(
@@ -35,7 +39,12 @@ VIDEO_CAPABILITIES = frozenset(
         "first_frame",
         "last_frame",
         "first_last_frame",
+        "video_audio",
     }
+)
+
+AUDIO_CAPABILITIES = frozenset(
+    {"text_to_speech", "voice_clone", "voice_design"}
 )
 
 # (模型名片段, 能力集)：先匹配先得；model_type 已先过滤。
@@ -82,6 +91,8 @@ def infer_capabilities(preset_key: str | None, model_id: str, model_type: str) -
     """按规则推断能力；未命中时使用保守默认值。"""
     if model_type == "llm":
         return []
+    if model_type == "audio":
+        return ["text_to_speech"]
     mid = model_id.lower()
     rules = _VIDEO_RULES if model_type == "video" else _IMAGE_RULES
     for fragment, caps in rules:
@@ -99,6 +110,8 @@ def validate_capabilities(model_type: str, capabilities: list[str]) -> list[str]
         if model_type == "image"
         else VIDEO_CAPABILITIES
         if model_type == "video"
+        else AUDIO_CAPABILITIES
+        if model_type == "audio"
         else frozenset()
     )
     unknown = [c for c in capabilities if c not in CAPABILITY_LABELS]
