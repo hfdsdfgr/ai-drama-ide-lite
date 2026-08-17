@@ -1,6 +1,7 @@
 """Phase 14 M2 — 配音音视频合成（FFmpeg）。"""
 
 import subprocess
+import tempfile
 from pathlib import Path
 
 import imageio_ffmpeg
@@ -15,18 +16,18 @@ def ffmpeg_exe() -> str:
         raise AppError(500, "ffmpeg_unavailable", "FFmpeg 不可用，无法合成配音") from exc
 
 
-def mix_audio_video(
+def mix_audio_to_master(
     video_path: str,
     voice_paths: list[str],
-    output_path: str,
+    output_audio_path: str,
     bgm_path: str | None = None,
 ) -> str:
-    """把视频（可能自带音效）与对白、BGM 统一混音为一个有声视频文件。"""
+    """把视频原音轨、对白、BGM 混成一条独立音频母带。"""
     video = Path(video_path)
-    output = Path(output_path)
+    output = Path(output_audio_path)
     voices = [Path(p) for p in voice_paths if p]
     if not video.is_file():
-        raise AppError(422, "video_missing", "待配音的视频文件不存在")
+        raise AppError(422, "video_missing", "待混音的视频文件不存在")
     for voice in voices:
         if not voice.is_file():
             raise AppError(422, "voice_missing", f"对白音频不存在: {voice}")
@@ -67,11 +68,10 @@ def mix_audio_video(
         )
         audio_label = "[aout]"
 
-    cmd += ["-map", "0:v"]
     cmd += ["-map", audio_label]
     if filters:
         cmd += ["-filter_complex", ";".join(filters)]
-    cmd += ["-c:v", "copy", "-c:a", "aac", "-shortest", str(output)]
+    cmd += ["-c:a", "pcm_s16le", "-vn", str(output)]
 
     try:
         proc = subprocess.run(
@@ -82,16 +82,83 @@ def mix_audio_video(
             check=False,
         )
     except subprocess.TimeoutExpired as exc:
-        raise AppError(504, "ffmpeg_timeout", "音视频合成超时，请重试") from exc
+        raise AppError(504, "ffmpeg_timeout", "音频混音超时，请重试") from exc
     except Exception as exc:  # noqa: BLE001 - 统一转业务错误
-        raise AppError(500, "ffmpeg_failed", f"音视频合成失败：{exc}") from exc
+        raise AppError(500, "ffmpeg_failed", f"音频混音失败：{exc}") from exc
 
     if proc.returncode != 0:
         detail = (proc.stderr or "").strip().splitlines()[-1:] or ["未知错误"]
-        raise AppError(500, "ffmpeg_failed", f"音视频合成失败：{detail[0][:300]}")
+        raise AppError(500, "ffmpeg_failed", f"音频混音失败：{detail[0][:300]}")
     if not output.is_file():
-        raise AppError(500, "ffmpeg_failed", "音视频合成未生成输出文件")
+        raise AppError(500, "ffmpeg_failed", "音频混音未生成输出文件")
     return str(output)
+
+
+def compose_video_with_audio(
+    video_path: str,
+    audio_path: str,
+    output_path: str,
+) -> str:
+    """把无声视频和音频母带封装成最终有声视频。"""
+    video = Path(video_path)
+    audio = Path(audio_path)
+    output = Path(output_path)
+    if not video.is_file():
+        raise AppError(422, "video_missing", "待合成的视频文件不存在")
+    if not audio.is_file():
+        raise AppError(422, "audio_missing", "待合成的音频母带不存在")
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    cmd = [
+        ffmpeg_exe(),
+        "-y",
+        "-i",
+        str(video),
+        "-i",
+        str(audio),
+        "-map",
+        "0:v",
+        "-map",
+        "1:a",
+        "-c:v",
+        "copy",
+        "-c:a",
+        "aac",
+        "-shortest",
+        str(output),
+    ]
+    try:
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=300,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise AppError(504, "ffmpeg_timeout", "视频合成超时，请重试") from exc
+    except Exception as exc:  # noqa: BLE001 - 统一转业务错误
+        raise AppError(500, "ffmpeg_failed", f"视频合成失败：{exc}") from exc
+
+    if proc.returncode != 0:
+        detail = (proc.stderr or "").strip().splitlines()[-1:] or ["未知错误"]
+        raise AppError(500, "ffmpeg_failed", f"视频合成失败：{detail[0][:300]}")
+    if not output.is_file():
+        raise AppError(500, "ffmpeg_failed", "视频合成未生成输出文件")
+    return str(output)
+
+
+def mix_audio_video(
+    video_path: str,
+    voice_paths: list[str],
+    output_path: str,
+    bgm_path: str | None = None,
+) -> str:
+    """兼容旧调用：先混音成母带，再封装成有声视频。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        master = Path(tmp) / "master.wav"
+        mix_audio_to_master(video_path, voice_paths, str(master), bgm_path=bgm_path)
+        return compose_video_with_audio(video_path, str(master), output_path)
 
 
 def _has_audio(video: Path) -> bool:

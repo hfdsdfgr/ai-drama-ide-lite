@@ -10,6 +10,7 @@ from pathlib import Path
 
 from app.core.errors import AppError
 from app.services.adapters.manager import ProviderManager
+from app.services.capability_registry import resolve_max_reference_images
 from app.services.job_store import JOB_TYPE_GENERATION, JobStore
 
 
@@ -40,6 +41,12 @@ class GenerationService:
         # fail-fast：校验模型启用/Key/能力（不触发任何 API 调用或费用）
         self.manager.adapter_for(model_id, capability)
         model = self.manager.repo.get_model(model_id)
+        extra = dict(extra or {})
+        max_reference_images = resolve_max_reference_images(
+            model.provider_preset_key, model.model_id
+        )
+        if max_reference_images is not None:
+            extra["max_reference_images"] = max_reference_images
         record = self.store.create(
             JOB_TYPE_GENERATION,
             project_id or None,
@@ -52,7 +59,7 @@ class GenerationService:
                 "duration": duration,
                 "images": images or [],
                 "negative_prompt": negative_prompt or "",
-                "extra": extra or {},
+                "extra": extra,
             },
         )
         return self._public(record)

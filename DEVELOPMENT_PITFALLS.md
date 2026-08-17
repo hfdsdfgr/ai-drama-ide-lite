@@ -157,3 +157,8 @@
 - **阿里云百炼 Wan 图生视频 REST 字段是 `input.img_url`，不是 `input.media`**：旧实现用 `input.media[type=first_frame]` 会请求失败。以官方最新 `image-to-video guide` 为准：`input.prompt + input.img_url`（或音频时再加 `audio_url`），轮询 `GET /api/v1/tasks/{id}` 取 `output.video_url`。
 - **分镜参考图在 dev 模式永远不加载**：`StoryboardPage` 的参考图 effect 曾写 `if (!projectId || !apiBase) return`，而 Tauri dev 下 `getApiBase()` 返回空字符串，导致资产参考图列表永远为空、显示「暂无可用的资产图片参考图」。修复：去掉 `!apiBase`，改为 `if (!active || !projectId) return`，图片 src 用相对路径走 Vite 代理。
 - **切资产页生成图片后回分镜页参考图不刷新**：参考图 effect 只依赖 `projectId`，资产页生成新图片后切回分镜页不会重新加载。修复：依赖加入 `active`，每次进入分镜页重新拉取有当前图片版本的资产。
+- **qwen-audio-*-asr 被误判为 TTS 音频模型**：阿里云百炼的 `qwen-audio-3.0-asr-flash` 是语音识别模型，不是语音合成；旧规则把 `qwen-audio` 笼统归为 audio，导致配音 Job 自动选中它并调用 `/multimodal-generation/generation` 返回 HTTP 400。修复：vendor type rules 去掉 `qwen-audio` 泛匹配；`_backfill_model_capabilities` 启动时按 `classify_model` 同时刷新 auto 模型的 `model_type` 和 capabilities，旧库里已经误判的 ASR 模型会自动变成 `llm`。
+- **视频原生音效不应默认启用**：智谱 / OpenRouter 视频模型原生生成的音效效果不稳定，且会和后续台词配音混叠。产品已改为所有视频先生成无声版本，音效 / BGM 由用户导入本地音频，台词统一用 TTS 配音；后端 `VideoGenerateRequest` 不再暴露 `with_audio`，前端也不根据 `video_audio` 能力自动开启原生音效。
+- **当前配音没有逐句时间轴和口型对齐**：`AudioDubbingService` 只把台词拆成多段 TTS 后按顺序 concat，再与视频从 0 秒开始混音；没有对齐到具体镜头内的时间点，也没有口型 / lip-sync。后续需要真正对口型时，必须增加台词时间戳、ASR/音素对齐或视频生成模型的语音驱动能力，不能把当前配音误认为已经对齐。
+- **`extract_json` 只识别对象，不识别 JSON 数组**：`extract_json` 之前只查找 `{...}`，导致“台词归属”等需要返回 JSON 数组的接口即使 LLM 输出正确，也会解析失败并回退成整段台词一行。修复：`extract_json` 同时识别 `{...}` 和 `[...]`，选择最先出现的有效边界。
+- **不要把“混音”和“封装视频”放在同一条 FFmpeg 命令里**：旧 `mix_audio_video` 同时完成多路音频混音、AAC 编码和视频封装，无法单独复用音频母带。拆分声音管线时，先 `mix_audio_to_master` 输出 WAV 母带，再用 `compose_video_with_audio` 以 `-c:v copy` 将无声视频与母带封装，避免视频被重复编码，也方便以后单独重混或替换母带。

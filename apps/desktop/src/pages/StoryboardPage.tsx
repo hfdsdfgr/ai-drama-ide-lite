@@ -554,14 +554,11 @@ export function StoryboardPage({ active }: { active: boolean }) {
     setVideoJob(null);
     setError("");
     try {
-      const videoModel = videoModels.find((m) => m.id === videoModelId);
-      const withAudio = videoModel?.capabilities.includes("video_audio") ?? false;
       const job = await generateVideo(projectId, {
         target_id: selectedShotId,
         model_id: videoModelId,
         prompt,
         duration: videoDuration,
-        with_audio: withAudio,
       });
       setVideoJob(job);
       while (true) {
@@ -1077,11 +1074,7 @@ export function StoryboardPage({ active }: { active: boolean }) {
                     </label>
                     {videoModelId && (
                       <p className="muted">
-                        {videoModels
-                          .find((m) => m.id === videoModelId)
-                          ?.capabilities.includes("video_audio")
-                          ? "该模型将自动生成 AI 音效（不含台词），台词由下方配音统一合成。"
-                          : "该模型仅生成无声视频；台词请用下方语音模型配音。"}
+                        视频统一生成无声版本；音效 / BGM 可导入本地音频，台词由下方配音统一合成。
                       </p>
                     )}
                     <label>

@@ -9,7 +9,10 @@
 import json
 
 from app.core.errors import AppError
-from app.services.model_catalog import get_builtin_capabilities
+from app.services.model_catalog import (
+    get_builtin_capabilities,
+    get_builtin_max_reference_images,
+)
 
 CAPABILITY_LABELS: dict[str, str] = {
     "text_to_image": "文生图",
@@ -45,6 +48,14 @@ VIDEO_CAPABILITIES = frozenset(
 
 AUDIO_CAPABILITIES = frozenset(
     {"text_to_speech", "voice_clone", "voice_design"}
+)
+
+# 图片模型“最多可接收参考图数量”的兜底规则。
+# 优先使用 vendor_models.json 中的精确字段；这里用于服务商返回的新模型或未收录模型。
+_MAX_REFERENCE_IMAGES_RULES: tuple[tuple[str, int], ...] = (
+    ("gpt-image", 16),
+    ("qwen-image", 3),
+    ("wan2.7-image", 9),
 )
 
 # (模型名片段, 能力集)：先匹配先得；model_type 已先过滤。
@@ -85,6 +96,23 @@ def resolve_default_capabilities(
         if catalog_caps is not None:
             return sorted(set(catalog_caps))
     return infer_capabilities(preset_key, model_id, model_type)
+
+
+def resolve_max_reference_images(preset_key: str | None, model_id: str) -> int | None:
+    """返回模型最多可接收的参考图数量。
+
+    优先读取本地调研目录 vendor_models.json；若该模型未收录，则按名称片段
+    保守推断。None 表示没有明确的参考图数量声明。
+    """
+    if preset_key:
+        catalog_value = get_builtin_max_reference_images(preset_key, model_id)
+        if catalog_value is not None:
+            return catalog_value
+    mid = model_id.lower()
+    for fragment, value in _MAX_REFERENCE_IMAGES_RULES:
+        if fragment in mid:
+            return value
+    return None
 
 
 def infer_capabilities(preset_key: str | None, model_id: str, model_type: str) -> list[str]:

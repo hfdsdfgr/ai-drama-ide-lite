@@ -232,6 +232,7 @@ def _migrate_models_audio_type(conn: sqlite3.Connection) -> None:
 def _backfill_model_capabilities(conn: sqlite3.Connection) -> None:
     """刷新全部自动推断模型的能力（内置目录优先；手动覆盖的不动）。"""
     from app.services.capability_registry import resolve_default_capabilities, serialize
+    from app.services.vendor_presets import classify_model
 
     rows = conn.execute(
         """
@@ -242,12 +243,13 @@ def _backfill_model_capabilities(conn: sqlite3.Connection) -> None:
         """
     ).fetchall()
     for row in rows:
+        model_type = classify_model(row["preset_key"], row["model_id"])
         caps = resolve_default_capabilities(
-            row["preset_key"], row["model_id"], row["model_type"]
+            row["preset_key"], row["model_id"], model_type
         )
         conn.execute(
-            "UPDATE models SET capabilities = ? WHERE id = ?",
-            (serialize(caps), row["id"]),
+            "UPDATE models SET model_type = ?, capabilities = ? WHERE id = ?",
+            (model_type, serialize(caps), row["id"]),
         )
     if rows:
         logger.info("Refreshed capabilities for %d auto model(s)", len(rows))

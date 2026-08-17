@@ -4,6 +4,7 @@ import httpx
 import pytest
 
 from app.core.errors import AppError
+from app.services.capability_registry import resolve_max_reference_images
 from app.services.adapters.base import (
     GenerationRequest,
     ProviderContext,
@@ -58,8 +59,10 @@ class _FakeClient:
     def __exit__(self, *args):
         return False
 
-    def _respond(self, method, url):
-        self.calls.append((method, url))
+    def _respond(self, method, url, **kwargs):
+        self.calls.append(
+            {"method": method, "url": url, "json": kwargs.get("json")}
+        )
         if self._raise_exc:
             raise self._raise_exc
         return _FakeResponse(self._status_code, self._payload)
@@ -68,13 +71,21 @@ class _FakeClient:
         return self._respond("GET", url)
 
     def post(self, url, headers=None, json=None, files=None, data=None):
-        return self._respond("POST", url)
+        return self._respond("POST", url, json=json)
 
 
 def _patch_client(monkeypatch, **kwargs):
     monkeypatch.setattr(
         httpx, "Client", lambda timeout=None: _FakeClient(timeout=timeout, **kwargs)
     )
+
+
+def test_resolve_max_reference_images_uses_catalog_and_fallback():
+    assert resolve_max_reference_images("bailian", "qwen-image-2.0-pro") == 3
+    assert resolve_max_reference_images("bailian", "wan2.7-image") == 9
+    assert resolve_max_reference_images("openai", "gpt-image-2") == 16
+    assert resolve_max_reference_images(None, "qwen-image-next") == 3
+    assert resolve_max_reference_images(None, "unknown-model") is None
 
 
 # ---------- OpenAI 兼容：chat ----------
@@ -264,6 +275,172 @@ def test_dashscope_generate_image_to_image_requires_image():
 
 
 # ---------- DashScope：视频异步任务 ----------
+
+
+def test_dashscope_combines_more_than_three_reference_images(monkeypatch, tmp_path):
+    from PIL import Image
+
+    paths = []
+    for index in range(4):
+        path = tmp_path / f"ref_{index}.png"
+        Image.new("RGB", (64, 64), (index * 40, 80, 120)).save(path)
+        paths.append(str(path))
+
+    captured = {}
+
+    def make_client(timeout=None):
+        client = _FakeClient(
+            timeout=timeout,
+            payload={
+                "output": {
+                    "choices": [
+                        {
+                            "finish_reason": "stop",
+                            "message": {
+                                "role": "assistant",
+                                "content": [{"image": "https://cdn/qwen.png"}],
+                            },
+                        }
+                    ]
+                }
+            },
+        )
+        captured["client"] = client
+        return client
+
+    monkeypatch.setattr(httpx, "Client", make_client)
+    adapter = DashScopeAdapter()
+    adapter.generate(
+        _ctx(
+            model_id="qwen-image-2.0-pro",
+            base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+            preset="bailian",
+        ),
+        "reference_image",
+        GenerationRequest(
+            capability="reference_image",
+            prompt="结合参考图生成分镜",
+            images=paths,
+            aspect_ratio="1280x720",
+        ),
+    )
+
+    body = captured["client"].calls[0]["json"]
+    content = body["input"]["messages"][0]["content"]
+    image_items = [item for item in content if "image" in item]
+    assert len(image_items) == 1
+    assert image_items[0]["image"].startswith("data:image/png;base64,")
+
+
+def test_dashscope_does_not_combine_when_reference_count_is_within_limit(monkeypatch, tmp_path):
+    from PIL import Image
+
+    paths = []
+    for index in range(4):
+        path = tmp_path / f"ref_{index}.png"
+        Image.new("RGB", (64, 64), (index * 40, 80, 120)).save(path)
+        paths.append(str(path))
+
+    captured = {}
+
+    def make_client(timeout=None):
+        client = _FakeClient(
+            timeout=timeout,
+            payload={
+                "output": {
+                    "choices": [
+                        {
+                            "finish_reason": "stop",
+                            "message": {
+                                "role": "assistant",
+                                "content": [{"image": "https://cdn/qwen.png"}],
+                            },
+                        }
+                    ]
+                }
+            },
+        )
+        captured["client"] = client
+        return client
+
+    monkeypatch.setattr(httpx, "Client", make_client)
+    adapter = DashScopeAdapter()
+    adapter.generate(
+        _ctx(
+            model_id="qwen-image-2.0-pro",
+            base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+            preset="bailian",
+        ),
+        "reference_image",
+        GenerationRequest(
+            capability="reference_image",
+            prompt="结合参考图生成分镜",
+            images=paths,
+            aspect_ratio="1280x720",
+            extra={"max_reference_images": 4},
+        ),
+    )
+
+    body = captured["client"].calls[0]["json"]
+    content = body["input"]["messages"][0]["content"]
+    image_items = [item for item in content if "image" in item]
+    assert len(image_items) == 4
+
+
+def test_dashscope_combines_when_reference_count_exceeds_declared_limit(monkeypatch, tmp_path):
+    from PIL import Image
+
+    paths = []
+    for index in range(3):
+        path = tmp_path / f"ref_{index}.png"
+        Image.new("RGB", (64, 64), (index * 40, 80, 120)).save(path)
+        paths.append(str(path))
+
+    captured = {}
+
+    def make_client(timeout=None):
+        client = _FakeClient(
+            timeout=timeout,
+            payload={
+                "output": {
+                    "choices": [
+                        {
+                            "finish_reason": "stop",
+                            "message": {
+                                "role": "assistant",
+                                "content": [{"image": "https://cdn/qwen.png"}],
+                            },
+                        }
+                    ]
+                }
+            },
+        )
+        captured["client"] = client
+        return client
+
+    monkeypatch.setattr(httpx, "Client", make_client)
+    adapter = DashScopeAdapter()
+    adapter.generate(
+        _ctx(
+            model_id="qwen-image-2.0-pro",
+            base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+            preset="bailian",
+        ),
+        "reference_image",
+        GenerationRequest(
+            capability="reference_image",
+            prompt="结合参考图生成分镜",
+            images=paths,
+            aspect_ratio="1280x720",
+            extra={"max_reference_images": 2},
+        ),
+    )
+
+    body = captured["client"].calls[0]["json"]
+    content = body["input"]["messages"][0]["content"]
+    image_items = [item for item in content if "image" in item]
+    assert len(image_items) == 1
+    assert image_items[0]["image"].startswith("data:image/png;base64,")
 
 
 def test_dashscope_submit_text_to_video(monkeypatch):

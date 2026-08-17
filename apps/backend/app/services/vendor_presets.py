@@ -25,7 +25,6 @@ _BAILIAN_TYPE_RULES: tuple[tuple[str, str], ...] = (
     ("wan2.2-t2v", "video"),
     ("wan-video", "video"),
     ("qwen-video", "video"),
-    ("qwen-audio", "audio"),
     ("qwen3-tts", "audio"),
     ("qwen-tts", "audio"),
     ("cosyvoice", "audio"),

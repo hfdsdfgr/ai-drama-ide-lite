@@ -627,52 +627,79 @@ Image → Video
 
 > 单模型生成：一次 Job 只用一个 Model / 一个 Provider；不做多模型并行。自动 Model Router 留到 Phase 17（P1）。
 
-M2 — Audio / BGM（角色自动配音与配乐）
+M2 — Audio / Voice（声音四阶段管线）
 
 目标：
 
-把声音统一到一个合成环节：支持音效的视频模型自动生成音效（不含台词），台词统一由 TTS 模型配音，音效 / BGM 可导入本地文件，最后 FFmpeg 一次混音。
+把声音处理拆成可独立执行、可单独重跑、可分别定位问题的四个阶段：
+
+```text
+人声分离 → 配音 → 混音 → 合成
+```
+
+当前已经跑通 MVP 的“台词归属 + TTS + FFmpeg 一次混音 + 写有声版本”。接下来的重点是解耦，不再继续让一个 `dubbing` Job 承担所有事情。
 
 Pipeline
 
-Shot Video（无声 / 可选模型自带 AI 音效）
- ↓
-声音合成（统一入口）
- ├─ 对白：有台词 → 台词归属 + 逐角色 TTS
- ├─ 音效 / BGM：可选本地音频文件
- └─ 视频原音轨（若模型已生成音效）
- ↓
-FFmpeg 统一混音
- ↓
-有声视频版本（shot_video_voiced）
+```text
+音频素材 / 参考音频
+        ↓
+① 人声分离
+        ↓
+台词规划 → ② 配音（逐角色 TTS，输出独立人声分轨）
+        ↓
+音频分轨
+        ↓
+③ 混音（根据 Mix Manifest 生成一条音频母带）
+        ↓
+④ 合成（无声视频 + 音频母带 → shot_video_voiced）
+```
+
+四阶段职责
+
+- 人声分离：处理导入音频或外部视频音轨，拆出人声、音乐、音效；当前先实现 pass-through Adapter，后续再接入分离模型。
+- 配音：`DialoguePlanningService` 负责台词归属，`VoiceSynthesisService` 负责逐角色 TTS；每条台词生成独立音频分轨，不立即混音。
+- 混音：`AudioMixService` 根据 `audio_mix_sessions` 中的 stem 清单和增益设置，生成一条 WAV 音频母带。
+- 合成：`MediaComposeService` 使用 `-c:v copy` 将无声视频与音频母带封装成有声视频，再写入 `versions`。
 
 Tasks
 
-- [ ] model_type 增加 `audio`（SQLite CHECK 约束迁移）
-- [ ] capability 增加 `text_to_speech`（预留 `voice_clone` / `voice_design`，本期不实现）
-- [ ] TTS Adapter：智谱 `glm-tts` + OpenAI 兼容 `/audio/speech`
-- [ ] FFmpeg 引入与打包（Windows sidecar）
-- [ ] 角色音色：`characters` 增加 `voice_id` / `voice_provider`，Story Bible 角色卡支持选择音色
-- [ ] 台词归属：配音时将 `shot.dialogue + shot.characters` 解析为 `[{character, text}]`（结合 Story Bible 唯一名称）
-- [ ] 视频音效能力 `video_audio`：智谱 `with_audio` / OpenRouter `generate_audio` 自动开启
-- [ ] 音频文件上传（音效 / BGM），无台词分镜可仅混入音频文件
-- [ ] 配音 Job：输入 shot_id + 可选音效/BGM，自动匹配角色音色、生成多段对白并合成有声视频
-- [ ] 合成保留视频原音轨 + 对白 + 音效/BGM，避免音效与对白打架
-- [ ] 有声视频版本写 `versions`（entity_type `shot_video_voiced`）+ `production_graph` 依赖边
-- [ ] 分镜页声音入口（配音 / 导入音频）、生成进度、有声视频预览
+- [x] `model_type` 增加 `audio`（SQLite CHECK 约束迁移）
+- [x] capability 增加 `text_to_speech`
+- [x] TTS Adapter：DashScope / OpenAI 兼容 `/audio/speech`
+- [x] FFmpeg 引入与打包（Windows sidecar）
+- [x] 角色音色：角色卡支持选择音色并持久化
+- [x] 台词归属：`shot.dialogue + shot.characters` 解析为 `[{character, text}]`
+- [x] 视频统一生成无声版本，不自动启用 `video_audio`
+- [x] 音频文件上传（音效 / BGM）
+- [x] 现有 MVP 配音 Job：单次完成 TTS + 混音 + 写版本
+- [x] 有声视频版本写 `versions`（`shot_video_voiced`）
+- [ ] 新增 `audio_stems` 数据表 / Repository，持久化人声、BGM、音效等分轨
+- [ ] 新增 `audio_mix_sessions` 数据表 / Repository，保存 Mix Manifest、增益和母带输出
+- [x] 拆分后端 Service：`DialoguePlanningService` / `VoiceSynthesisService` / `AudioMixService` / `MediaComposeService`
+- [ ] 增加人声分离接口和 `SeparationAdapter`，默认 pass-through
+- [ ] 配音阶段独立输出并持久化 TTS stems，不再生成后立即混音
+- [ ] 混音阶段根据 Mix Manifest 生成音频母带，不直接封装视频
+- [ ] 合成阶段独立完成视频封装和版本写入
+- [ ] Job 拆分：`audio_separation` / `dialogue_planning` / `tts_generation` / `audio_mixing` / `media_compose`
+- [ ] 分镜页声音面板改为四阶段状态展示
+- [ ] 单阶段失败可重跑，且不重复调用 TTS 产生费用
 - [ ] 分镜卡片优先播放有声版本（有则播有声，否则播无声）
 
 完成标准
 
-- 后端：TTS 封装为 Adapter；角色音色可配置并持久化；支持音效的视频模型自动开启音效；配音 Job 统一完成台词归属、逐角色 TTS、本地音效/BGM、视频原音轨的 FFmpeg 混音，结果写版本系统与生产依赖图。
-- 前端：分镜页声音入口自动识别当前视频模型是否支持音效并给出提示；完成后播放有声视频；分镜卡片自动优先展示有声版本。
-- 测试：台词归属解析、TTS Adapter（mock）、音效参数传递、FFmpeg 多路混音、配音 Job、版本写入；前端 lint / vitest / build。
+- 后端：声音链路按“人声分离 / 配音 / 混音 / 合成”四个 Service 拆分；TTS 输出、音频分轨、混音会话均可持久化；最终合成结果写入 `versions` 和生产依赖图。
+- 一个 Generation Job 仍只绑定一个 Model / 一个 Provider，不因为拆分声音阶段引入多模型并行。
+- 前端：分镜页声音入口能展示四个阶段状态，允许用户分别触发或重跑；完成后播放有声视频，分镜卡片自动优先展示有声版本。
+- 测试：台词规划、TTS Adapter（mock）、人声分离 Adapter、Mix Manifest、FFmpeg 混音、最终封装、Job 状态与版本写入；前端 lint / vitest / build。
 
 本轮边界
 
-- 视频音效来自模型自带能力（智谱 / OpenRouter 支持时自动开启）；台词始终由 TTS 统一处理，不把台词交给视频模型。
-- 音效 / BGM 先按本地文件导入；AI 音乐生成、独立音效生成、语音克隆/声音设计仍 P2。
-- 不做逐句精确时间轴；整集时间轴与自动剪辑（Timeline / Auto Editing）仍 P2。
+- 视频先生成无声版本，不依赖模型自带音效。
+- 台词始终由 TTS 统一处理，不把台词交给视频模型。
+- 人声分离先做接口和 pass-through；真实分离模型后续按需接入。
+- 不做逐句精确时间轴，不做口型 / lip-sync；整集时间轴与自动剪辑仍留后续。
+- AI 音乐生成、独立音效生成、语音克隆 / 声音设计仍 P2。
 
 Phase 15 — Generation Center
 
@@ -976,7 +1003,7 @@ Quality Agent
 Advanced Asset Control
 P2 — 后续
 
-Voice（角色自动配音已提前到 Phase 14 M2；此处指语音克隆/声音设计等更完整语音系统）
+Voice（角色配音已提前到 Phase 14 M2，并拆为人声分离/配音/混音/合成；此处指语音克隆/声音设计等更完整语音系统）
 Music（BGM 本地文件混入已在 Phase 14 M2；AI 音乐生成仍留此处）
 Sound Effects
 Timeline

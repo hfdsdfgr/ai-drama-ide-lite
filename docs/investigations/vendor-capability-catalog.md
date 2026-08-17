@@ -14,8 +14,8 @@
 | --- | --- | --- | --- | --- |
 | gpt-image-1 / 1.5 / 2 | ✓ | ✓ | ✓ | OpenAI 图片编辑端点支持输入图（最多 16 张参考图） |
 | dall-e-3 | ✓ | ✕ | ✕ | 编辑端点仅支持 GPT Image 与 dall-e-2 |
-| qwen-image-plus / qwen-image-2.0-pro | ✓ | ✓ | ✓ | 百炼图像生成/编辑/多图融合（2.0 支持最多 9 张参考图） |
-| wan2.7-image-pro | ✓ | ✓ | ✓ | 文生图/图生图/组图/编辑 |
+| qwen-image-plus / qwen-image-2.0-pro | ✓ | ✓ | ✓ | 百炼图像生成/编辑；输入参考图通常为 1-3 张 |
+| wan2.7-image-pro | ✓ | ✓ | ✓ | 文生图/图生图/组图/编辑，最多 9 张参考图 |
 | wanx2.1-t2i | ✓ | ✕ | ✕ | 万相 2.1 文生图模型（t2i） |
 | cogview-4 / cogview-3 系列 | ✓ | ✕ | ✕ | 智谱文生图模型 |
 | FLUX.1-schnell | ✓ | ✕ | ✕ | 硅基流动文生图（编辑能力属 FLUX.1 Kontext，另设规则） |

@@ -16,9 +16,14 @@ def extract_json(text: str) -> str:
     fence = re.match(r"^```(?:json)?\s*(.*?)\s*```$", text, re.S)
     if fence:
         return fence.group(1)
-    start = text.find("{")
-    end = text.rfind("}")
-    if start >= 0 and end > start:
+    candidates: list[tuple[int, int, str]] = []
+    for open_char, close_char in (("{", "}"), ("[", "]")):
+        start = text.find(open_char)
+        end = text.rfind(close_char)
+        if start >= 0 and end > start:
+            candidates.append((start, end, open_char))
+    if candidates:
+        start, end, _open_char = min(candidates, key=lambda item: item[0])
         return text[start : end + 1]
     return text
 

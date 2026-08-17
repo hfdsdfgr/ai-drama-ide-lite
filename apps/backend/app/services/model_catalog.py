@@ -27,3 +27,14 @@ def get_builtin_capabilities(preset_key: str, model_id: str) -> list[str] | None
             caps = item.get("capabilities")
             return list(caps) if isinstance(caps, list) else []
     return None
+
+
+def get_builtin_max_reference_images(preset_key: str, model_id: str) -> int | None:
+    """返回内置目录中该模型最多可接收的参考图数量；未收录或无字段返回 None。"""
+    for item in get_builtin_models(preset_key):
+        if item.get("id") == model_id:
+            value = item.get("max_reference_images")
+            if isinstance(value, int) and value > 0:
+                return value
+            return None
+    return None

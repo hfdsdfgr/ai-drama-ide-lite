@@ -26,7 +26,6 @@ class VideoGenerationService:
         *,
         duration: int = 5,
         aspect_ratio: str | None = None,
-        with_audio: bool = False,
     ) -> dict:
         ScriptRepository(self.db_path).get_shot_with_scene(project_id, shot_id)
         image = self.versions.get_current(project_id, "shot", shot_id)
@@ -50,7 +49,6 @@ class VideoGenerationService:
             extra={
                 "target_type": "shot",
                 "target_id": shot_id,
-                "with_audio": with_audio,
                 "source_refs": [
                     {
                         "type": "shot",

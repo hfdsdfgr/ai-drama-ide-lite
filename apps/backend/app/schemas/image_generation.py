@@ -13,4 +13,4 @@ class ImageGenerateRequest(BaseModel):
     aspect_ratio: str | None = Field(default=None, max_length=20)
     art_style: str | None = Field(default=None, max_length=50)
     negative_prompt: str = Field(default="", max_length=1000)
-    reference_asset_ids: list[str] = Field(default_factory=list, max_length=3)
+    reference_asset_ids: list[str] = Field(default_factory=list)
