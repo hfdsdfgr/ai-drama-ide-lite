@@ -28,7 +28,9 @@ class VideoGenerationService:
         aspect_ratio: str | None = None,
         with_audio: bool = False,
     ) -> dict:
-        ScriptRepository(self.db_path).get_shot_with_scene(project_id, shot_id)
+        shot, _scene = ScriptRepository(self.db_path).get_shot_with_scene(
+            project_id, shot_id
+        )
         image = self.versions.get_current(project_id, "shot", shot_id)
         if image is None:
             raise AppError(
@@ -39,6 +41,9 @@ class VideoGenerationService:
         prompt = prompt.strip()
         if not prompt:
             raise AppError(422, "prompt_required", "请输入视频生成提示词")
+        dialogue = (shot.dialogue or "").strip()
+        if with_audio and dialogue and dialogue not in prompt:
+            prompt = f"{prompt}\n\n对白：{dialogue}"
         return self.generation_service.create_job(
             model_id,
             "image_to_video",

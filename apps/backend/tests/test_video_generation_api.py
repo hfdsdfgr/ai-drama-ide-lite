@@ -1,5 +1,9 @@
 """Phase 14 M1 - Video generation API route tests."""
 
+from types import SimpleNamespace
+
+from app.db.database import get_connection
+
 
 def _job_out(model_id="model_video", capability="image_to_video"):
     return {
@@ -110,3 +114,81 @@ def test_video_generate_requires_prompt(client):
     )
 
     assert response.status_code == 422
+
+
+def _create_project_with_shot(client, dialogue: str) -> str:
+    response = client.post(
+        "/api/projects",
+        json={"name": "p", "description": ""},
+    )
+    assert response.status_code == 201
+    project_id = response.json()["id"]
+    db_path = client.app.state.settings.db_path
+    with get_connection(db_path) as conn:
+        now = "2026-08-16T00:00:00Z"
+        conn.execute(
+            "INSERT INTO scenes (id, project_id, episode_id, novel_id, title, order_index, slugline, action, dialogue, deleted_at, created_at, updated_at) VALUES ('scene1', ?, NULL, NULL, '', 0, '', '', '', NULL, ?, ?)",
+            (project_id, now, now),
+        )
+        conn.execute(
+            "INSERT INTO shots (id, project_id, scene_id, shot_number, order_index, shot_type, camera, characters, action, lighting, dialogue, duration, prompt, deleted_at, created_at, updated_at) VALUES ('shot1', ?, 'scene1', 1, 0, '', '', '', '', '', ?, 5, '', NULL, ?, ?)",
+            (project_id, dialogue, now, now),
+        )
+    return project_id
+
+
+def _capture_create_job(service, calls: dict, monkeypatch):
+    def fake_create_job(model_id, capability, prompt, **kwargs):
+        calls.update({"model_id": model_id, "capability": capability, "prompt": prompt})
+        calls.update(kwargs)
+        return {"job_id": "job_1", "status": "queued"}
+
+    monkeypatch.setattr(service.generation_service, "create_job", fake_create_job)
+    monkeypatch.setattr(
+        service.versions,
+        "get_current",
+        lambda *a, **k: SimpleNamespace(file_path="img.png"),
+    )
+
+
+def test_start_shot_video_appends_dialogue_when_with_audio(client, monkeypatch):
+    project_id = _create_project_with_shot(client, "你好，快走。")
+    service = client.app.state.video_generation_service
+    calls = {}
+    _capture_create_job(service, calls, monkeypatch)
+
+    service.start_shot_video(
+        project_id, "shot1", "model_video", "镜头缓缓推进", with_audio=True
+    )
+
+    assert calls["prompt"] == "镜头缓缓推进\n\n对白：你好，快走。"
+
+
+def test_start_shot_video_skips_dialogue_already_in_prompt(client, monkeypatch):
+    project_id = _create_project_with_shot(client, "你好，快走。")
+    service = client.app.state.video_generation_service
+    calls = {}
+    _capture_create_job(service, calls, monkeypatch)
+
+    service.start_shot_video(
+        project_id,
+        "shot1",
+        "model_video",
+        "镜头缓缓推进，人物说：你好，快走。",
+        with_audio=True,
+    )
+
+    assert calls["prompt"] == "镜头缓缓推进，人物说：你好，快走。"
+
+
+def test_start_shot_video_ignores_dialogue_without_audio(client, monkeypatch):
+    project_id = _create_project_with_shot(client, "你好，快走。")
+    service = client.app.state.video_generation_service
+    calls = {}
+    _capture_create_job(service, calls, monkeypatch)
+
+    service.start_shot_video(
+        project_id, "shot1", "model_video", "镜头缓缓推进", with_audio=False
+    )
+
+    assert calls["prompt"] == "镜头缓缓推进"
