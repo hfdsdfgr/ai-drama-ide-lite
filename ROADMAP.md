@@ -677,14 +677,19 @@ Tasks
 - [x] 新增 `audio_stems` 数据表 / Repository，持久化人声、BGM、音效等分轨
 - [x] 新增 `audio_mix_sessions` 数据表 / Repository，保存 Mix Manifest、增益和母带输出
 - [x] 拆分后端 Service：`DialoguePlanningService` / `VoiceSynthesisService` / `AudioMixService` / `MediaComposeService`
-- [ ] 增加人声分离接口和 `SeparationAdapter`，默认 pass-through
-- [ ] 配音阶段独立输出并持久化 TTS stems，不再生成后立即混音
-- [ ] 混音阶段根据 Mix Manifest 生成音频母带，不直接封装视频
-- [ ] 合成阶段独立完成视频封装和版本写入
 - [x] Job 拆分：`audio_separation` / `dialogue_planning` / `tts_generation` / `audio_mixing` / `media_compose`
-- [ ] 分镜页声音面板改为四阶段状态展示
-- [ ] 单阶段失败可重跑，且不重复调用 TTS 产生费用
-- [ ] 分镜卡片优先播放有声版本（有则播有声，否则播无声）
+
+> **本轮边界更新（2026-08-19）：配音 / 音频四阶段管线暂停开发。**
+> 当前路线改为「视频原生音频优先」：支持 `video_audio` 能力的模型直接带声音 / 台词生成视频（已实现：分镜页开关 + 台词自动写入提示词），不依赖 TTS 配音流程。
+> 以下 M2 未完成项整体搁置，移入 P2 后续区，待主线（Phase 15 之后）回归：
+>
+> - [ ] 增加人声分离接口和 `SeparationAdapter`，默认 pass-through（真实引擎方案已完成调研，回归时实施）
+> - [ ] 配音阶段独立输出并持久化 TTS stems，不再生成后立即混音
+> - [ ] 混音阶段根据 Mix Manifest 生成音频母带，不直接封装视频
+> - [ ] 合成阶段独立完成视频封装和版本写入
+> - [ ] 分镜页声音面板改为四阶段状态展示
+> - [ ] 单阶段失败可重跑，且不重复调用 TTS 产生费用
+> - [ ] 分镜卡片优先播放有声版本（有则播有声，否则播无声）
 
 完成标准
 
@@ -1080,6 +1085,7 @@ Quality Agent
 Advanced Asset Control
 P2 — 后续
 
+Phase 14 M2 搁置项（2026-08-19）：人声分离真实引擎 / 配音·混音·合成四阶段解耦与独立重跑 / 四阶段状态 UI / 分镜卡片优先有声版本；ElevenLabs 与 Sync.so 的 Adapter 真实调用（Phase A/C）同样依赖配音流程，一并搁置。回归前提：主线 MVP 完成且用户决定重启配音管线。
 Voice（角色配音已提前到 Phase 14 M2，并拆为人声分离/配音/混音/合成；此处指语音克隆/声音设计等更完整语音系统）
 Music（BGM 本地文件混入已在 Phase 14 M2；AI 音乐生成仍留此处）
 Sound Effects
