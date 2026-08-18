@@ -5,7 +5,9 @@ export type ProviderProtocol =
   | "sora"
   | "openrouter_video"
   | "zhipu_video"
-  | "siliconflow_video";
+  | "siliconflow_video"
+  | "elevenlabs"
+  | "syncso";
 
 export const PROTOCOL_LABELS: Record<ProviderProtocol, string> = {
   openai_compat: "OpenAI 兼容",
@@ -14,6 +16,8 @@ export const PROTOCOL_LABELS: Record<ProviderProtocol, string> = {
   openrouter_video: "OpenRouter Video",
   zhipu_video: "智谱 CogVideoX",
   siliconflow_video: "SiliconFlow Video",
+  elevenlabs: "ElevenLabs",
+  syncso: "Sync.so",
 };
 
 export type CapabilityKey =
@@ -29,8 +33,10 @@ export type CapabilityKey =
   | "first_last_frame"
   | "video_audio"
   | "text_to_speech"
+  | "tts_timestamps"
   | "voice_clone"
-  | "voice_design";
+  | "voice_design"
+  | "lip_sync";
 
 export const CAPABILITY_LABELS: Record<CapabilityKey, string> = {
   text_to_image: "文生图",
@@ -45,8 +51,10 @@ export const CAPABILITY_LABELS: Record<CapabilityKey, string> = {
   first_last_frame: "首尾帧控制",
   video_audio: "视频自带音效",
   text_to_speech: "文本转语音",
+  tts_timestamps: "语音时间戳",
   voice_clone: "声音复刻",
   voice_design: "声音设计",
+  lip_sync: "对口型",
 };
 
 export const IMAGE_CAPABILITIES: CapabilityKey[] = [
@@ -68,6 +76,7 @@ export const VIDEO_CAPABILITIES: CapabilityKey[] = [
 
 export const AUDIO_CAPABILITIES: CapabilityKey[] = [
   "text_to_speech",
+  "tts_timestamps",
   "voice_clone",
   "voice_design",
 ];

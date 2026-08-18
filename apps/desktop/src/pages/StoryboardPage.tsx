@@ -183,6 +183,7 @@ export function StoryboardPage({ active }: { active: boolean }) {
   const [videoModelId, setVideoModelId] = useState("");
   const [videoPrompt, setVideoPrompt] = useState("");
   const [videoDuration, setVideoDuration] = useState(5);
+  const [withAudio, setWithAudio] = useState(true);
   const [audioModels, setAudioModels] = useState<Model[]>([]);
   const [voiceModelId, setVoiceModelId] = useState("");
   const [shotVersions, setShotVersions] = useState<Record<string, AssetVersion>>(
@@ -554,11 +555,15 @@ export function StoryboardPage({ active }: { active: boolean }) {
     setVideoJob(null);
     setError("");
     try {
+      const videoModel = videoModels.find((m) => m.id === videoModelId);
+      const supportsAudio =
+        videoModel?.capabilities.includes("video_audio") ?? false;
       const job = await generateVideo(projectId, {
         target_id: selectedShotId,
         model_id: videoModelId,
         prompt,
         duration: videoDuration,
+        with_audio: supportsAudio && withAudio,
       });
       setVideoJob(job);
       while (true) {
@@ -1074,7 +1079,10 @@ export function StoryboardPage({ active }: { active: boolean }) {
                     </label>
                     {videoModelId && (
                       <p className="muted">
-                        视频统一生成无声版本；音效 / BGM 可导入本地音频，台词由下方配音统一合成。
+                        {videoModels.find((m) => m.id === videoModelId)
+                          ?.capabilities.includes("video_audio")
+                          ? "该模型支持原生音频：开启后视频将直接带声音/台词生成。"
+                          : "该模型生成无声视频；台词与音效可在下方配音流程统一合成。"}
                       </p>
                     )}
                     <label>
@@ -1103,6 +1111,18 @@ export function StoryboardPage({ active }: { active: boolean }) {
                         ))}
                       </select>
                     </label>
+                    {videoModels.find((m) => m.id === videoModelId)
+                      ?.capabilities.includes("video_audio") && (
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={withAudio}
+                          onChange={(e) => setWithAudio(e.target.checked)}
+                          disabled={generatingVideoShotId === selectedShotId}
+                        />
+                        带声音生成（模型原生音效 / 台词）
+                      </label>
+                    )}
                     {shotVersions[selectedShotId] ? (
                       <button
                         type="button"

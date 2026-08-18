@@ -28,6 +28,7 @@ def generate_video(
         payload.prompt,
         duration=payload.duration,
         aspect_ratio=payload.aspect_ratio,
+        with_audio=payload.with_audio,
     )
 
 

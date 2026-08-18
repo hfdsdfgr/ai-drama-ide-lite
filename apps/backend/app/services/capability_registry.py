@@ -27,8 +27,10 @@ CAPABILITY_LABELS: dict[str, str] = {
     "first_last_frame": "首尾帧控制",
     "video_audio": "视频自带音效",
     "text_to_speech": "文本转语音",
+    "tts_timestamps": "语音时间戳",
     "voice_clone": "声音复刻",
     "voice_design": "声音设计",
+    "lip_sync": "对口型",
 }
 
 IMAGE_CAPABILITIES = frozenset(
@@ -47,7 +49,7 @@ VIDEO_CAPABILITIES = frozenset(
 )
 
 AUDIO_CAPABILITIES = frozenset(
-    {"text_to_speech", "voice_clone", "voice_design"}
+    {"text_to_speech", "tts_timestamps", "voice_clone", "voice_design"}
 )
 
 # 图片模型“最多可接收参考图数量”的兜底规则。
@@ -81,7 +83,7 @@ _VIDEO_RULES: tuple[tuple[str, frozenset[str]], ...] = (
     ("pika", frozenset({"text_to_video", "image_to_video"})),
     ("sora", frozenset({"text_to_video", "image_to_video", "video_to_video"})),
     ("cogvideox", frozenset({"text_to_video", "image_to_video"})),
-    ("happyhorse", frozenset({"text_to_video"})),
+    ("happyhorse", frozenset({"text_to_video", "image_to_video", "video_audio"})),
     ("wan2.1-t2v", frozenset({"text_to_video"})),
     ("wan2.2-t2v", frozenset({"text_to_video"})),
 )

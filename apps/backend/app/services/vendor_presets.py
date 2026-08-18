@@ -147,6 +147,30 @@ PRESETS: dict[str, VendorPreset] = {
         base_url="http://127.0.0.1:11434/v1",
         needs_key=False,
     ),
+    "elevenlabs": VendorPreset(
+        key="elevenlabs",
+        name="ElevenLabs",
+        base_url="https://api.elevenlabs.io/v1",
+        needs_key=True,
+        protocol="elevenlabs",
+        discoverable=False,
+        type_rules=(
+            ("eleven_", "audio"),
+            ("eleven", "audio"),
+        ),
+    ),
+    "syncso": VendorPreset(
+        key="syncso",
+        name="Sync.so（对口型）",
+        base_url="https://api.sync.so/v2",
+        needs_key=True,
+        protocol="syncso",
+        discoverable=False,
+        type_rules=(
+            ("lipsync", "video"),
+            ("sync-", "video"),
+        ),
+    ),
 }
 
 

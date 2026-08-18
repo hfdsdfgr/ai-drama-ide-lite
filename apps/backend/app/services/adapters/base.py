@@ -13,6 +13,8 @@ SUPPORTED_PROTOCOLS = frozenset(
         "openrouter_video",
         "zhipu_video",
         "siliconflow_video",
+        "elevenlabs",
+        "syncso",
     }
 )
 

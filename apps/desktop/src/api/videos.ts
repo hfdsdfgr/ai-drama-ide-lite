@@ -9,6 +9,7 @@ export interface VideoGenerateInput {
   prompt: string;
   duration?: number;
   aspect_ratio?: string;
+  with_audio?: boolean;
 }
 
 export function generateVideo(

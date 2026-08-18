@@ -670,7 +670,7 @@ Tasks
 - [x] FFmpeg 引入与打包（Windows sidecar）
 - [x] 角色音色：角色卡支持选择音色并持久化
 - [x] 台词归属：`shot.dialogue + shot.characters` 解析为 `[{character, text}]`
-- [x] 视频统一生成无声版本，不自动启用 `video_audio`
+- [x] 视频生成恢复可选原生音频：支持 `video_audio` 的模型可带声音/台词直接生成（前端开关，默认开启）；不支持的仍生成无声版本
 - [x] 音频文件上传（音效 / BGM）
 - [x] 现有 MVP 配音 Job：单次完成 TTS + 混音 + 写版本
 - [x] 有声视频版本写 `versions`（`shot_video_voiced`）
@@ -695,7 +695,7 @@ Tasks
 
 本轮边界
 
-- 视频先生成无声版本，不依赖模型自带音效。
+- 视频原生音频为「用户可选」：支持 `video_audio` 能力的模型（如 Sora 2 / Veo 3.1 / CogVideoX）可在分镜页勾选带声音生成；未勾选或不支持的模型生成无声版本，走下方配音流程。
 - 台词始终由 TTS 统一处理，不把台词交给视频模型。
 - 人声分离先做接口和 pass-through；真实分离模型后续按需接入。
 - 逐句精确时间轴与口型同步不混入 M2，独立里程碑见 M3。
@@ -755,6 +755,7 @@ Tasks
 - [x] LipSyncAdapter 接口 + PassThrough 占位实现（LatentSync / Sync.so 预留）
 - [x] lip_sync 独立 Job（视频 + 音频 → 同步视频，写 shot_video_lip_synced 版本）
 - [x] 第一阶段实现 character / word 级 alignment；phoneme 只预留字段
+- [x] 设置页新增 ElevenLabs / Sync.so Provider 预设（填 API Key + 内置模型目录；Adapter 真实调用待 Phase A/C）
 
 完成标准
 

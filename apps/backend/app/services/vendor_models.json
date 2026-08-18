@@ -23,7 +23,7 @@
     { "id": "gpt-image-1.5", "type": "image", "capabilities": ["image_to_image", "reference_image", "text_to_image"], "max_reference_images": 16 },
     { "id": "gpt-image-1", "type": "image", "capabilities": ["image_to_image", "reference_image", "text_to_image"], "max_reference_images": 16 },
     { "id": "dall-e-3", "type": "image", "capabilities": ["text_to_image"] },
-    { "id": "sora-2", "type": "video", "capabilities": ["image_to_video", "text_to_video", "video_to_video"] },
+    { "id": "sora-2", "type": "video", "capabilities": ["image_to_video", "text_to_video", "video_to_video", "video_audio"] },
     { "id": "gpt-4o-mini-tts", "type": "audio", "capabilities": ["text_to_speech"] },
     { "id": "tts-1", "type": "audio", "capabilities": ["text_to_speech"] },
     { "id": "tts-1-hd", "type": "audio", "capabilities": ["text_to_speech"] }
@@ -46,7 +46,7 @@
     { "id": "google/veo-3.1", "type": "video", "capabilities": ["image_to_video", "text_to_video", "video_audio"] },
     { "id": "google/veo-3.1-fast", "type": "video", "capabilities": ["image_to_video", "text_to_video", "video_audio"] },
     { "id": "kwaivgi/kling-video-o1", "type": "video", "capabilities": ["image_to_video", "text_to_video"] },
-    { "id": "bytedance/seedance-1-5-pro", "type": "video", "capabilities": ["image_to_video", "text_to_video"] },
+    { "id": "bytedance/seedance-1-5-pro", "type": "video", "capabilities": ["image_to_video", "text_to_video", "video_audio"] },
     { "id": "openai/gpt-4o-mini-tts", "type": "audio", "capabilities": ["text_to_speech"] },
     { "id": "mistralai/voxtral-mini-tts-2603", "type": "audio", "capabilities": ["text_to_speech"] },
     { "id": "hexgrad/kokoro-82m", "type": "audio", "capabilities": ["text_to_speech"] }
@@ -78,7 +78,7 @@
     { "id": "wan2.2-t2v", "type": "video", "capabilities": ["text_to_video"] },
     { "id": "wan2.2-i2v-plus", "type": "video", "capabilities": ["image_to_video"] },
     { "id": "wan2.2-i2v-flash", "type": "video", "capabilities": ["image_to_video"] },
-    { "id": "happyhorse-1.1-t2v", "type": "video", "capabilities": ["text_to_video"] },
+    { "id": "happyhorse-1.1-t2v", "type": "video", "capabilities": ["text_to_video", "video_audio"] },
     { "id": "qwen3-tts-flash", "type": "audio", "capabilities": ["text_to_speech"] },
     { "id": "qwen3-tts-instruct-flash", "type": "audio", "capabilities": ["text_to_speech"] },
     { "id": "qwen-tts", "type": "audio", "capabilities": ["text_to_speech"] },
@@ -117,4 +117,16 @@
     { "id": "IndexTTS-2", "type": "audio", "capabilities": ["text_to_speech"] }
   ],
   "ollama": []
+  ,
+  "elevenlabs": [
+    { "id": "eleven_v3", "type": "audio", "capabilities": ["text_to_speech", "tts_timestamps"] },
+    { "id": "eleven_multilingual_v2", "type": "audio", "capabilities": ["text_to_speech", "tts_timestamps"] },
+    { "id": "eleven_turbo_v2_5", "type": "audio", "capabilities": ["text_to_speech", "tts_timestamps"] },
+    { "id": "eleven_flash_v2_5", "type": "audio", "capabilities": ["text_to_speech", "tts_timestamps"] },
+    { "id": "eleven_flash_v2", "type": "audio", "capabilities": ["text_to_speech", "tts_timestamps"] }
+  ],
+  "syncso": [
+    { "id": "lipsync-2", "type": "video", "capabilities": ["lip_sync"] },
+    { "id": "sync-3", "type": "video", "capabilities": ["lip_sync"] }
+  ]
 }

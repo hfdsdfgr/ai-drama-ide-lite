@@ -9,6 +9,7 @@ class VideoGenerateRequest(BaseModel):
     prompt: str = Field(min_length=1, max_length=2000)
     duration: int = Field(default=5, ge=2, le=15)
     aspect_ratio: str | None = Field(default=None, max_length=20)
+    with_audio: bool = False
 
 
 class AudioDubRequest(BaseModel):
