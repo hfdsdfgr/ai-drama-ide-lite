@@ -84,6 +84,11 @@ _VIDEO_RULES: tuple[tuple[str, frozenset[str]], ...] = (
     ("sora", frozenset({"text_to_video", "image_to_video", "video_to_video"})),
     ("cogvideox", frozenset({"text_to_video", "image_to_video"})),
     ("happyhorse", frozenset({"text_to_video", "image_to_video", "video_audio"})),
+    ("seedance", frozenset({"text_to_video", "image_to_video", "video_audio"})),
+    ("wan2.6-t2v", frozenset({"text_to_video", "video_audio"})),
+    ("wan2.6-i2v", frozenset({"image_to_video", "video_audio"})),
+    ("wan2.5-t2v", frozenset({"text_to_video", "video_audio"})),
+    ("wan2.5-i2v", frozenset({"image_to_video", "video_audio"})),
     ("wan2.1-t2v", frozenset({"text_to_video"})),
     ("wan2.2-t2v", frozenset({"text_to_video"})),
 )

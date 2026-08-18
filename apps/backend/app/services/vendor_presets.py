@@ -21,6 +21,10 @@ class VendorPreset:
 _BAILIAN_TYPE_RULES: tuple[tuple[str, str], ...] = (
     ("qwen-image", "image"),
     ("wanx", "image"),
+    ("wan2.6-t2v", "video"),
+    ("wan2.6-i2v", "video"),
+    ("wan2.5-t2v", "video"),
+    ("wan2.5-i2v", "video"),
     ("wan2.1-t2v", "video"),
     ("wan2.2-t2v", "video"),
     ("wan-video", "video"),
