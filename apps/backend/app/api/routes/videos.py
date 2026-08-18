@@ -71,6 +71,21 @@ def dub_shot(
     return _job_out(record)
 
 
+@router.post("/{shot_id}/lip-sync", response_model=JobOut, status_code=201)
+def lip_sync_shot(
+    project_id: str,
+    shot_id: str,
+    request: Request,
+) -> dict:
+    """独立 Lip Sync Job：无声视频 + 最终音频母带 -> 同步视频。"""
+    record = request.app.state.lip_sync_service.create_job(
+        request.app.state.job_store,
+        project_id,
+        shot_id,
+    )
+    return _job_out(record)
+
+
 @router.post("/audio-files", status_code=201)
 async def upload_audio_file(
     project_id: str,
@@ -97,6 +112,18 @@ def get_current_voiced_version(
 ) -> dict | None:
     record = request.app.state.asset_version_service.get_current(
         project_id, "shot_video_voiced", shot_id
+    )
+    return _version_out(project_id, record) if record else None
+
+
+@router.get("/lip-synced/current", response_model=AssetVersionOut | None)
+def get_current_lip_synced_version(
+    project_id: str,
+    shot_id: str,
+    request: Request,
+) -> dict | None:
+    record = request.app.state.asset_version_service.get_current(
+        project_id, "shot_video_lip_synced", shot_id
     )
     return _version_out(project_id, record) if record else None
 

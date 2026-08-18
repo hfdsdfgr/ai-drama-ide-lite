@@ -6,8 +6,11 @@ from pathlib import Path
 
 from app.db.database import get_connection, init_db
 from app.services.adapters.base import GenerationResult
+from app.services.audio_mix_session_repository import AudioMixSessionRepository
+from app.services.audio_stem_repository import AudioStemRepository
 from app.services.asset_version_service import AssetVersionService
 from app.services.audio_dubbing_service import AudioDubbingService
+from app.services.dialogue_clip_repository import DialogueClipRepository
 from app.services.job_store import JobStore
 from app.services.media_mix import ffmpeg_exe, mix_audio_video
 
@@ -150,10 +153,32 @@ def test_run_dubbing_writes_voiced_version(tmp_path):
         input_payload={"shot_id": "shot1", "script_model_id": "m_llm"},
     )
 
-    result = service.run(job)
+    result = service.run(job, store)
 
     assert result["entity_type"] == "shot_video_voiced"
     current = versions.get_current("p", "shot_video_voiced", "shot1")
     assert current is not None
     assert Path(current.file_path).is_file()
     assert current.file_path.endswith(".mp4")
+    stems = AudioStemRepository(db_path).list_for_shot("p", "shot1")
+    assert len(stems) == 2
+    assert {stem["role"] for stem in stems} == {"dialogue"}
+    sessions = AudioMixSessionRepository(db_path).list_for_shot("p", "shot1")
+    assert len(sessions) == 1
+    assert sessions[0]["status"] == "completed"
+    assert Path(sessions[0]["output_audio_path"]).is_file()
+    clips = DialogueClipRepository(db_path).list_for_shot("p", "shot1")
+    assert len(clips) == 2
+    assert all(clip["alignment"] is not None for clip in clips)
+    assert all(
+        clip["alignment"].source == "audio_duration_only" for clip in clips
+    )
+    assert clips[1]["start_time"] >= clips[0]["end_time"]
+    subjobs = store.list_jobs(project_id="p")
+    assert {subjob.type for subjob in subjobs} >= {
+        "audio_separation",
+        "dialogue_planning",
+        "tts_generation",
+        "audio_mixing",
+        "media_compose",
+    }

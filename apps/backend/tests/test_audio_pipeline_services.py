@@ -69,8 +69,11 @@ def test_voice_synthesis_service_generates_individual_stems(tmp_path):
     )
 
     assert len(paths) == 2
+    assert [clip.character for clip in paths] == ["赵明", "小福子"]
+    assert [clip.text for clip in paths] == ["你来了。", "少爷醒了！"]
     assert [call.extra["voice"] for call in manager.calls] == [
         "voice_a",
         "voice_b",
     ]
     assert all(call.extra["response_format"] == "wav" for call in manager.calls)
+    assert all(clip.result is not None for clip in paths)

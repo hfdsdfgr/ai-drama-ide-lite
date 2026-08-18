@@ -39,6 +39,12 @@ CATEGORY_PERMANENT = "permanent"
 
 JOB_TYPE_GENERATION = "generation"
 JOB_TYPE_ASSET_COMPLETION = "asset_completion"
+JOB_TYPE_AUDIO_SEPARATION = "audio_separation"
+JOB_TYPE_DIALOGUE_PLANNING = "dialogue_planning"
+JOB_TYPE_TTS_GENERATION = "tts_generation"
+JOB_TYPE_AUDIO_MIXING = "audio_mixing"
+JOB_TYPE_MEDIA_COMPOSE = "media_compose"
+JOB_TYPE_LIP_SYNC = "lip_sync"
 
 
 def _now_iso() -> str:

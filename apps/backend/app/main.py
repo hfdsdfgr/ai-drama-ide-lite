@@ -36,6 +36,7 @@ from app.services.image_generation_service import ImageGenerationService
 from app.services.image_result_service import ImageResultService
 from app.services.job_store import JobStore
 from app.services.job_worker import JobWorker
+from app.services.lip_sync_service import LipSyncService
 from app.services.project_repo import migrate_legacy_json_projects
 from app.services.production_graph import ProductionGraphService
 from app.services.provider_repo import ProviderRepository
@@ -83,12 +84,18 @@ def create_app(
         app.state.asset_version_service,
         config.projects_dir,
     )
+    app.state.lip_sync_service = LipSyncService(
+        config.db_path,
+        app.state.asset_version_service,
+        config.projects_dir,
+    )
     app.state.job_worker = JobWorker(
         app.state.job_store,
         app.state.provider_manager,
         config.data_dir / "generation_tests",
         image_result_service=app.state.image_result_service,
         audio_dubbing_service=app.state.audio_dubbing_service,
+        lip_sync_service=app.state.lip_sync_service,
     )
     app.state.generation_service = GenerationService(
         app.state.job_store,

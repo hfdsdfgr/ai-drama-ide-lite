@@ -162,3 +162,7 @@
 - **当前配音没有逐句时间轴和口型对齐**：`AudioDubbingService` 只把台词拆成多段 TTS 后按顺序 concat，再与视频从 0 秒开始混音；没有对齐到具体镜头内的时间点，也没有口型 / lip-sync。后续需要真正对口型时，必须增加台词时间戳、ASR/音素对齐或视频生成模型的语音驱动能力，不能把当前配音误认为已经对齐。
 - **`extract_json` 只识别对象，不识别 JSON 数组**：`extract_json` 之前只查找 `{...}`，导致“台词归属”等需要返回 JSON 数组的接口即使 LLM 输出正确，也会解析失败并回退成整段台词一行。修复：`extract_json` 同时识别 `{...}` 和 `[...]`，选择最先出现的有效边界。
 - **不要把“混音”和“封装视频”放在同一条 FFmpeg 命令里**：旧 `mix_audio_video` 同时完成多路音频混音、AAC 编码和视频封装，无法单独复用音频母带。拆分声音管线时，先 `mix_audio_to_master` 输出 WAV 母带，再用 `compose_video_with_audio` 以 `-c:v copy` 将无声视频与母带封装，避免视频被重复编码，也方便以后单独重混或替换母带。
+- **声音子任务如果直接进入 Job Queue，会被 worker 二次领取**：当前配音仍是单个前端可见的 `dubbing` 父 Job。拆分 `audio_separation` / `dialogue_planning` / `tts_generation` / `audio_mixing` / `media_compose` 时，子任务在父 Job 内部同步执行并立即标记终态，不留在 `queued` 状态，避免 worker 下一轮重复执行或产生重复 TTS 费用。
+- **Lip Sync 的 PassThrough 只封装音频，不替换嘴型**：`PassThroughLipSyncAdapter` 复用 `compose_video_with_audio`，输出 `shot_video_lip_synced` 版本但画面不变。它用于验证「Video + Final Audio → Synced Video」独立 Job 流程，不能被当作真实对口型结果。接真实实现（LatentSync / Sync.so）时直接替换 Adapter，不改 Job 结构。
+- **Lip Sync 输入必须用无声视频 + 最终音频母带，而不是有声视频**：配音流程已约定视频先生成无声版本、音频由混音输出 WAV 母带。Lip Sync 若误用 `shot_video_voiced` 作输入，会重复封装音频或产生双重音轨；`LipSyncService.create_job` 校验的是 `shot_video` 当前版本 + `audio_mix_sessions` 最近 completed 的 `output_audio_path`。
+- **M3 时间轴不依赖 LLM / 字符数估算**：`TimelineService.probe_audio_duration` 用 FFmpeg 探测真实时长；TTS Provider 返回 timestamps 时才用字符/词级 alignment，否则一律 `audio_duration_only`。任何「每句话 X 秒」「按字符数估算」的实现都不允许出现。

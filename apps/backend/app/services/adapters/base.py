@@ -51,6 +51,7 @@ class GenerationResult:
     urls: list[str] = field(default_factory=list)
     meta: dict = field(default_factory=dict)
     download_headers: dict = field(default_factory=dict)
+    alignment: dict | None = None
 
 
 @dataclass

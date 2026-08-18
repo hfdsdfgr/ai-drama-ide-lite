@@ -674,14 +674,14 @@ Tasks
 - [x] 音频文件上传（音效 / BGM）
 - [x] 现有 MVP 配音 Job：单次完成 TTS + 混音 + 写版本
 - [x] 有声视频版本写 `versions`（`shot_video_voiced`）
-- [ ] 新增 `audio_stems` 数据表 / Repository，持久化人声、BGM、音效等分轨
-- [ ] 新增 `audio_mix_sessions` 数据表 / Repository，保存 Mix Manifest、增益和母带输出
+- [x] 新增 `audio_stems` 数据表 / Repository，持久化人声、BGM、音效等分轨
+- [x] 新增 `audio_mix_sessions` 数据表 / Repository，保存 Mix Manifest、增益和母带输出
 - [x] 拆分后端 Service：`DialoguePlanningService` / `VoiceSynthesisService` / `AudioMixService` / `MediaComposeService`
 - [ ] 增加人声分离接口和 `SeparationAdapter`，默认 pass-through
 - [ ] 配音阶段独立输出并持久化 TTS stems，不再生成后立即混音
 - [ ] 混音阶段根据 Mix Manifest 生成音频母带，不直接封装视频
 - [ ] 合成阶段独立完成视频封装和版本写入
-- [ ] Job 拆分：`audio_separation` / `dialogue_planning` / `tts_generation` / `audio_mixing` / `media_compose`
+- [x] Job 拆分：`audio_separation` / `dialogue_planning` / `tts_generation` / `audio_mixing` / `media_compose`
 - [ ] 分镜页声音面板改为四阶段状态展示
 - [ ] 单阶段失败可重跑，且不重复调用 TTS 产生费用
 - [ ] 分镜卡片优先播放有声版本（有则播有声，否则播无声）
@@ -698,8 +698,84 @@ Tasks
 - 视频先生成无声版本，不依赖模型自带音效。
 - 台词始终由 TTS 统一处理，不把台词交给视频模型。
 - 人声分离先做接口和 pass-through；真实分离模型后续按需接入。
-- 不做逐句精确时间轴，不做口型 / lip-sync；整集时间轴与自动剪辑仍留后续。
+- 逐句精确时间轴与口型同步不混入 M2，独立里程碑见 M3。
 - AI 音乐生成、独立音效生成、语音克隆 / 声音设计仍 P2。
+
+M3 — Voice / Timeline / Lip Sync（声音时间轴与口型同步分离）
+
+目标：
+
+将三个概念严格分离，禁止用 LLM / 字符数 / 固定规则估算台词时长：
+
+1. Voice Generation：只负责生成音频 + 真实 alignment 数据。
+2. Timeline / Alignment：把音频、台词、Shot 映射到真实时间轴。
+3. Lip Sync：只负责让画面嘴型匹配已确定的音频，独立 Job。
+
+Pipeline
+
+```text
+Script
+ ↓
+Dialogue Clips
+ ↓
+TTS（Voice Generation）
+ ↓
+Final Audio Asset
+ ↓
+Provider Alignment 或 Forced Alignment
+ ↓
+准确的 Dialogue Timeline
+ ↓
+Storyboard / Shot Timeline
+ ↓
+Video Generation
+ ↓
+Video + Final Audio
+ ↓
+Lip Sync（独立 Job）
+ ↓
+Final Video
+```
+
+时间轴来源优先级
+
+1. TTS Provider 返回的真实 timestamps / alignment（如 ElevenLabs with-timestamps）。
+2. Provider 不提供时，对最终音频执行 Forced Alignment（ElevenLabs forced-alignment / WhisperX / MFA）。
+3. 两者都不可用时，只使用音频真实 duration，不伪造字符级时间戳。
+
+Tasks
+
+- [x] DialogueClip 数据结构（startTime / endTime / audioAssetId / alignment / speakerId / voiceProfileId / shotId / version；一句台词可跨多个 Shot）
+- [x] AlignmentResult 数据结构（characters / words / phonemes 预留 / source / confidence）
+- [x] VoiceGenerationAdapter 输出 GenerationResult + AlignmentResult
+- [x] TimelineService：Provider timestamps → Forced Alignment → duration fallback
+- [x] DialogueClip 跨 Shot 片段支持（segments 结构已实现，实际写入待 Shot Timeline 对齐）
+- [x] Shot Timeline 来自真实视频时间轴，不由台词时长反推（真实 duration 探测）
+- [x] DialogueClip / alignment 持久化（dialogue_clips 表 + Repository，配音流程自动写入）
+- [x] LipSyncAdapter 接口 + PassThrough 占位实现（LatentSync / Sync.so 预留）
+- [x] lip_sync 独立 Job（视频 + 音频 → 同步视频，写 shot_video_lip_synced 版本）
+- [x] 第一阶段实现 character / word 级 alignment；phoneme 只预留字段
+
+完成标准
+
+- 音频时间轴是真实时间轴；Shot 时间轴是真实视频时间轴。
+- Lip Sync 只消费视频 + 音频 + 可选角色信息，不读台词、不调 TTS、不估算时长。
+- 一句台词可以跨多个 Shot，通过 clip 内多片段表达。
+- alignment 数据持久化，字段预留到 phoneme 级。
+
+本轮边界
+
+- 第一阶段不实现 phoneme 级 alignment（只预留字段）。
+- Lip Sync 先本地 LatentSync 1.5 或 Sync.so，根据部署环境选择；不默认调用付费 API。
+- 不对齐口型到音素细节，先保证整体同步。
+
+调研结论（2026-08-18）
+
+- 时间轴最可靠：ElevenLabs TTS with-timestamps（字符级）+ Forced Alignment（字符/词级，支持中文、不支持 diarization）。
+- 本地免费 Lip Sync 首选 LatentSync（Apache 2.0，可商用，1.5 约 8GB VRAM）；Wav2Lip 仅限非商业。
+- 商用高质量首选 Sync.so（异步 polling，支持多角色/侧脸）；Hedra 适合静态角色说话，不完全等价于已有视频嘴型替换。
+- 开源 Forced Alignment 备选：WhisperX（词级）、MFA（音素级）；WhisperX 词级时间戳有历史回归 bug，落地前需验证版本。
+- 详细文档：docs/investigations/voice-timeline-lipsync.md
 
 Phase 15 — Generation Center
 
@@ -1006,7 +1082,6 @@ P2 — 后续
 Voice（角色配音已提前到 Phase 14 M2，并拆为人声分离/配音/混音/合成；此处指语音克隆/声音设计等更完整语音系统）
 Music（BGM 本地文件混入已在 Phase 14 M2；AI 音乐生成仍留此处）
 Sound Effects
-Timeline
 Auto Editing
 Local Models
 ComfyUI

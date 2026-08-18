@@ -1,8 +1,19 @@
 """Phase 14 M3 - Voice synthesis service."""
 
+from dataclasses import dataclass, field
 from pathlib import Path
 
-from app.services.adapters.base import GenerationRequest
+from app.services.adapters.base import GenerationRequest, GenerationResult
+
+
+@dataclass
+class VoiceClip:
+    """一条 TTS 输出：音频路径 + 台词归属 + 原始生成结果（含可选 alignment）。"""
+
+    path: str
+    character: str = ""
+    text: str = ""
+    result: GenerationResult | None = field(default=None)
 
 
 class VoiceSynthesisService:
@@ -18,12 +29,12 @@ class VoiceSynthesisService:
         voice_override: str = "",
         response_format: str = "",
         output_dir: str,
-    ) -> list[str]:
-        """逐句生成 TTS 音频，并返回落盘文件路径。"""
+    ) -> list[VoiceClip]:
+        """逐句生成 TTS 音频，返回结构化 VoiceClip（路径 + 归属 + 原始结果）。"""
         character_voices = character_voices or {}
         output = Path(output_dir)
         output.mkdir(parents=True, exist_ok=True)
-        voice_paths: list[str] = []
+        voice_clips: list[VoiceClip] = []
 
         for line in lines:
             voice_id = voice_override or character_voices.get(
@@ -44,5 +55,12 @@ class VoiceSynthesisService:
                 ),
             )
             if result.urls:
-                voice_paths.append(result.urls[0])
-        return voice_paths
+                voice_clips.append(
+                    VoiceClip(
+                        path=result.urls[0],
+                        character=str(line.get("character", "")),
+                        text=str(line.get("text", "")),
+                        result=result,
+                    )
+                )
+        return voice_clips

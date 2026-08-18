@@ -26,6 +26,7 @@ from app.services.job_store import (
     CATEGORY_RETRYABLE,
     JOB_TYPE_ASSET_COMPLETION,
     JOB_TYPE_GENERATION,
+    JOB_TYPE_LIP_SYNC,
     STATUS_CANCELLED,
     STATUS_COMPLETED,
     STATUS_FAILED,
@@ -63,6 +64,7 @@ class JobWorker:
         poll_interval: float = 3.0,
         image_result_service=None,
         audio_dubbing_service=None,
+        lip_sync_service=None,
     ) -> None:
         self.store = store
         self.manager = manager
@@ -71,6 +73,7 @@ class JobWorker:
         self.poll_interval = poll_interval
         self.image_result_service = image_result_service
         self.audio_dubbing_service = audio_dubbing_service
+        self.lip_sync_service = lip_sync_service
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
 
@@ -122,6 +125,8 @@ class JobWorker:
                 self._run_asset_completion(job)
             elif job.type == "dubbing":
                 self._run_dubbing(job)
+            elif job.type == JOB_TYPE_LIP_SYNC:
+                self._run_lip_sync(job)
             else:
                 self.store.mark_failed(
                     job.id, f"未知任务类型: {job.type}", CATEGORY_PERMANENT
@@ -181,7 +186,17 @@ class JobWorker:
                 job.id, "配音服务未初始化", CATEGORY_PERMANENT
             )
             return
-        result = self.audio_dubbing_service.run(job)
+        result = self.audio_dubbing_service.run(job, self.store)
+        self.store.mark_completed(job.id, result_payload=result)
+
+    def _run_lip_sync(self, job) -> None:
+        """Lip Sync：Video + Final Audio -> Synced Video（独立 Job）。"""
+        if self.lip_sync_service is None:
+            self.store.mark_failed(
+                job.id, "Lip Sync 服务未初始化", CATEGORY_PERMANENT
+            )
+            return
+        result = self.lip_sync_service.run(job, self.store)
         self.store.mark_completed(job.id, result_payload=result)
 
     def _finish_sync(self, job, result) -> None:

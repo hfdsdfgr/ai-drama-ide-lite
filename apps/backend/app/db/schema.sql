@@ -171,6 +171,54 @@ CREATE TABLE IF NOT EXISTS versions (
     created_at  TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS audio_stems (
+    id           TEXT PRIMARY KEY,
+    project_id   TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    shot_id      TEXT REFERENCES shots(id) ON DELETE SET NULL,
+    role         TEXT NOT NULL,
+    source_type  TEXT NOT NULL,
+    file_path    TEXT NOT NULL DEFAULT '',
+    format       TEXT NOT NULL DEFAULT 'wav',
+    duration     REAL NOT NULL DEFAULT 0,
+    model_id     TEXT NOT NULL DEFAULT '',
+    provider_id  TEXT NOT NULL DEFAULT '',
+    job_id       TEXT NOT NULL DEFAULT '',
+    order_index  INTEGER NOT NULL DEFAULT 0,
+    payload      TEXT NOT NULL DEFAULT '{}',
+    created_at   TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS audio_mix_sessions (
+    id                 TEXT PRIMARY KEY,
+    project_id         TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    shot_id            TEXT REFERENCES shots(id) ON DELETE SET NULL,
+    status             TEXT NOT NULL DEFAULT 'draft',
+    stem_snapshot      TEXT NOT NULL DEFAULT '[]',
+    gain_settings      TEXT NOT NULL DEFAULT '{}',
+    output_audio_path  TEXT NOT NULL DEFAULT '',
+    error              TEXT NOT NULL DEFAULT '',
+    created_at         TEXT NOT NULL,
+    updated_at         TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS dialogue_clips (
+    id               TEXT PRIMARY KEY,
+    project_id       TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    shot_id          TEXT REFERENCES shots(id) ON DELETE SET NULL,
+    audio_asset_id   TEXT NOT NULL DEFAULT '',
+    speaker_id       TEXT NOT NULL DEFAULT '',
+    voice_profile_id TEXT NOT NULL DEFAULT '',
+    start_time       REAL NOT NULL DEFAULT 0,
+    end_time         REAL NOT NULL DEFAULT 0,
+    version          INTEGER NOT NULL DEFAULT 1,
+    alignment        TEXT NOT NULL DEFAULT '{}',
+    segments         TEXT NOT NULL DEFAULT '[]',
+    job_id           TEXT NOT NULL DEFAULT '',
+    order_index      INTEGER NOT NULL DEFAULT 0,
+    created_at       TEXT NOT NULL,
+    updated_at       TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS production_edges (
     id               TEXT PRIMARY KEY,
     project_id       TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -230,6 +278,10 @@ CREATE INDEX IF NOT EXISTS idx_shots_project ON shots(project_id);
 CREATE INDEX IF NOT EXISTS idx_assets_project ON assets(project_id);
 CREATE INDEX IF NOT EXISTS idx_jobs_project ON jobs(project_id);
 CREATE INDEX IF NOT EXISTS idx_versions_project ON versions(project_id);
+CREATE INDEX IF NOT EXISTS idx_audio_stems_project ON audio_stems(project_id);
+CREATE INDEX IF NOT EXISTS idx_audio_stems_shot ON audio_stems(shot_id);
+CREATE INDEX IF NOT EXISTS idx_audio_mix_sessions_project ON audio_mix_sessions(project_id);
+CREATE INDEX IF NOT EXISTS idx_audio_mix_sessions_shot ON audio_mix_sessions(shot_id);
 CREATE INDEX IF NOT EXISTS idx_production_edges_project ON production_edges(project_id);
 CREATE INDEX IF NOT EXISTS idx_production_edges_upstream ON production_edges(upstream_type, upstream_id);
 CREATE INDEX IF NOT EXISTS idx_production_edges_downstream ON production_edges(downstream_type, downstream_id);
