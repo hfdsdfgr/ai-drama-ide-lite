@@ -37,11 +37,12 @@ def build_project_overview(db_path: Path, project_id: str) -> dict:
     with get_connection(db_path) as conn:
         _ensure_project(conn, project_id)
         snapshot = _snapshot(conn, project_id)
-        active = _active_stages(conn, project_id)
+        active_jobs = _active_stage_jobs(conn, project_id)
 
     stages = []
     for key, label in STAGES:
-        is_active = key in active
+        jobs = active_jobs.get(key, [])
+        is_active = bool(jobs)
         if is_active:
             status = "active"
         elif snapshot[key] > 0:
@@ -54,9 +55,21 @@ def build_project_overview(db_path: Path, project_id: str) -> dict:
                 "label": label,
                 "status": status,
                 "detail": _detail(key, snapshot, is_active),
+                "jobs": jobs,
             }
         )
     return {"project_id": project_id, "stages": stages}
+
+
+def stage_active_job_ids(db_path: Path, project_id: str, stage: str) -> list[str]:
+    """返回某个生产阶段当前进行中的 Job ID 列表（用于阶段级停止）。"""
+    known = {key for key, _label in STAGES}
+    if stage not in known:
+        raise AppError(422, "unknown_stage", f"未知生产阶段: {stage}")
+    with get_connection(db_path) as conn:
+        _ensure_project(conn, project_id)
+        jobs = _active_stage_jobs(conn, project_id).get(stage, [])
+    return [job["job_id"] for job in jobs]
 
 
 def _ensure_project(conn, project_id: str) -> None:
@@ -155,35 +168,77 @@ def _any_version_count(conn, project_id: str, entity_type: str) -> int:
     return int(row["c"])
 
 
-def _active_stages(conn, project_id: str) -> set[str]:
+def _active_stage_jobs(conn, project_id: str) -> dict[str, list[dict]]:
     rows = conn.execute(
         """
-        SELECT capability, input_payload FROM jobs
+        SELECT id, capability, status, progress, input_payload FROM jobs
         WHERE project_id = ? AND status IN (?, ?, ?)
+        ORDER BY created_at
         """,
         (project_id, *ACTIVE_STATUSES),
     ).fetchall()
-    active: set[str] = set()
+    active: dict[str, list[dict]] = {}
     for row in rows:
-        capability = row["capability"]
-        payload = _parse_json(row["input_payload"])
-        extra = payload.get("extra") or {}
-        target_type = extra.get("target_type")
-        target_id = extra.get("target_id")
-
-        if capability in IMAGE_CAPABILITIES:
-            if target_type == "asset":
-                asset_type = _asset_type(conn, target_id)
-                if asset_type == "character":
-                    active.add("character_asset")
-                elif asset_type == "location":
-                    active.add("scene_asset")
-            elif target_type == "shot":
-                active.add("image_generation")
-        elif capability in VIDEO_CAPABILITIES:
-            if target_type == "shot":
-                active.add("video_generation")
+        stage = _stage_for_job(conn, row)
+        if stage is None:
+            continue
+        active.setdefault(stage, []).append(
+            {
+                "job_id": row["id"],
+                "capability": row["capability"],
+                "status": row["status"],
+                "progress": row["progress"],
+                "target_label": _target_label(conn, row),
+            }
+        )
     return active
+
+
+def _stage_for_job(conn, row) -> str | None:
+    capability = row["capability"]
+    payload = _parse_json(row["input_payload"])
+    extra = payload.get("extra") or {}
+    target_type = extra.get("target_type")
+    target_id = extra.get("target_id")
+
+    if capability in IMAGE_CAPABILITIES:
+        if target_type == "asset":
+            asset_type = _asset_type(conn, target_id)
+            if asset_type == "character":
+                return "character_asset"
+            if asset_type == "location":
+                return "scene_asset"
+        elif target_type == "shot":
+            return "image_generation"
+    elif capability in VIDEO_CAPABILITIES:
+        if target_type == "shot":
+            return "video_generation"
+    elif capability == "llm_asset_completion":
+        return "character_asset"
+    return None
+
+
+def _target_label(conn, row) -> str:
+    payload = _parse_json(row["input_payload"])
+    extra = payload.get("extra") or {}
+    target_type = extra.get("target_type")
+    target_id = extra.get("target_id")
+    if not target_id:
+        return ""
+    if target_type == "shot":
+        shot = conn.execute(
+            "SELECT shot_number FROM shots WHERE id = ? AND deleted_at IS NULL",
+            (target_id,),
+        ).fetchone()
+        number = shot["shot_number"] if shot and shot["shot_number"] else ""
+        return f"Shot {number}" if number else target_id
+    if target_type == "asset":
+        asset = conn.execute(
+            "SELECT name FROM assets WHERE id = ?",
+            (target_id,),
+        ).fetchone()
+        return asset["name"] if asset else target_id
+    return target_id
 
 
 def _asset_type(conn, asset_id: str) -> str:

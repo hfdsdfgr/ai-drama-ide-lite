@@ -156,6 +156,55 @@ def test_active_character_asset_job_marks_stage_active(client):
     stages = _stage_map(client, pid)
     assert stages["character_asset"]["status"] == "active"
     assert stages["character_asset"]["detail"] == "生成中"
+    assert len(stages["character_asset"]["jobs"]) == 1
+    job = stages["character_asset"]["jobs"][0]
+    assert job["job_id"] == "job1"
+    assert job["capability"] == "text_to_image"
+    assert job["status"] == "running"
+    assert job["target_label"] == "林凡"
+
+
+def test_stage_jobs_include_shot_video_job(client):
+    pid = _create_project(client)
+    db_path = client.app.state.settings.db_path
+    with get_connection(db_path) as conn:
+        now = _now()
+        _insert(
+            conn,
+            "INSERT INTO scenes (id, project_id, episode_id, novel_id, title, order_index, slugline, action, dialogue, deleted_at, created_at, updated_at) VALUES (?, ?, NULL, NULL, '', 0, '', '', '', NULL, ?, ?)",
+            ("sc1", pid, now, now),
+        )
+        _insert(
+            conn,
+            "INSERT INTO shots (id, project_id, scene_id, shot_number, order_index, shot_type, camera, characters, action, lighting, dialogue, duration, prompt, deleted_at, created_at, updated_at) VALUES (?, ?, ?, 3, 0, '', '', '', '', '', '', 0, '', NULL, ?, ?)",
+            ("shot1", pid, "sc1", now, now),
+        )
+        payload = json.dumps(
+            {"extra": {"target_type": "shot", "target_id": "shot1"}}
+        )
+        _insert(
+            conn,
+            "INSERT INTO jobs (id, project_id, type, status, progress, model_id, provider_id, capability, task_id, input_payload, result_payload, output_files, error, error_category, attempts, max_attempts, created_at) VALUES (?, ?, 'generation', 'running', 64, 'model', 'prov', 'image_to_video', '', ?, '{}', '[]', '', '', 1, 1, ?)",
+            ("job1", pid, payload, now),
+        )
+
+    stages = _stage_map(client, pid)
+    assert stages["video_generation"]["status"] == "active"
+    assert stages["video_generation"]["jobs"] == [
+        {
+            "job_id": "job1",
+            "capability": "image_to_video",
+            "status": "running",
+            "progress": 64,
+            "target_label": "Shot 3",
+        }
+    ]
+
+
+def test_stage_jobs_empty_when_no_active_job(client):
+    pid = _create_project(client)
+    stages = _stage_map(client, pid)
+    assert all(stage["jobs"] == [] for stage in stages.values())
 
 
 def test_overview_project_not_found(client):
