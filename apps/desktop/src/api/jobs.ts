@@ -33,3 +33,19 @@ export function resumeJob(jobId: string): Promise<JobOut> {
 export function retryJob(jobId: string): Promise<JobOut> {
   return request<JobOut>(`/jobs/${jobId}/retry`, { method: "POST" });
 }
+
+export interface BatchJobsResult {
+  affected: number;
+  jobs: JobOut[];
+}
+
+export function batchJobs(params: {
+  project_id: string;
+  action: "cancel" | "pause" | "resume";
+  stage?: string;
+}): Promise<BatchJobsResult> {
+  return request<BatchJobsResult>(`/jobs/batch`, {
+    method: "POST",
+    body: JSON.stringify(params),
+  });
+}

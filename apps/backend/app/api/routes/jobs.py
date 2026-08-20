@@ -5,7 +5,8 @@ from typing import Literal
 from fastapi import APIRouter, Request
 
 from app.core.errors import AppError
-from app.schemas.job import JobOut
+from app.schemas.job import BatchJobsRequest, BatchJobsResult, JobOut
+from app.services.project_overview import stage_active_job_ids
 from app.services.job_store import JobRecord
 
 router = APIRouter(prefix="/api/jobs", tags=["jobs"])
@@ -53,6 +54,36 @@ def list_jobs(
             project_id=project_id, status=status, limit=limit
         )
     ]
+
+
+@router.post("/batch", response_model=BatchJobsResult)
+def batch_jobs(request: Request, body: BatchJobsRequest) -> dict:
+    """项目级 / 阶段级批量操作：取消、暂停、恢复。
+    只影响非终态任务；已完成资产与版本不受影响。
+    """
+    store = _store(request)
+    if body.stage:
+        job_ids = stage_active_job_ids(
+            request.app.state.settings.db_path, body.project_id, body.stage
+        )
+    else:
+        job_ids = [
+            job.id
+            for job in store.list_jobs(project_id=body.project_id, limit=200)
+            if job.status in ("queued", "running", "paused")
+        ]
+
+    if body.action == "cancel":
+        affected = store.cancel_many(job_ids)
+    elif body.action == "pause":
+        affected = store.pause_many(job_ids)
+    else:
+        affected = store.resume_many(job_ids)
+
+    return {
+        "affected": affected,
+        "jobs": [_job_out(store.get(job_id)) for job_id in job_ids],
+    }
 
 
 @router.get("/{job_id}", response_model=JobOut)

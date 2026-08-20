@@ -273,6 +273,31 @@ class JobStore:
             )
         return self.get(job_id)
 
+    def cancel_many(self, job_ids: list[str]) -> int:
+        """批量取消 queued / running 任务，终态任务自动跳过，返回受影响数量。"""
+        if not job_ids:
+            return 0
+        now = _now_iso()
+        placeholders = ",".join("?" * len(job_ids))
+        with get_connection(self.db_path) as conn:
+            cur = conn.execute(
+                f"""
+                UPDATE jobs
+                SET status = ?, cancelled_at = ?, completed_at = ?
+                WHERE id IN ({placeholders}) AND status IN (?, ?, ?)
+                """,
+                (
+                    STATUS_CANCELLED,
+                    now,
+                    now,
+                    *job_ids,
+                    STATUS_QUEUED,
+                    STATUS_RUNNING,
+                    STATUS_PAUSED,
+                ),
+            )
+            return cur.rowcount
+
     def pause(self, job_id: str) -> JobRecord:
         """running -> paused。仅允许运行中的任务暂停。"""
         now = _now_iso()
@@ -286,6 +311,22 @@ class JobStore:
             )
         return self.get(job_id)
 
+    def pause_many(self, job_ids: list[str]) -> int:
+        """批量暂停 running 任务，返回受影响数量。"""
+        if not job_ids:
+            return 0
+        now = _now_iso()
+        placeholders = ",".join("?" * len(job_ids))
+        with get_connection(self.db_path) as conn:
+            cur = conn.execute(
+                f"""
+                UPDATE jobs SET status = ?, paused_at = ?
+                WHERE id IN ({placeholders}) AND status = ?
+                """,
+                (STATUS_PAUSED, now, *job_ids, STATUS_RUNNING),
+            )
+            return cur.rowcount
+
     def resume(self, job_id: str) -> JobRecord:
         """paused -> queued（重新排队，worker 统一从 queued 领取）。"""
         with get_connection(self.db_path) as conn:
@@ -298,6 +339,22 @@ class JobStore:
                 (STATUS_QUEUED, job_id, STATUS_PAUSED),
             )
         return self.get(job_id)
+
+    def resume_many(self, job_ids: list[str]) -> int:
+        """批量恢复 paused 任务为 queued，返回受影响数量。"""
+        if not job_ids:
+            return 0
+        placeholders = ",".join("?" * len(job_ids))
+        with get_connection(self.db_path) as conn:
+            cur = conn.execute(
+                f"""
+                UPDATE jobs
+                SET status = ?, paused_at = NULL, started_at = NULL, heartbeat_at = NULL
+                WHERE id IN ({placeholders}) AND status = ?
+                """,
+                (STATUS_QUEUED, *job_ids, STATUS_PAUSED),
+            )
+            return cur.rowcount
 
     def retry(self, job_id: str) -> JobRecord:
         """failed / cancelled -> queued（用户手动重试），重置错误与尝试次数。

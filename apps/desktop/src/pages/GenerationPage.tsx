@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { listJobs, cancelJob, retryJob, resumeJob } from "../api/jobs";
+import {
+  listJobs,
+  cancelJob,
+  pauseJob,
+  retryJob,
+  resumeJob,
+  batchJobs,
+} from "../api/jobs";
 import { getProjectOverview } from "../api/overview";
 import { listProjects } from "../api/projects";
 import type { JobOut, JobStatus } from "../types/job";
@@ -23,7 +30,21 @@ const CAPABILITY_LABEL: Record<string, string> = {
   character_reference: "角色参考",
   text_to_video: "文生视频",
   image_to_video: "图生视频",
+  video_to_video: "视频生视频",
   llm_asset_completion: "资产卡补全",
+  lip_sync: "口型同步",
+  text_to_speech: "语音合成",
+  audio_separation: "人声分离",
+  audio_mix: "混音",
+};
+
+const JOB_STAGE_LABEL: Record<string, string> = {
+  queued: "排队中",
+  running: "生成中",
+  paused: "已暂停",
+  completed: "已完成",
+  failed: "失败",
+  cancelled: "已取消",
 };
 
 const STAGE_ICON: Record<StageStatus, string> = {
@@ -65,6 +86,8 @@ export function GenerationPage({ active }: { active: boolean }) {
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState<Filter>("all");
   const [cancelArmed, setCancelArmed] = useState<Record<string, boolean>>({});
+  const [batchArmed, setBatchArmed] = useState(false);
+  const [stageArmed, setStageArmed] = useState<Record<string, boolean>>({});
   const timerRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -144,6 +167,53 @@ export function GenerationPage({ active }: { active: boolean }) {
     }
   }
 
+  async function handlePause(job: JobOut) {
+    try {
+      await pauseJob(job.job_id);
+      await refresh();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  async function handleBatch(action: "pause" | "resume" | "cancel") {
+    if (!projectId) return;
+    if (action === "cancel" && !batchArmed) {
+      setBatchArmed(true);
+      window.setTimeout(() => setBatchArmed(false), 3000);
+      return;
+    }
+    try {
+      await batchJobs({ project_id: projectId, action });
+      setBatchArmed(false);
+      await refresh();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  async function handleCancelStage(stageKey: string) {
+    if (!projectId) return;
+    if (!stageArmed[stageKey]) {
+      setStageArmed((prev) => ({ ...prev, [stageKey]: true }));
+      window.setTimeout(() => {
+        setStageArmed((prev) => ({ ...prev, [stageKey]: false }));
+      }, 3000);
+      return;
+    }
+    try {
+      await batchJobs({
+        project_id: projectId,
+        action: "cancel",
+        stage: stageKey,
+      });
+      setStageArmed((prev) => ({ ...prev, [stageKey]: false }));
+      await refresh();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
   return (
     <div className="page">
       <div className="page-head">
@@ -172,6 +242,28 @@ export function GenerationPage({ active }: { active: boolean }) {
         <button type="button" onClick={() => void refresh()} disabled={loading || !projectId}>
           {loading ? "刷新中…" : "刷新"}
         </button>
+        <button
+          type="button"
+          onClick={() => void handleBatch("pause")}
+          disabled={loading || !projectId}
+        >
+          暂停全部
+        </button>
+        <button
+          type="button"
+          onClick={() => void handleBatch("resume")}
+          disabled={loading || !projectId}
+        >
+          恢复全部
+        </button>
+        <button
+          type="button"
+          className={batchArmed ? "button-danger" : "button-ghost"}
+          onClick={() => void handleBatch("cancel")}
+          disabled={loading || !projectId}
+        >
+          {batchArmed ? "确认停止全部" : "停止全部"}
+        </button>
       </div>
 
       {error && <p className="error">{error}</p>}
@@ -199,6 +291,44 @@ export function GenerationPage({ active }: { active: boolean }) {
                       <span className="overview-step-detail">{stage.detail}</span>
                     )}
                   </span>
+                  {stage.status === "active" && stage.jobs.length > 0 && (
+                    <>
+                      <ul className="stage-jobs">
+                        {stage.jobs.map((job) => (
+                          <li key={job.job_id} className="stage-job">
+                            <span
+                              className={`stage-job-dot stage-job-${job.status}`}
+                              aria-hidden="true"
+                            />
+                            <span className="stage-job-text">
+                              {CAPABILITY_LABEL[job.capability] ?? job.capability}
+                              {job.target_label ? ` · ${job.target_label}` : ""}
+                            </span>
+                            {job.status === "running" ? (
+                              job.progress > 0 ? (
+                                <span className="stage-job-progress">
+                                  {job.progress}%
+                                </span>
+                              ) : (
+                                <span className="muted">处理中…</span>
+                              )
+                            ) : (
+                              <span className="stage-job-progress">
+                                {JOB_STAGE_LABEL[job.status] ?? job.status}
+                              </span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                      <button
+                        type="button"
+                        className={`stage-stop ${stageArmed[stage.key] ? "button-danger" : "button-ghost"}`}
+                        onClick={() => void handleCancelStage(stage.key)}
+                      >
+                        {stageArmed[stage.key] ? "确认停止该阶段" : "停止该阶段"}
+                      </button>
+                    </>
+                  )}
                 </li>
               ))}
             </ol>
@@ -220,11 +350,7 @@ export function GenerationPage({ active }: { active: boolean }) {
 
             {visible.length === 0 ? (
               <div className="card">
-                <p className="muted">
-                  {filter === "all"
-                    ? "该分类下没有任务。"
-                    : "该分类下没有任务。"}
-                </p>
+                <p className="muted">该分类下没有任务。</p>
               </div>
             ) : (
               <div className="jobs-list">
@@ -244,6 +370,20 @@ export function GenerationPage({ active }: { active: boolean }) {
                         {job.error_category === "retryable" && "（可重试）"}
                       </p>
                     )}
+                    {job.status === "running" && (
+                      <div className="progress-bar">
+                        <div
+                          className="progress-bar-fill"
+                          style={{
+                            width:
+                              job.progress > 0
+                                ? `${Math.min(job.progress, 100)}%`
+                                : "8%",
+                            opacity: job.progress > 0 ? 1 : 0.4,
+                          }}
+                        />
+                      </div>
+                    )}
                     <div className="job-meta">
                       <span className="muted">
                         创建于 {formatTime(job.created_at)}
@@ -254,6 +394,11 @@ export function GenerationPage({ active }: { active: boolean }) {
                       )}
                     </div>
                     <div className="job-actions">
+                      {job.status === "running" && (
+                        <button type="button" onClick={() => void handlePause(job)}>
+                          暂停
+                        </button>
+                      )}
                       {job.status === "paused" && (
                         <button type="button" onClick={() => void handleResume(job)}>
                           恢复

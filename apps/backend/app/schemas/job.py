@@ -29,3 +29,14 @@ class JobOut(BaseModel):
     completed_at: datetime | None = None
     paused_at: datetime | None = None
     cancelled_at: datetime | None = None
+
+
+class BatchJobsRequest(BaseModel):
+    project_id: str = Field(min_length=1, max_length=100)
+    action: Literal["cancel", "pause", "resume"]
+    stage: str | None = Field(default=None, max_length=50)
+
+
+class BatchJobsResult(BaseModel):
+    affected: int = 0
+    jobs: list[JobOut] = Field(default_factory=list)
