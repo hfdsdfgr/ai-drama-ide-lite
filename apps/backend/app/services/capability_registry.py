@@ -28,6 +28,7 @@ CAPABILITY_LABELS: dict[str, str] = {
     "video_audio": "视频自带音效",
     "text_to_speech": "文本转语音",
     "speech_to_text": "语音转写",
+    "vision": "图像理解",
     "tts_timestamps": "语音时间戳",
     "voice_clone": "声音复刻",
     "voice_design": "声音设计",
@@ -52,6 +53,7 @@ VIDEO_CAPABILITIES = frozenset(
 AUDIO_CAPABILITIES = frozenset(
     {"text_to_speech", "speech_to_text", "tts_timestamps", "voice_clone", "voice_design"}
 )
+VISION_CAPABILITIES = frozenset({"vision"})
 
 # 图片模型“最多可接收参考图数量”的兜底规则。
 # 优先使用 vendor_models.json 中的精确字段；这里用于服务商返回的新模型或未收录模型。
@@ -148,7 +150,7 @@ def validate_capabilities(model_type: str, capabilities: list[str]) -> list[str]
         if model_type == "video"
         else AUDIO_CAPABILITIES
         if model_type == "audio"
-        else frozenset()
+        else VISION_CAPABILITIES
     )
     unknown = [c for c in capabilities if c not in CAPABILITY_LABELS]
     if unknown:

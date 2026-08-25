@@ -38,6 +38,14 @@ import {
   type DialogueReview,
 } from "../api/dialogue_reviews";
 import {
+  decideVisualReview,
+  listVisualReviews,
+  runVisualReview,
+  submitManualVisualReview,
+  type VisualReview,
+  type VisualReviewType,
+} from "../api/visual_reviews";
+import {
   composeVideos,
   dubShot,
   getComposeJob,
@@ -203,6 +211,18 @@ export function StoryboardPage({ active }: { active: boolean }) {
   const [latestReview, setLatestReview] = useState<DialogueReview | null>(null);
   const [reviewingJob, setReviewingJob] = useState<JobOut | null>(null);
   const [reviewDeciding, setReviewDeciding] = useState(false);
+  const [visionModels, setVisionModels] = useState<Model[]>([]);
+  const [visualModelId, setVisualModelId] = useState("");
+  const [visualReviewType, setVisualReviewType] =
+    useState<VisualReviewType>("character");
+  const [visualMode, setVisualMode] = useState<"model" | "manual">("model");
+  const [latestVisualReview, setLatestVisualReview] =
+    useState<VisualReview | null>(null);
+  const [visualReviewingJob, setVisualReviewingJob] = useState<JobOut | null>(
+    null,
+  );
+  const [visualManualIssue, setVisualManualIssue] = useState("");
+  const [visualDeciding, setVisualDeciding] = useState(false);
   const [voiceModelId, setVoiceModelId] = useState("");
   const [shotVersions, setShotVersions] = useState<Record<string, AssetVersion>>(
     {},
@@ -293,6 +313,11 @@ export function StoryboardPage({ active }: { active: boolean }) {
     listModels({ model_type: "llm", enabled_only: true })
       .then((models) => {
         setLlmModels(models);
+        const vision = models.filter((m) => m.capabilities.includes("vision"));
+        setVisionModels(vision);
+        setVisualModelId((prev) =>
+          vision.some((m) => m.id === prev) ? prev : (vision[0]?.id ?? ""),
+        );
         setReviewScriptModelId((prev) =>
           models.some((m) => m.id === prev) ? prev : (models[0]?.id ?? ""),
         );
@@ -481,6 +506,9 @@ export function StoryboardPage({ active }: { active: boolean }) {
     setLatestReview(null);
     setReviewingJob(null);
     setManualDetected("");
+    setLatestVisualReview(null);
+    setVisualReviewingJob(null);
+    setVisualManualIssue("");
     void getCurrentVideoVersion(projectId, shot.id)
       .then(setShotVideoVersion)
       .catch(() => setShotVideoVersion(null));
@@ -492,6 +520,11 @@ export function StoryboardPage({ active }: { active: boolean }) {
         if (reviews.length > 0) setLatestReview(reviews[0]);
       })
       .catch(() => setLatestReview(null));
+    void listVisualReviews(projectId, shot.id)
+      .then((reviews) => {
+        if (reviews.length > 0) setLatestVisualReview(reviews[0]);
+      })
+      .catch(() => setLatestVisualReview(null));
   }
 
   function closeShotDetail() {
@@ -752,6 +785,83 @@ export function StoryboardPage({ active }: { active: boolean }) {
       setError((e as Error).message);
     } finally {
       setReviewDeciding(false);
+    }
+  }
+
+  async function handleRunVisualReview() {
+    if (!projectId || !selectedShotId || !visualModelId) {
+      setError("请选择视觉审核模型");
+      return;
+    }
+    setVisualReviewingJob(null);
+    setError("");
+    try {
+      const job = await runVisualReview(projectId, {
+        shot_id: selectedShotId,
+        model_id: visualModelId,
+        review_type: visualReviewType,
+      });
+      setVisualReviewingJob(job);
+      while (true) {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        const updated = await getJob(job.job_id);
+        setVisualReviewingJob(updated);
+        if (["completed", "failed", "cancelled"].includes(updated.status)) {
+          if (updated.status === "completed") {
+            const reviews = await listVisualReviews(
+              projectId,
+              selectedShotId,
+            );
+            setLatestVisualReview(reviews[0] ?? null);
+          } else if (updated.error) {
+            setError(updated.error);
+          }
+          break;
+        }
+      }
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setVisualReviewingJob(null);
+    }
+  }
+
+  async function handleSubmitManualVisualReview(consistent: boolean) {
+    if (!projectId || !selectedShotId) return;
+    setError("");
+    try {
+      const review = await submitManualVisualReview(projectId, {
+        shot_id: selectedShotId,
+        review_type: visualReviewType,
+        consistent,
+        issue: visualManualIssue,
+      });
+      setLatestVisualReview(review);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  async function handleVisualDecision(
+    decision: "regenerate" | "delete_shot" | "keep",
+  ) {
+    if (!projectId || !latestVisualReview) return;
+    setVisualDeciding(true);
+    setError("");
+    try {
+      const updated = await decideVisualReview(
+        projectId,
+        latestVisualReview.id,
+        decision,
+      );
+      setLatestVisualReview(updated);
+      if (decision === "delete_shot") {
+        handleDeleteSelectedShot();
+      }
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setVisualDeciding(false);
     }
   }
 
@@ -1550,6 +1660,187 @@ export function StoryboardPage({ active }: { active: boolean }) {
                 ) : (
                   <p className="muted">
                     请先生成该镜头的视频，再进行台词审核。
+                  </p>
+                )}
+              </div>
+              <div className="card image-generate-card">
+                <div className="sidebar-head">
+                  <h3>视觉一致性检查</h3>
+                </div>
+                {shotVersions[selectedShotId] ? (
+                  <>
+                    <label>
+                      检查类型
+                      <select
+                        value={visualReviewType}
+                        onChange={(e) =>
+                          setVisualReviewType(
+                            e.target.value as VisualReviewType,
+                          )
+                        }
+                        disabled={visualReviewingJob !== null}
+                      >
+                        <option value="character">角色与角色卡</option>
+                        <option value="scene">场景与设定</option>
+                        <option value="continuity">与前一镜头连续性</option>
+                      </select>
+                    </label>
+                    <label>
+                      审核方式
+                      <select
+                        value={visualMode}
+                        onChange={(e) =>
+                          setVisualMode(e.target.value as "model" | "manual")
+                        }
+                        disabled={visualReviewingJob !== null}
+                      >
+                        <option value="model">多模态模型审核</option>
+                        <option value="manual">人工审核</option>
+                      </select>
+                    </label>
+                    {visualMode === "model" ? (
+                      <>
+                        {visionModels.length > 0 ? (
+                          <label>
+                            视觉模型
+                            <select
+                              value={visualModelId}
+                              onChange={(e) =>
+                                setVisualModelId(e.target.value)
+                              }
+                              disabled={visualReviewingJob !== null}
+                            >
+                              {visionModels.map((m) => (
+                                <option key={m.id} value={m.id}>
+                                  {m.model_id}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        ) : (
+                          <p className="muted">
+                            没有可用的视觉模型，请先在「设置」启用（如
+                            qwen-vl-plus / glm-4v-plus / gpt-4o）。
+                          </p>
+                        )}
+                        <button
+                          type="button"
+                          className="btn-primary"
+                          disabled={
+                            !visualModelId || visualReviewingJob !== null
+                          }
+                          onClick={() => void handleRunVisualReview()}
+                        >
+                          {visualReviewingJob ? "审核中…" : "开始审核"}
+                        </button>
+                        {visualReviewingJob && (
+                          <p className="muted">正在比对分镜图与参考图…</p>
+                        )}
+                        <p className="muted">
+                          审核会调用视觉模型 API，可能产生费用。
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="muted">
+                          对照上方分镜图与角色卡 / 场景设定 / 前一镜头判断是否一致。
+                        </p>
+                        <label>
+                          问题说明（不一致时填写）
+                          <textarea
+                            value={visualManualIssue}
+                            onChange={(e) => setVisualManualIssue(e.target.value)}
+                            rows={3}
+                            placeholder="例如：角色服装与角色卡不一致"
+                          />
+                        </label>
+                        <div className="review-actions">
+                          <button
+                            type="button"
+                            className="btn-primary"
+                            onClick={() =>
+                              void handleSubmitManualVisualReview(true)
+                            }
+                          >
+                            视觉一致
+                          </button>
+                          <button
+                            type="button"
+                            className="button-ghost"
+                            onClick={() =>
+                              void handleSubmitManualVisualReview(false)
+                            }
+                          >
+                            视觉不一致
+                          </button>
+                        </div>
+                      </>
+                    )}
+                    {latestVisualReview && (
+                      <div
+                        className={`review-result review-${latestVisualReview.status}`}
+                      >
+                        {latestVisualReview.status === "flagged" ? (
+                          <>
+                            <p className="review-issue">
+                              检测到异常：
+                              {latestVisualReview.issue || "视觉要素不一致"}
+                            </p>
+                            <div className="review-actions">
+                              <button
+                                type="button"
+                                disabled={visualDeciding}
+                                onClick={() =>
+                                  void handleVisualDecision("regenerate")
+                                }
+                              >
+                                重新生成
+                              </button>
+                              <button
+                                type="button"
+                                disabled={visualDeciding}
+                                onClick={() =>
+                                  void handleVisualDecision("delete_shot")
+                                }
+                              >
+                                删除分镜
+                              </button>
+                              <button
+                                type="button"
+                                disabled={visualDeciding}
+                                onClick={() =>
+                                  void handleVisualDecision("keep")
+                                }
+                              >
+                                继续沿用
+                              </button>
+                            </div>
+                            {latestVisualReview.decision && (
+                              <p className="muted">
+                                已选择：
+                                {latestVisualReview.decision === "regenerate"
+                                  ? "重新生成（请在上方图片区域重新生成）"
+                                  : latestVisualReview.decision === "delete_shot"
+                                    ? "删除分镜"
+                                    : "继续沿用"}
+                              </p>
+                            )}
+                          </>
+                        ) : (
+                          <p className="review-passed">
+                            视觉一致 ✓（
+                            {latestVisualReview.mode === "model"
+                              ? "模型审核"
+                              : "人工审核"}
+                            ）
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <p className="muted">
+                    请先生成该镜头的分镜图，再进行视觉一致性检查。
                   </p>
                 )}
               </div>

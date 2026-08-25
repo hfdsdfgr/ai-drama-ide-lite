@@ -50,6 +50,9 @@ class OpenAICompatAdapter(Adapter):
         temperature: float = 0.8,
         timeout: int = 60,
     ) -> str:
+        """支持纯文本与多模态 content（[{type:text/image_url}] 数组）。
+        图片以 data URL 传入时原样透传；HTTP 地址同样支持。
+        """
         url = ctx.base_url.rstrip("/") + "/chat/completions"
         headers = {"Authorization": f"Bearer {ctx.api_key}"} if ctx.api_key else {}
         payload = {"model": ctx.model_id, "messages": messages, "temperature": temperature}

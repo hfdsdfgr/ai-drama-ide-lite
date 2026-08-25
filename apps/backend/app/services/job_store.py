@@ -47,6 +47,7 @@ JOB_TYPE_MEDIA_COMPOSE = "media_compose"
 JOB_TYPE_LIP_SYNC = "lip_sync"
 JOB_TYPE_VIDEO_COMPOSE = "video_compose"
 JOB_TYPE_DIALOGUE_REVIEW = "dialogue_review"
+JOB_TYPE_VISUAL_REVIEW = "visual_review"
 
 
 def _now_iso() -> str:

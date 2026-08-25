@@ -34,6 +34,7 @@ export type CapabilityKey =
   | "video_audio"
   | "text_to_speech"
   | "speech_to_text"
+  | "vision"
   | "tts_timestamps"
   | "voice_clone"
   | "voice_design"
@@ -53,6 +54,7 @@ export const CAPABILITY_LABELS: Record<CapabilityKey, string> = {
   video_audio: "视频自带音效",
   text_to_speech: "文本转语音",
   speech_to_text: "语音转写",
+  vision: "图像理解",
   tts_timestamps: "语音时间戳",
   voice_clone: "声音复刻",
   voice_design: "声音设计",

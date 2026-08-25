@@ -131,7 +131,7 @@ def test_model_auto_capabilities(client):
     assert dalle["capabilities"] == ["text_to_image"]
 
     llm = _add_model(client, provider["id"], "gpt-4o", "llm")
-    assert llm["capabilities"] == []
+    assert llm["capabilities"] == ["vision"]
 
 
 def test_manual_override_and_reset(client):

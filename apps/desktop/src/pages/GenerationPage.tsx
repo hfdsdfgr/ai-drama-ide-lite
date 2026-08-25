@@ -37,6 +37,7 @@ const CAPABILITY_LABEL: Record<string, string> = {
   audio_separation: "人声分离",
   audio_mix: "混音",
   dialogue_review: "台词审核",
+  visual_review: "视觉一致性检查",
 };
 
 const JOB_STAGE_LABEL: Record<string, string> = {
