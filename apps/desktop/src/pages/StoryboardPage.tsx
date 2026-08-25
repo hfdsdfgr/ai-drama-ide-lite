@@ -177,7 +177,15 @@ function SortableShotCard({
   );
 }
 
-export function StoryboardPage({ active }: { active: boolean }) {
+export function StoryboardPage({
+  active,
+  jumpToShotId = null,
+  onJumpConsumed,
+}: {
+  active: boolean;
+  jumpToShotId?: string | null;
+  onJumpConsumed?: () => void;
+}) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState("");
   const [novels, setNovels] = useState<Novel[]>([]);
@@ -324,6 +332,47 @@ export function StoryboardPage({ active }: { active: boolean }) {
       })
       .catch((e) => setError((e as Error).message));
   }, [active]);
+
+  useEffect(() => {
+    if (!jumpToShotId || !projectId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        for (const sceneId of Object.keys(sceneDetails)) {
+          const shot = sceneDetails[sceneId]?.shots.find(
+            (s) => s.id === jumpToShotId,
+          );
+          if (shot) {
+            openShotDetail(sceneId, shot);
+            onJumpConsumed?.();
+            return;
+          }
+        }
+        const episodes = await listEpisodes(projectId);
+        for (const episode of episodes) {
+          const detail = await getEpisodeDetail(projectId, episode.id);
+          for (const scene of detail.scenes) {
+            const sceneDetail = await getSceneDetail(projectId, scene.id);
+            const shot = sceneDetail.shots.find(
+              (s) => s.id === jumpToShotId,
+            );
+            if (shot && !cancelled) {
+              await selectEpisode(episode.id);
+              openShotDetail(scene.id, shot);
+              onJumpConsumed?.();
+              return;
+            }
+          }
+        }
+      } catch {
+        // 跳转失败不阻塞页面
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jumpToShotId, projectId]);
 
   const refreshNovels = useCallback(async (pid: string) => {
     setError("");

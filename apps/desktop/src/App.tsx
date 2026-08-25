@@ -40,6 +40,12 @@ const CREATION_MODULES: ModuleDef[] = [
 
 function App() {
   const [view, setView] = useState<View>("project");
+  const [jumpToShotId, setJumpToShotId] = useState<string | null>(null);
+
+  function handleJumpToShot(shotId: string) {
+    setJumpToShotId(shotId);
+    setView("storyboard");
+  }
 
   return (
     <div className="app">
@@ -89,13 +95,20 @@ function App() {
           <ScriptPage active={view === "script"} />
         </div>
         <div className={view === "storyboard" ? "view-pane active" : "view-pane"}>
-          <StoryboardPage active={view === "storyboard"} />
+          <StoryboardPage
+            active={view === "storyboard"}
+            jumpToShotId={view === "storyboard" ? jumpToShotId : null}
+            onJumpConsumed={() => setJumpToShotId(null)}
+          />
         </div>
         <div className={view === "assets" ? "view-pane active" : "view-pane"}>
           <AssetPage active={view === "assets"} />
         </div>
         <div className={view === "generation" ? "view-pane active" : "view-pane"}>
-          <GenerationPage active={view === "generation"} />
+          <GenerationPage
+            active={view === "generation"}
+            onJumpToShot={handleJumpToShot}
+          />
         </div>
         <div className={view === "settings" ? "view-pane active" : "view-pane"}>
           <SettingsPage />

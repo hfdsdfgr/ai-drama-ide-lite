@@ -17,6 +17,7 @@ from app.api.routes import (
     overview,
     production_graph,
     projects,
+    quality,
     providers,
     script,
     story,
@@ -176,6 +177,7 @@ def create_app(
     app.include_router(videos.router)
     app.include_router(dialogue_reviews.router)
     app.include_router(visual_reviews.router)
+    app.include_router(quality.router)
     logger.info("Application started (env=%s)", config.env)
     return app
 

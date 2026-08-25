@@ -9,6 +9,7 @@ import {
   batchJobs,
 } from "../api/jobs";
 import { getProjectOverview } from "../api/overview";
+import { getProjectQuality, type ProjectQuality } from "../api/quality";
 import { listProjects } from "../api/projects";
 import type { JobOut, JobStatus } from "../types/job";
 import type { ProjectOverview, StageStatus } from "../types/overview";
@@ -79,10 +80,17 @@ function matchesFilter(job: JobOut, filter: Filter): boolean {
   return job.status === filter;
 }
 
-export function GenerationPage({ active }: { active: boolean }) {
+export function GenerationPage({
+  active,
+  onJumpToShot,
+}: {
+  active: boolean;
+  onJumpToShot?: (shotId: string) => void;
+}) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState("");
   const [overview, setOverview] = useState<ProjectOverview | null>(null);
+  const [quality, setQuality] = useState<ProjectQuality | null>(null);
   const [jobs, setJobs] = useState<JobOut[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -107,12 +115,14 @@ export function GenerationPage({ active }: { active: boolean }) {
     if (!projectId) return;
     setLoading(true);
     try {
-      const [nextOverview, nextJobs] = await Promise.all([
+      const [nextOverview, nextJobs, nextQuality] = await Promise.all([
         getProjectOverview(projectId),
         listJobs({ project_id: projectId, limit: 200 }),
+        getProjectQuality(projectId),
       ]);
       setOverview(nextOverview);
       setJobs(nextJobs);
+      setQuality(nextQuality);
       setError("");
     } catch (e) {
       setError((e as Error).message);
@@ -134,6 +144,12 @@ export function GenerationPage({ active }: { active: boolean }) {
   }, [active, projectId, refresh]);
 
   const visible = jobs.filter((job) => matchesFilter(job, filter));
+  const flaggedItems = (quality?.items ?? []).filter(
+    (item) => item.status === "flagged",
+  );
+  const pendingItems = (quality?.items ?? []).filter(
+    (item) => item.status === "pending",
+  );
 
   async function handleCancel(job: JobOut) {
     if (!cancelArmed[job.job_id]) {
@@ -337,6 +353,77 @@ export function GenerationPage({ active }: { active: boolean }) {
           </section>
 
           <section className="generation-jobs">
+            <section className="card quality-panel">
+              <div className="quality-head">
+                <h3>质量报告</h3>
+                <div className="quality-summary">
+                  <span className="quality-bad">
+                    异常 {quality?.summary.flagged ?? 0}
+                  </span>
+                  <span className="quality-muted">
+                    待审核 {quality?.summary.pending ?? 0}
+                  </span>
+                  <span className="quality-good">
+                    通过 {quality?.summary.passed ?? 0}
+                  </span>
+                </div>
+              </div>
+              {flaggedItems.length === 0 && pendingItems.length === 0 ? (
+                <p className="muted">
+                  还没有分镜审核记录，去分镜页对镜头做台词 / 视觉一致性检查。
+                </p>
+              ) : (
+                <div className="quality-lists">
+                  {flaggedItems.length > 0 && (
+                    <div>
+                      <h4>异常镜头</h4>
+                      <ul className="quality-list">
+                        {flaggedItems.map((item) => (
+                          <li
+                            key={item.shot_id}
+                            className="quality-item quality-item-flagged"
+                            onClick={() => onJumpToShot?.(item.shot_id)}
+                            title="点击跳转到该分镜"
+                          >
+                            <span className="quality-shot">
+                              {item.scene_title || "未命名场景"} · Shot{" "}
+                              {item.shot_number ?? ""}
+                            </span>
+                            <span className="quality-issue">
+                              {item.reviews
+                                .filter((r) => r.status === "flagged")
+                                .map((r) => r.issue || "审核异常")
+                                .join("；")}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {pendingItems.length > 0 && (
+                    <div>
+                      <h4>待审核镜头</h4>
+                      <ul className="quality-list">
+                        {pendingItems.map((item) => (
+                          <li
+                            key={item.shot_id}
+                            className="quality-item quality-item-pending"
+                            onClick={() => onJumpToShot?.(item.shot_id)}
+                            title="点击跳转到该分镜"
+                          >
+                            <span className="quality-shot">
+                              {item.scene_title || "未命名场景"} · Shot{" "}
+                              {item.shot_number ?? ""}
+                            </span>
+                            <span className="quality-issue">尚未审核</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+            </section>
             <div className="toolbar">
               {FILTERS.map((f) => (
                 <button
