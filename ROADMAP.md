@@ -918,6 +918,9 @@ Phase 19 — Quality Agent
 
 在生成后自动检查。
 
+已起步（2026-08-25）：台词审核 + 视觉一致性检查，均支持「模型审核 / 人工审核」，
+异常标出后用户可选择「重新生成 / 删除分镜 / 继续沿用」，走独立 Job 可暂停/重试。
+
 检查：
 Character Consistency
 Scene Consistency
@@ -934,6 +937,13 @@ Shot Continuity
 [Accept]
 [Regenerate]
 [Ignore]
+
+Tasks
+- [x] 台词审核：语音转写（speech_to_text）+ LLM 比对；人工模式可标记并填写实际台词
+- [x] 视觉一致性检查：角色与角色卡 / 场景与设定 / 与前一镜头连续性（多模态 vision 模型或人工）
+- [ ] 服装一致性专项（跨镜头细粒度）
+- [ ] 剧情一致性（Story Consistency）
+- [ ] 质量报告聚合（项目级汇总异常镜头）
 Phase 20 — End-to-End Pipeline
 
 这是第一个真正意义上的产品 Demo。
