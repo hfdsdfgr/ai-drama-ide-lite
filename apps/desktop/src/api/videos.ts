@@ -43,6 +43,40 @@ export function getCurrentVideoVersion(
   );
 }
 
+export interface VideoComposeInput {
+  scene_id?: string;
+  episode_id?: string;
+}
+
+export function composeVideos(
+  projectId: string,
+  input: VideoComposeInput,
+): Promise<JobOut> {
+  return request<JobOut>(`/projects/${projectId}/videos/compose`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function getComposeJob(
+  projectId: string,
+  jobId: string,
+): Promise<JobOut> {
+  return request<JobOut>(
+    `/projects/${projectId}/videos/compose/jobs/${jobId}`,
+  );
+}
+
+export function getComposedVideoVersion(
+  projectId: string,
+  entityType: "scene_video" | "episode_video",
+  entityId: string,
+): Promise<AssetVersion | null> {
+  return request<AssetVersion | null>(
+    `/projects/${projectId}/videos/composed/${entityType}/${entityId}/current`,
+  );
+}
+
 export interface AudioDubInput {
   voice_model_id?: string;
   script_model_id?: string;

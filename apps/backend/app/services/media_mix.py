@@ -1,5 +1,6 @@
 """Phase 14 M2 — 配音音视频合成（FFmpeg）。"""
 
+import re
 import subprocess
 import tempfile
 from pathlib import Path
@@ -145,6 +146,154 @@ def compose_video_with_audio(
         raise AppError(500, "ffmpeg_failed", f"视频合成失败：{detail[0][:300]}")
     if not output.is_file():
         raise AppError(500, "ffmpeg_failed", "视频合成未生成输出文件")
+    return str(output)
+
+
+def _probe_video(path: Path) -> dict:
+    """读取视频分辨率 / 帧率 / 时长 / 是否含音轨（供拼接归一化使用）。"""
+    try:
+        proc = subprocess.run(
+            [ffmpeg_exe(), "-hide_banner", "-i", str(path)],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+    except Exception as exc:  # noqa: BLE001 - 统一转为业务错误
+        raise AppError(500, "ffmpeg_probe_failed", f"无法读取视频信息：{path.name}") from exc
+    info = proc.stderr or ""
+
+    duration = 0.0
+    match = re.search(r"Duration: (\d+):(\d+):(\d+(?:\.\d+)?)", info)
+    if match:
+        hours, minutes, seconds = (
+            int(match.group(1)),
+            int(match.group(2)),
+            float(match.group(3)),
+        )
+        duration = hours * 3600 + minutes * 60 + seconds
+
+    width = height = 0
+    match = re.search(r"(\d{2,5})x(\d{2,5})", info)
+    if match:
+        width, height = int(match.group(1)), int(match.group(2))
+
+    fps = 30.0
+    match = re.search(r"(\d+(?:\.\d+)?) fps", info)
+    if match:
+        fps = float(match.group(1))
+
+    return {
+        "duration": duration,
+        "width": width or 1280,
+        "height": height or 720,
+        "fps": fps,
+        "has_audio": "Audio:" in info,
+    }
+
+
+def concat_videos(video_paths: list[str], output_path: str) -> str:
+    """按顺序拼接多个分镜视频为单个成片。
+    统一分辨率 / 帧率 / 像素格式（以第一个视频为准），有音轨的分镜保留声音，
+    无音轨的分镜自动补静音轨，保证拼接结果总时长 = 各分镜时长之和。
+    """
+    paths = [Path(p) for p in video_paths if p]
+    if not paths:
+        raise AppError(422, "video_missing", "没有可拼接的视频")
+    for path in paths:
+        if not path.is_file():
+            raise AppError(422, "video_missing", f"待拼接的视频不存在：{path.name}")
+    output = Path(output_path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+
+    probes = [_probe_video(path) for path in paths]
+    base = probes[0]
+    width, height, fps = base["width"], base["height"], base["fps"]
+    any_audio = any(probe["has_audio"] for probe in probes)
+
+    cmd = [ffmpeg_exe(), "-y"]
+    for path in paths:
+        cmd += ["-i", str(path)]
+    # 无音轨的视频补一条静音输入（在 filter 内按对应视频时长截断）
+    silent_start = len(paths)
+    for index, probe in enumerate(probes):
+        if any_audio and not probe["has_audio"]:
+            cmd += [
+                "-f",
+                "lavfi",
+                "-i",
+                "anullsrc=channel_layout=stereo:sample_rate=44100",
+            ]
+            silent_start += 0  # 输入索引 = len(paths) + 已添加的静音数
+
+    filters: list[str] = []
+    vlabels: list[str] = []
+    alabels: list[str] = []
+    silent_inputs = 0
+    for index, probe in enumerate(probes):
+        filters.append(
+            f"[{index}:v]scale={width}:{height}:force_original_aspect_ratio=decrease,"
+            f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps={fps},format=yuv420p[v{index}]"
+        )
+        vlabels.append(f"[v{index}]")
+        if any_audio:
+            if probe["has_audio"]:
+                filters.append(
+                    f"[{index}:a]aresample=44100,aformat=channel_layouts=stereo[a{index}]"
+                )
+                alabels.append(f"[a{index}]")
+            else:
+                src_index = len(paths) + silent_inputs
+                silent_inputs += 1
+                duration = probe["duration"] or 1.0
+                filters.append(
+                    f"[{src_index}:a]atrim=0:{duration},asetpts=PTS-STARTPTS,"
+                    f"aformat=channel_layouts=stereo:sample_rates=44100[a{index}]"
+                )
+                alabels.append(f"[a{index}]")
+
+    concat_inputs = ""
+    for index in range(len(paths)):
+        concat_inputs += vlabels[index]
+        if any_audio:
+            concat_inputs += alabels[index]
+    filters.append(
+        f"{concat_inputs}concat=n={len(paths)}:v=1:a={1 if any_audio else 0}[vout]"
+    )
+
+    cmd += ["-filter_complex", ";".join(filters), "-map", "[vout]"]
+    if any_audio:
+        cmd += ["-c:a", "aac", "-b:a", "192k"]
+    cmd += [
+        "-c:v",
+        "libx264",
+        "-preset",
+        "medium",
+        "-crf",
+        "23",
+        "-movflags",
+        "+faststart",
+        str(output),
+    ]
+
+    try:
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=600,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise AppError(504, "ffmpeg_timeout", "视频拼接超时，请重试") from exc
+    except Exception as exc:  # noqa: BLE001 - 统一转为业务错误
+        raise AppError(500, "ffmpeg_failed", f"视频拼接失败：{exc}") from exc
+
+    if proc.returncode != 0:
+        detail = (proc.stderr or "").strip().splitlines()[-1:] or ["未知错误"]
+        raise AppError(500, "ffmpeg_failed", f"视频拼接失败：{detail[0][:300]}")
+    if not output.is_file():
+        raise AppError(500, "ffmpeg_failed", "视频拼接未生成输出文件")
     return str(output)
 
 

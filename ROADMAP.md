@@ -602,6 +602,7 @@ Tasks
 - [ ] Camera Motion（第一阶段不做）
 - [x] Video Preview
 - [x] Video Version
+- [x] 多分镜合成（场景成片 `scene_video` / 分集成片 `episode_video`：按顺序拼接 shot 视频，本地 FFmpeg，写版本 + 生产依赖边；分镜页一键合成 + 预览）
 - [x] Retry（Job 系统）
 - [x] Cancel（Job 系统）
 

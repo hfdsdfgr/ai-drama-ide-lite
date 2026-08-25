@@ -10,7 +10,11 @@ from app.core.errors import AppError
 from app.schemas.asset_version import AssetVersionOut
 from app.schemas.generation import GenerationJobOut
 from app.schemas.job import JobOut
-from app.schemas.video_generation import AudioDubRequest, VideoGenerateRequest
+from app.schemas.video_generation import (
+    AudioDubRequest,
+    VideoComposeRequest,
+    VideoGenerateRequest,
+)
 
 router = APIRouter(prefix="/api/projects/{project_id}/videos", tags=["videos"])
 
@@ -30,6 +34,52 @@ def generate_video(
         aspect_ratio=payload.aspect_ratio,
         with_audio=payload.with_audio,
     )
+
+
+@router.post("/compose", response_model=JobOut, status_code=201)
+def compose_videos(
+    project_id: str,
+    payload: VideoComposeRequest,
+    request: Request,
+) -> dict:
+    """把分镜视频按顺序合成为场景 / 分集成片（本地 FFmpeg，不产生 API 费用）。"""
+    record = request.app.state.video_sequence_service.create_job(
+        request.app.state.job_store,
+        project_id,
+        scene_id=payload.scene_id,
+        episode_id=payload.episode_id,
+    )
+    return _job_out(record)
+
+
+@router.get("/compose/jobs/{job_id}", response_model=JobOut)
+def get_compose_job(
+    project_id: str,
+    job_id: str,
+    request: Request,
+) -> dict:
+    record = request.app.state.video_sequence_service.get_job(
+        request.app.state.job_store, job_id
+    )
+    if record.project_id != project_id:
+        raise AppError(404, "compose_job_not_found", "视频合成任务不存在")
+    return _job_out(record)
+
+
+@router.get("/composed/{entity_type}/{entity_id}/current", response_model=AssetVersionOut | None)
+def get_composed_video_version(
+    project_id: str,
+    entity_type: str,
+    entity_id: str,
+    request: Request,
+) -> dict | None:
+    """获取场景 / 分集成片的当前版本（entity_type: scene_video / episode_video）。"""
+    if entity_type not in ("scene_video", "episode_video"):
+        raise AppError(422, "invalid_entity_type", "合成视频类型不合法")
+    record = request.app.state.asset_version_service.get_current(
+        project_id, entity_type, entity_id
+    )
+    return _version_out(project_id, record) if record else None
 
 
 @router.get("/jobs/{job_id}", response_model=GenerationJobOut)

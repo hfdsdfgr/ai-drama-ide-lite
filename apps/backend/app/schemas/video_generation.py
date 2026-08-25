@@ -12,6 +12,11 @@ class VideoGenerateRequest(BaseModel):
     with_audio: bool = False
 
 
+class VideoComposeRequest(BaseModel):
+    scene_id: str = Field(default="", max_length=100)
+    episode_id: str = Field(default="", max_length=100)
+
+
 class AudioDubRequest(BaseModel):
     voice_model_id: str = Field(default="", max_length=100)
     script_model_id: str = Field(default="", max_length=100)
