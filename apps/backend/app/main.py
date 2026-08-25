@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import (
     assets,
     asset_versions,
+    dialogue_reviews,
     generation,
     health,
     images,
@@ -37,6 +38,8 @@ from app.services.image_result_service import ImageResultService
 from app.services.job_store import JobStore
 from app.services.job_worker import JobWorker
 from app.services.lip_sync_service import LipSyncService
+from app.services.video_sequence_service import VideoSequenceService
+from app.services.dialogue_review_service import DialogueReviewService
 from app.services.project_repo import migrate_legacy_json_projects
 from app.services.production_graph import ProductionGraphService
 from app.services.provider_repo import ProviderRepository
@@ -89,6 +92,17 @@ def create_app(
         app.state.asset_version_service,
         config.projects_dir,
     )
+    app.state.video_sequence_service = VideoSequenceService(
+        config.db_path,
+        app.state.asset_version_service,
+        config.projects_dir,
+    )
+    app.state.dialogue_review_service = DialogueReviewService(
+        config.db_path,
+        app.state.provider_manager,
+        app.state.asset_version_service,
+        config.projects_dir,
+    )
     app.state.job_worker = JobWorker(
         app.state.job_store,
         app.state.provider_manager,
@@ -96,6 +110,8 @@ def create_app(
         image_result_service=app.state.image_result_service,
         audio_dubbing_service=app.state.audio_dubbing_service,
         lip_sync_service=app.state.lip_sync_service,
+        video_sequence_service=app.state.video_sequence_service,
+        dialogue_review_service=app.state.dialogue_review_service,
     )
     app.state.generation_service = GenerationService(
         app.state.job_store,
@@ -149,6 +165,7 @@ def create_app(
     app.include_router(overview.router)
     app.include_router(production_graph.router)
     app.include_router(videos.router)
+    app.include_router(dialogue_reviews.router)
     logger.info("Application started (env=%s)", config.env)
     return app
 

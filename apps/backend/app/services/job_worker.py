@@ -27,6 +27,8 @@ from app.services.job_store import (
     JOB_TYPE_ASSET_COMPLETION,
     JOB_TYPE_GENERATION,
     JOB_TYPE_LIP_SYNC,
+    JOB_TYPE_VIDEO_COMPOSE,
+    JOB_TYPE_DIALOGUE_REVIEW,
     STATUS_CANCELLED,
     STATUS_COMPLETED,
     STATUS_FAILED,
@@ -65,6 +67,8 @@ class JobWorker:
         image_result_service=None,
         audio_dubbing_service=None,
         lip_sync_service=None,
+        video_sequence_service=None,
+        dialogue_review_service=None,
     ) -> None:
         self.store = store
         self.manager = manager
@@ -74,6 +78,8 @@ class JobWorker:
         self.image_result_service = image_result_service
         self.audio_dubbing_service = audio_dubbing_service
         self.lip_sync_service = lip_sync_service
+        self.video_sequence_service = video_sequence_service
+        self.dialogue_review_service = dialogue_review_service
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
 
@@ -127,6 +133,10 @@ class JobWorker:
                 self._run_dubbing(job)
             elif job.type == JOB_TYPE_LIP_SYNC:
                 self._run_lip_sync(job)
+            elif job.type == JOB_TYPE_VIDEO_COMPOSE:
+                self._run_video_compose(job)
+            elif job.type == JOB_TYPE_DIALOGUE_REVIEW:
+                self._run_dialogue_review(job)
             else:
                 self.store.mark_failed(
                     job.id, f"未知任务类型: {job.type}", CATEGORY_PERMANENT
@@ -197,6 +207,26 @@ class JobWorker:
             )
             return
         result = self.lip_sync_service.run(job, self.store)
+        self.store.mark_completed(job.id, result_payload=result)
+
+    def _run_video_compose(self, job) -> None:
+        """多分镜合成：本地 FFmpeg 拼接，不调用外部 API。"""
+        if self.video_sequence_service is None:
+            self.store.mark_failed(
+                job.id, "视频合成服务未初始化", CATEGORY_PERMANENT
+            )
+            return
+        result = self.video_sequence_service.run(job, self.store)
+        self.store.mark_completed(job.id, result_payload=result)
+
+    def _run_dialogue_review(self, job) -> None:
+        """台词审核：提取音轨 → 语音转写 → LLM 比对 → 写审核记录。"""
+        if self.dialogue_review_service is None:
+            self.store.mark_failed(
+                job.id, "台词审核服务未初始化", CATEGORY_PERMANENT
+            )
+            return
+        result = self.dialogue_review_service.run_model_review(job, self.store)
         self.store.mark_completed(job.id, result_payload=result)
 
     def _finish_sync(self, job, result) -> None:

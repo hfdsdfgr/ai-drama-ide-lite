@@ -31,7 +31,17 @@ import {
   getImageJob,
 } from "../api/images";
 import {
+  decideDialogueReview,
+  listDialogueReviews,
+  runDialogueReview,
+  submitManualReview,
+  type DialogueReview,
+} from "../api/dialogue_reviews";
+import {
+  composeVideos,
   dubShot,
+  getComposeJob,
+  getComposedVideoVersion,
   generateVideo,
   getCurrentVoicedVersion,
   getCurrentVideoVersion,
@@ -185,6 +195,14 @@ export function StoryboardPage({ active }: { active: boolean }) {
   const [videoDuration, setVideoDuration] = useState(5);
   const [withAudio, setWithAudio] = useState(true);
   const [audioModels, setAudioModels] = useState<Model[]>([]);
+  const [llmModels, setLlmModels] = useState<Model[]>([]);
+  const [reviewMode, setReviewMode] = useState<"model" | "manual">("model");
+  const [asrModelId, setAsrModelId] = useState("");
+  const [reviewScriptModelId, setReviewScriptModelId] = useState("");
+  const [manualDetected, setManualDetected] = useState("");
+  const [latestReview, setLatestReview] = useState<DialogueReview | null>(null);
+  const [reviewingJob, setReviewingJob] = useState<JobOut | null>(null);
+  const [reviewDeciding, setReviewDeciding] = useState(false);
   const [voiceModelId, setVoiceModelId] = useState("");
   const [shotVersions, setShotVersions] = useState<Record<string, AssetVersion>>(
     {},
@@ -195,6 +213,10 @@ export function StoryboardPage({ active }: { active: boolean }) {
   const [shotVoicedVersions, setShotVoicedVersions] = useState<
     Record<string, AssetVersion>
   >({});
+  const [composedVersions, setComposedVersions] = useState<
+    Record<string, AssetVersion>
+  >({});
+  const [composingSceneId, setComposingSceneId] = useState("");
   const [shotVideoVersion, setShotVideoVersion] =
     useState<AssetVersion | null>(null);
   const [shotVoicedVersion, setShotVoicedVersion] =
@@ -265,6 +287,14 @@ export function StoryboardPage({ active }: { active: boolean }) {
         setAudioModels(usable);
         setVoiceModelId((prev) =>
           usable.some((m) => m.id === prev) ? prev : (usable[0]?.id ?? ""),
+        );
+      })
+      .catch((e) => setError((e as Error).message));
+    listModels({ model_type: "llm", enabled_only: true })
+      .then((models) => {
+        setLlmModels(models);
+        setReviewScriptModelId((prev) =>
+          models.some((m) => m.id === prev) ? prev : (models[0]?.id ?? ""),
         );
       })
       .catch((e) => setError((e as Error).message));
@@ -386,6 +416,18 @@ export function StoryboardPage({ active }: { active: boolean }) {
           }
         });
         setShotVoicedVersions(voicedMap);
+        const composedMap: Record<string, AssetVersion> = {};
+        const composedResults = await Promise.allSettled(
+          detail.scenes.map((scene) =>
+            getComposedVideoVersion(projectId, "scene_video", scene.id),
+          ),
+        );
+        composedResults.forEach((result, index) => {
+          if (result.status === "fulfilled" && result.value) {
+            composedMap[detail.scenes[index].id] = result.value;
+          }
+        });
+        setComposedVersions(composedMap);
       } catch (e) {
         setError((e as Error).message);
       }
@@ -436,12 +478,20 @@ export function StoryboardPage({ active }: { active: boolean }) {
     setDubJob(null);
     setAudioFilePath("");
     setAudioFileName("");
+    setLatestReview(null);
+    setReviewingJob(null);
+    setManualDetected("");
     void getCurrentVideoVersion(projectId, shot.id)
       .then(setShotVideoVersion)
       .catch(() => setShotVideoVersion(null));
     void getCurrentVoicedVersion(projectId, shot.id)
       .then(setShotVoicedVersion)
       .catch(() => setShotVoicedVersion(null));
+    void listDialogueReviews(projectId, shot.id)
+      .then((reviews) => {
+        if (reviews.length > 0) setLatestReview(reviews[0]);
+      })
+      .catch(() => setLatestReview(null));
   }
 
   function closeShotDetail() {
@@ -587,6 +637,121 @@ export function StoryboardPage({ active }: { active: boolean }) {
       setGeneratingVideoShotId((prev) =>
         prev === selectedShotId ? null : prev,
       );
+    }
+  }
+
+  async function handleComposeScene(sceneId: string) {
+    if (!projectId || composingSceneId) return;
+    setComposingSceneId(sceneId);
+    setError("");
+    try {
+      const job = await composeVideos(projectId, { scene_id: sceneId });
+      while (true) {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        const updated = await getComposeJob(projectId, job.job_id);
+        if (["completed", "failed", "cancelled"].includes(updated.status)) {
+          if (updated.status === "completed") {
+            const version = await getComposedVideoVersion(
+              projectId,
+              "scene_video",
+              sceneId,
+            );
+            if (version) {
+              setComposedVersions((prev) => ({
+                ...prev,
+                [sceneId]: version,
+              }));
+            }
+          } else if (updated.error) {
+            setError(updated.error);
+          }
+          break;
+        }
+      }
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setComposingSceneId("");
+    }
+  }
+
+  const asrModels = audioModels.filter((m) =>
+    m.capabilities.includes("speech_to_text"),
+  );
+
+  async function handleRunModelReview() {
+    if (!projectId || !selectedShotId || !asrModelId || !reviewScriptModelId) {
+      setError("请选择语音转写模型和文本比对模型");
+      return;
+    }
+    setReviewingJob(null);
+    setError("");
+    try {
+      const job = await runDialogueReview(projectId, {
+        shot_id: selectedShotId,
+        model_id: asrModelId,
+        script_model_id: reviewScriptModelId,
+      });
+      setReviewingJob(job);
+      while (true) {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        const updated = await getJob(job.job_id);
+        setReviewingJob(updated);
+        if (["completed", "failed", "cancelled"].includes(updated.status)) {
+          if (updated.status === "completed") {
+            const reviews = await listDialogueReviews(
+              projectId,
+              selectedShotId,
+            );
+            setLatestReview(reviews[0] ?? null);
+          } else if (updated.error) {
+            setError(updated.error);
+          }
+          break;
+        }
+      }
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setReviewingJob(null);
+    }
+  }
+
+  async function handleSubmitManualReview(consistent: boolean) {
+    if (!projectId || !selectedShotId) return;
+    setError("");
+    try {
+      const review = await submitManualReview(projectId, {
+        shot_id: selectedShotId,
+        consistent,
+        detected_speech: manualDetected,
+      });
+      setLatestReview(review);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  async function handleReviewDecision(
+    decision: "regenerate" | "delete_shot" | "keep",
+  ) {
+    if (!projectId || !latestReview) return;
+    setReviewDeciding(true);
+    setError("");
+    try {
+      const updated = await decideDialogueReview(
+        projectId,
+        latestReview.id,
+        decision,
+      );
+      setLatestReview(updated);
+      if (decision === "delete_shot") {
+        handleDeleteSelectedShot();
+      }
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setReviewDeciding(false);
     }
   }
 
@@ -790,6 +955,18 @@ export function StoryboardPage({ active }: { active: boolean }) {
                       <div className="scene-head">
                         <strong>{scene.slugline || scene.title}</strong>
                         <span className="badge">{shots.length} 个镜头</span>
+                        <button
+                          type="button"
+                          className="scene-compose-btn"
+                          disabled={composingSceneId !== ""}
+                          onClick={() => void handleComposeScene(scene.id)}
+                        >
+                          {composingSceneId === scene.id
+                            ? "合成中…"
+                            : composedVersions[scene.id]
+                              ? "重新合成"
+                              : "合成场景视频"}
+                        </button>
                       </div>
                       {shots.length === 0 ? (
                         <p className="muted">
@@ -836,6 +1013,15 @@ export function StoryboardPage({ active }: { active: boolean }) {
                             </div>
                           </SortableContext>
                         </DndContext>
+                      )}
+                      {composedVersions[scene.id] && (
+                        <div className="composed-preview">
+                          <span className="muted">场景成片</span>
+                          <video
+                            controls
+                            src={`${apiBase}${composedVersions[scene.id].file_url}`}
+                          />
+                        </div>
                       )}
                     </div>
                   );
@@ -1165,6 +1351,205 @@ export function StoryboardPage({ active }: { active: boolean }) {
                 ) : (
                   <p className="muted">
                     还没有可用的视频模型，请先在「设置」启用一个支持图生视频的模型。
+                  </p>
+                )}
+              </div>
+              <div className="card image-generate-card">
+                <div className="sidebar-head">
+                  <h3>台词审核</h3>
+                </div>
+                {shotVideoVersion ? (
+                  hasDialogue ? (
+                    <>
+                      <label>
+                        审核方式
+                        <select
+                          value={reviewMode}
+                          onChange={(e) =>
+                            setReviewMode(e.target.value as "model" | "manual")
+                          }
+                          disabled={reviewingJob !== null}
+                        >
+                          <option value="model">多模态模型审核</option>
+                          <option value="manual">人工审核</option>
+                        </select>
+                      </label>
+                      {reviewMode === "model" ? (
+                        <>
+                          {asrModels.length > 0 ? (
+                            <label>
+                              语音转写模型
+                              <select
+                                value={asrModelId}
+                                onChange={(e) => setAsrModelId(e.target.value)}
+                                disabled={reviewingJob !== null}
+                              >
+                                <option value="">请选择</option>
+                                {asrModels.map((m) => (
+                                  <option key={m.id} value={m.id}>
+                                    {m.model_id}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                          ) : (
+                            <p className="muted">
+                              没有可用的语音转写模型，请先在「设置」启用（如
+                              whisper / qwen3-asr / GLM-ASR）。
+                            </p>
+                          )}
+                          {llmModels.length > 0 ? (
+                            <label>
+                              文本比对模型
+                              <select
+                                value={reviewScriptModelId}
+                                onChange={(e) =>
+                                  setReviewScriptModelId(e.target.value)
+                                }
+                                disabled={reviewingJob !== null}
+                              >
+                                {llmModels.map((m) => (
+                                  <option key={m.id} value={m.id}>
+                                    {m.model_id}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                          ) : (
+                            <p className="muted">
+                              没有可用的文本模型，请先在「设置」启用。
+                            </p>
+                          )}
+                          <button
+                            type="button"
+                            className="btn-primary"
+                            disabled={
+                              !asrModelId ||
+                              !reviewScriptModelId ||
+                              reviewingJob !== null
+                            }
+                            onClick={() => void handleRunModelReview()}
+                          >
+                            {reviewingJob ? "审核中…" : "开始审核"}
+                          </button>
+                          {reviewingJob && (
+                            <p className="muted">正在语音转写并比对台词…</p>
+                          )}
+                          <p className="muted">
+                            审核会调用语音转写与文本模型 API，可能产生费用。
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="muted">
+                            播放上方视频，对照剧本台词判断是否一致。
+                          </p>
+                          <p className="muted">
+                            <strong>剧本台词：</strong>
+                            {shotDetailDraft?.dialogue || "（无）"}
+                          </p>
+                          <label>
+                            实际听到的台词（不一致时填写）
+                            <textarea
+                              value={manualDetected}
+                              onChange={(e) => setManualDetected(e.target.value)}
+                              rows={3}
+                              placeholder="听到但与剧本不符的台词"
+                            />
+                          </label>
+                          <div className="review-actions">
+                            <button
+                              type="button"
+                              className="btn-primary"
+                              onClick={() => void handleSubmitManualReview(true)}
+                            >
+                              台词一致
+                            </button>
+                            <button
+                              type="button"
+                              className="button-ghost"
+                              onClick={() => void handleSubmitManualReview(false)}
+                            >
+                              台词不一致
+                            </button>
+                          </div>
+                        </>
+                      )}
+                      {latestReview && (
+                        <div
+                          className={`review-result review-${latestReview.status}`}
+                        >
+                          {latestReview.status === "flagged" ? (
+                            <>
+                              <p className="review-issue">
+                                检测到异常：
+                                {latestReview.issue || "实际台词与剧本不一致"}
+                              </p>
+                              <p className="muted">
+                                剧本：{latestReview.expected_dialogue}
+                              </p>
+                              <p className="muted">
+                                实际：
+                                {latestReview.detected_speech || "（未记录）"}
+                              </p>
+                              <div className="review-actions">
+                                <button
+                                  type="button"
+                                  disabled={reviewDeciding}
+                                  onClick={() =>
+                                    void handleReviewDecision("regenerate")
+                                  }
+                                >
+                                  重新生成
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={reviewDeciding}
+                                  onClick={() =>
+                                    void handleReviewDecision("delete_shot")
+                                  }
+                                >
+                                  删除分镜
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={reviewDeciding}
+                                  onClick={() =>
+                                    void handleReviewDecision("keep")
+                                  }
+                                >
+                                  继续沿用
+                                </button>
+                              </div>
+                              {latestReview.decision && (
+                                <p className="muted">
+                                  已选择：
+                                  {latestReview.decision === "regenerate"
+                                    ? "重新生成（请在上方视频区域重新生成）"
+                                    : latestReview.decision === "delete_shot"
+                                      ? "删除分镜"
+                                      : "继续沿用"}
+                                </p>
+                              )}
+                            </>
+                          ) : (
+                            <p className="review-passed">
+                              台词一致 ✓（
+                              {latestReview.mode === "model"
+                                ? "模型审核"
+                                : "人工审核"}
+                              ）
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <p className="muted">该镜头没有剧本台词，无需审核。</p>
+                  )
+                ) : (
+                  <p className="muted">
+                    请先生成该镜头的视频，再进行台词审核。
                   </p>
                 )}
               </div>

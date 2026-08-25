@@ -394,6 +394,6 @@ def test_classify_rules():
     assert classify_model("openai", "gpt-4o") == "llm"
     assert classify_model("bailian", "wanx2.1-t2i") == "image"
     assert classify_model("bailian", "wan2.1-t2v") == "video"
-    assert classify_model("bailian", "qwen-audio-3.0-asr-flash") == "llm"
+    assert classify_model("bailian", "qwen-audio-3.0-asr-flash") == "audio"
     assert classify_model("bailian", "qwen-tts") == "audio"
     assert classify_model(None, "anything") == "llm"

@@ -133,6 +133,8 @@ class OpenAICompatAdapter(Adapter):
             return self._edit_image(ctx, request)
         if capability == "text_to_speech":
             return self._text_to_speech(ctx, request)
+        if capability == "speech_to_text":
+            return self._speech_to_text(ctx, request)
         raise AdapterError(
             422,
             "generation_not_supported",
@@ -257,6 +259,53 @@ class OpenAICompatAdapter(Adapter):
                 "bytes": len(content),
             },
         )
+
+    def _speech_to_text(
+        self, ctx: ProviderContext, request: GenerationRequest
+    ) -> GenerationResult:
+        """OpenAI 兼容语音转写：POST /audio/transcriptions（multipart file + model）。
+        覆盖 OpenAI whisper / OpenRouter whisper / 百炼 qwen3-asr / 智谱 GLM-ASR。
+        """
+        audio_path = request.extra.get("audio_path") or (
+            request.images[0] if request.images else ""
+        )
+        if not audio_path:
+            raise AdapterError(422, "audio_required", "语音转写需要音频文件")
+        path = Path(audio_path)
+        if not path.is_file():
+            raise AdapterError(
+                422, "audio_file_not_found", f"音频文件不存在：{audio_path}"
+            )
+        url = ctx.base_url.rstrip("/") + "/audio/transcriptions"
+        headers = {"Authorization": f"Bearer {ctx.api_key}"} if ctx.api_key else {}
+        try:
+            with open(path, "rb") as fh:
+                files = {"file": (path.name, fh, "application/octet-stream")}
+                data = {"model": ctx.model_id, "response_format": "json"}
+                with httpx.Client(timeout=120) as client:
+                    response = client.post(
+                        url, headers=headers, files=files, data=data
+                    )
+                    response.raise_for_status()
+                    payload = response.json()
+        except httpx.TimeoutException as exc:
+            raise AdapterError(504, "stt_timeout", f"{ctx.provider_name} 语音转写超时") from exc
+        except httpx.HTTPStatusError as exc:
+            detail = self._http_detail(exc.response.status_code, ctx.base_url)
+            raise AdapterError(
+                exc.response.status_code,
+                "stt_failed",
+                f"{ctx.provider_name} 语音转写失败：{detail}",
+            ) from exc
+        except Exception as exc:
+            raise AdapterError(
+                502, "stt_failed", f"无法连接 {ctx.provider_name}，请检查网络与配置"
+            ) from exc
+
+        text = (payload.get("text") if isinstance(payload, dict) else None) or ""
+        if not text.strip():
+            raise AdapterError(502, "stt_no_output", f"{ctx.provider_name} 未返回转写文本")
+        return GenerationResult(urls=[], meta={"text": text.strip()})
 
     @staticmethod
     def _normalize_image_response(data: dict, output_dir: str | None) -> GenerationResult:

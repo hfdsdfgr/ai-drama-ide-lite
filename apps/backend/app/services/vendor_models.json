@@ -26,7 +26,8 @@
     { "id": "sora-2", "type": "video", "capabilities": ["image_to_video", "text_to_video", "video_to_video", "video_audio"] },
     { "id": "gpt-4o-mini-tts", "type": "audio", "capabilities": ["text_to_speech"] },
     { "id": "tts-1", "type": "audio", "capabilities": ["text_to_speech"] },
-    { "id": "tts-1-hd", "type": "audio", "capabilities": ["text_to_speech"] }
+    { "id": "tts-1-hd", "type": "audio", "capabilities": ["text_to_speech"] },
+    { "id": "whisper-1", "type": "audio", "capabilities": ["speech_to_text"] }
   ],
   "openrouter": [
     { "id": "openai/gpt-5.5", "type": "llm" },
@@ -51,7 +52,9 @@
     { "id": "bytedance/seedance-2.5", "type": "video", "capabilities": ["image_to_video", "text_to_video", "video_audio"] },
     { "id": "openai/gpt-4o-mini-tts", "type": "audio", "capabilities": ["text_to_speech"] },
     { "id": "mistralai/voxtral-mini-tts-2603", "type": "audio", "capabilities": ["text_to_speech"] },
-    { "id": "hexgrad/kokoro-82m", "type": "audio", "capabilities": ["text_to_speech"] }
+    { "id": "hexgrad/kokoro-82m", "type": "audio", "capabilities": ["text_to_speech"] },
+    { "id": "openai/whisper-1", "type": "audio", "capabilities": ["speech_to_text"] },
+    { "id": "openai/whisper-large-v3", "type": "audio", "capabilities": ["speech_to_text"] }
   ],
   "deepseek": [
     { "id": "deepseek-v4-flash", "type": "llm" },
@@ -88,7 +91,8 @@
     { "id": "qwen3-tts-flash", "type": "audio", "capabilities": ["text_to_speech"] },
     { "id": "qwen3-tts-instruct-flash", "type": "audio", "capabilities": ["text_to_speech"] },
     { "id": "qwen-tts", "type": "audio", "capabilities": ["text_to_speech"] },
-    { "id": "qwen-tts-latest", "type": "audio", "capabilities": ["text_to_speech"] }
+    { "id": "qwen-tts-latest", "type": "audio", "capabilities": ["text_to_speech"] },
+    { "id": "qwen3-asr-flash", "type": "audio", "capabilities": ["speech_to_text"] }
   ],
   "zhipu": [
     { "id": "glm-5-turbo", "type": "llm" },
@@ -106,7 +110,8 @@
     { "id": "cogview-3-plus", "type": "image", "capabilities": ["text_to_image"] },
     { "id": "cogview-3-flash", "type": "image", "capabilities": ["text_to_image"] },
     { "id": "cogvideox-3", "type": "video", "capabilities": ["image_to_video", "text_to_video", "video_audio"] },
-    { "id": "glm-tts", "type": "audio", "capabilities": ["text_to_speech"] }
+    { "id": "glm-tts", "type": "audio", "capabilities": ["text_to_speech"] },
+    { "id": "glm-asr-2512", "type": "audio", "capabilities": ["speech_to_text"] }
   ],
   "siliconflow": [
     { "id": "deepseek-ai/DeepSeek-V3", "type": "llm" },
