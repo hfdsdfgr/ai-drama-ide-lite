@@ -10,6 +10,7 @@ from pathlib import Path
 from app.core.errors import AppError
 from app.db.database import get_connection
 from app.services.job_store import JOB_TYPE_STORY_REVIEW
+from app.services.llm_json import extract_json
 from app.services.script_repo import ScriptRepository
 from app.services.story_consistency_repository import StoryConsistencyRepository
 
@@ -74,7 +75,7 @@ class StoryConsistencyService:
             temperature=0.1,
         )
         try:
-            data = json.loads(raw.strip())
+            data = json.loads(extract_json(raw))
             consistent = bool(data.get("consistent"))
             issue = str(data.get("issue") or "")
         except (ValueError, TypeError):

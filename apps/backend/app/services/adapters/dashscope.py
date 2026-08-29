@@ -57,6 +57,9 @@ class DashScopeAdapter(OpenAICompatAdapter):
     ) -> GenerationResult:
         if capability == "text_to_speech":
             return self._text_to_speech(ctx, request)
+        if capability == "speech_to_text":
+            # 百炼兼容模式提供 OpenAI 兼容 /audio/transcriptions
+            return OpenAICompatAdapter._speech_to_text(self, ctx, request)
         if capability not in {
             "text_to_image",
             "image_to_image",
@@ -118,7 +121,7 @@ class DashScopeAdapter(OpenAICompatAdapter):
             "Content-Type": "application/json",
         }
         try:
-            with httpx.Client(timeout=90) as client:
+            with httpx.Client(timeout=240) as client:
                 response = client.post(base + path, headers=headers, json=body)
                 response.raise_for_status()
                 payload = response.json()

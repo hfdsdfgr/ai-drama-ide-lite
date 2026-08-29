@@ -14,6 +14,7 @@ from app.core.errors import AppError
 from app.services.adapters.base import GenerationRequest
 from app.services.dialogue_review_repository import DialogueReviewRepository
 from app.services.job_store import JOB_TYPE_DIALOGUE_REVIEW
+from app.services.llm_json import extract_json
 from app.services.media_mix import _probe_video, ffmpeg_exe
 from app.services.script_repo import ScriptRepository
 
@@ -241,7 +242,7 @@ class DialogueReviewService:
             temperature=0.1,
         )
         try:
-            data = json.loads(raw.strip())
+            data = json.loads(extract_json(raw))
             consistent = bool(data.get("consistent"))
             issue = str(data.get("issue") or "")
         except (ValueError, TypeError):

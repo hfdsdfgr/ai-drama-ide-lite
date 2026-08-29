@@ -127,11 +127,13 @@ def resolve_max_reference_images(preset_key: str | None, model_id: str) -> int |
 
 def infer_capabilities(preset_key: str | None, model_id: str, model_type: str) -> list[str]:
     """按规则推断能力；未命中时使用保守默认值。"""
+    mid = model_id.lower()
     if model_type == "llm":
         return []
     if model_type == "audio":
+        if "asr" in mid or "whisper" in mid or "speech-to-text" in mid:
+            return ["speech_to_text"]
         return ["text_to_speech"]
-    mid = model_id.lower()
     rules = _VIDEO_RULES if model_type == "video" else _IMAGE_RULES
     for fragment, caps in rules:
         if fragment in mid:
