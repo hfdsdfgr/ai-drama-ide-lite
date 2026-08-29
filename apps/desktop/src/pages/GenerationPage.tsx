@@ -7,9 +7,17 @@ import {
   retryJob,
   resumeJob,
   batchJobs,
+  getJob,
 } from "../api/jobs";
 import { getProjectOverview } from "../api/overview";
 import { getProjectQuality, type ProjectQuality } from "../api/quality";
+import {
+  getPipelinePlan,
+  getPipelineStatus,
+  startPipeline,
+  type PipelinePlan,
+  type PipelineStatus,
+} from "../api/pipeline";
 import { listProjects } from "../api/projects";
 import type { JobOut, JobStatus } from "../types/job";
 import type { ProjectOverview, StageStatus } from "../types/overview";
@@ -66,6 +74,24 @@ const FILTERS: { key: Filter; label: string }[] = [
   { key: "failed", label: "失败" },
 ];
 
+const STAGE_LABELS: Record<string, string> = {
+  novel_analysis: "小说分析 / Story Bible",
+  script: "剧本生成（分集 / 场景）",
+  assets: "资产卡补全",
+  storyboard: "分镜生成",
+  shot_images: "分镜图生成",
+  videos: "图生视频",
+  quality_review: "质量审查（视觉/剧情/台词）",
+};
+
+const PIPELINE_STATUS_LABEL: Record<string, string> = {
+  queued: "排队中",
+  running: "生成中",
+  paused: "已暂停",
+  completed: "已完成",
+  failed: "失败",
+};
+
 function formatTime(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
@@ -92,6 +118,16 @@ export function GenerationPage({
   const [projectId, setProjectId] = useState("");
   const [overview, setOverview] = useState<ProjectOverview | null>(null);
   const [quality, setQuality] = useState<ProjectQuality | null>(null);
+  const [pipelinePlan, setPipelinePlan] = useState<PipelinePlan | null>(null);
+  const [planOpen, setPlanOpen] = useState(false);
+  const [includeVideos, setIncludeVideos] = useState(false);
+  const [autoContinue, setAutoContinue] = useState(false);
+  const [qualityReview, setQualityReview] = useState(false);
+  const [pipelineJob, setPipelineJob] = useState<JobOut | null>(null);
+  const [pipelineStatus, setPipelineStatus] = useState<PipelineStatus | null>(
+    null,
+  );
+  const pipelinePollRef = useRef<number | null>(null);
   const [jobs, setJobs] = useState<JobOut[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -99,7 +135,7 @@ export function GenerationPage({
   const [cancelArmed, setCancelArmed] = useState<Record<string, boolean>>({});
   const [batchArmed, setBatchArmed] = useState(false);
   const [stageArmed, setStageArmed] = useState<Record<string, boolean>>({});
-  const timerRef = useRef<number | null>(null);
+  const jobsRef = useRef<JobOut[]>([]);
 
   useEffect(() => {
     listProjects()
@@ -123,6 +159,7 @@ export function GenerationPage({
       ]);
       setOverview(nextOverview);
       setJobs(nextJobs);
+      jobsRef.current = nextJobs;
       setQuality(nextQuality);
       setError("");
     } catch (e) {
@@ -134,13 +171,23 @@ export function GenerationPage({
 
   useEffect(() => {
     if (!active || !projectId) return;
-    void refresh();
-    timerRef.current = window.setInterval(() => {
-      void refresh();
-    }, 3000);
+    let cancelled = false;
+    let timeout: number | null = null;
+    const tick = async () => {
+      await refresh();
+      if (cancelled) return;
+      const hasActive = jobsRef.current.some((job) =>
+        ["queued", "running", "paused"].includes(job.status),
+      );
+      timeout = window.setTimeout(
+        () => void tick(),
+        hasActive ? 3000 : 15000,
+      );
+    };
+    void tick();
     return () => {
-      if (timerRef.current !== null) window.clearInterval(timerRef.current);
-      timerRef.current = null;
+      cancelled = true;
+      if (timeout !== null) window.clearTimeout(timeout);
     };
   }, [active, projectId, refresh]);
 
@@ -150,6 +197,10 @@ export function GenerationPage({
   );
   const pendingItems = (quality?.items ?? []).filter(
     (item) => item.status === "pending",
+  );
+
+  const currentPipelineStage = (pipelineStatus?.stages ?? []).find(
+    (stage) => stage.status === "running" || stage.status === "failed",
   );
 
   async function handleCancel(job: JobOut) {
@@ -228,6 +279,99 @@ export function GenerationPage({
       });
       setStageArmed((prev) => ({ ...prev, [stageKey]: false }));
       await refresh();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  async function openPipelinePlan() {
+    if (!projectId) return;
+    setError("");
+    try {
+      const plan = await getPipelinePlan(projectId);
+      setPipelinePlan(plan);
+      setPlanOpen(true);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  async function handleStartPipeline() {
+    if (!projectId) return;
+    setError("");
+    try {
+      const job = await startPipeline(projectId, {
+        auto_continue: autoContinue,
+        include_videos: includeVideos,
+        quality_review: qualityReview,
+      });
+      setPlanOpen(false);
+      setPipelineJob(job);
+      await refreshPipeline();
+      if (pipelinePollRef.current !== null) {
+        window.clearInterval(pipelinePollRef.current);
+      }
+      pipelinePollRef.current = window.setInterval(() => {
+        void refreshPipeline();
+      }, 2500);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  async function refreshPipeline() {
+    if (!projectId || !pipelineJob) return;
+    try {
+      const [job, status] = await Promise.all([
+        getJob(pipelineJob.job_id),
+        getPipelineStatus(projectId),
+      ]);
+      setPipelineJob(job);
+      setPipelineStatus(status);
+      if (["completed", "failed", "cancelled"].includes(job.status)) {
+        if (pipelinePollRef.current !== null) {
+          window.clearInterval(pipelinePollRef.current);
+          pipelinePollRef.current = null;
+        }
+        if (job.status === "failed" && job.error) setError(job.error);
+        // 结束后刷新计划，展示已完成状态
+        try {
+          setPipelinePlan(await getPipelinePlan(projectId));
+        } catch {
+          /* 忽略 */
+        }
+      }
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  async function handleResumePipeline() {
+    if (!pipelineJob) return;
+    setError("");
+    try {
+      const updated = await resumeJob(pipelineJob.job_id);
+      setPipelineJob(updated);
+      if (pipelinePollRef.current === null) {
+        pipelinePollRef.current = window.setInterval(() => {
+          void refreshPipeline();
+        }, 2500);
+      }
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  async function handleStopPipeline() {
+    if (!pipelineJob) return;
+    setError("");
+    try {
+      const updated = await cancelJob(pipelineJob.job_id);
+      setPipelineJob(updated);
+      if (pipelinePollRef.current !== null) {
+        window.clearInterval(pipelinePollRef.current);
+        pipelinePollRef.current = null;
+      }
     } catch (e) {
       setError((e as Error).message);
     }
@@ -354,6 +498,151 @@ export function GenerationPage({
           </section>
 
           <section className="generation-jobs">
+            <section className="card pipeline-panel">
+              <div className="quality-head">
+                <h3>一键生成（End-to-End）</h3>
+                {!pipelineJob && (
+                  <button type="button" onClick={() => void openPipelinePlan()}>
+                    生成漫剧
+                  </button>
+                )}
+              </div>
+              {planOpen && pipelinePlan && (
+                <div className="pipeline-plan">
+                  {pipelinePlan.stages.map((stage) => (
+                    <div
+                      key={stage.key}
+                      className={`pipeline-stage pipeline-stage-${stage.status}`}
+                    >
+                      <span className="pipeline-stage-label">
+                        {stage.label}
+                      </span>
+                      {stage.status === "completed" && (
+                        <span className="quality-good">已完成</span>
+                      )}
+                      {stage.status === "ready" && (
+                        <span className="quality-muted">
+                          将使用 {stage.model_id}
+                        </span>
+                      )}
+                      {stage.status === "not_ready" && (
+                        <span className="pipeline-missing">
+                          ⚠ {stage.missing_reason}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={includeVideos}
+                      onChange={(e) => setIncludeVideos(e.target.checked)}
+                    />
+                    包含视频生成（费用较高，默认关闭）
+                  </label>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={autoContinue}
+                      onChange={(e) => setAutoContinue(e.target.checked)}
+                    />
+                    自动继续（每阶段不停顿等确认）
+                  </label>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={qualityReview}
+                      onChange={(e) => setQualityReview(e.target.checked)}
+                    />
+                    包含质量审查（生成后自动检查视觉/剧情一致性）
+                  </label>
+                  {qualityReview && (
+                    <p className="pipeline-missing">
+                      ⚠ 质量审查会对每个分镜调用视觉 / 文本（含视频时还会调用语音转写）
+                      模型 API，按镜头逐项审核，会产生明显费用，请确认后勾选。
+                    </p>
+                  )}
+                  <div className="review-actions">
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      disabled={!pipelinePlan.can_start}
+                      onClick={() => void handleStartPipeline()}
+                    >
+                      开始生成
+                    </button>
+                    <button
+                      type="button"
+                      className="button-ghost"
+                      onClick={() => setPlanOpen(false)}
+                    >
+                      取消
+                    </button>
+                  </div>
+                  {!pipelinePlan.can_start && (
+                    <p className="muted">
+                      请先在「设置」配置缺失的模型后再开始。
+                    </p>
+                  )}
+                </div>
+              )}
+              {pipelineJob && (
+                <div className="pipeline-run">
+                  <p className="muted">
+                    状态：{STATUS_LABEL[pipelineJob.status]}
+                    {currentPipelineStage && (
+                      <>
+                        {" "}
+                        · 当前阶段：
+                        {STAGE_LABELS[currentPipelineStage.stage_key] ??
+                          currentPipelineStage.stage_key}
+                      </>
+                    )}
+                  </p>
+                  {(pipelineStatus?.stages ?? []).map((stage) => (
+                    <div
+                      key={stage.stage_key}
+                      className={`pipeline-stage pipeline-stage-${stage.status}`}
+                    >
+                      <span className="pipeline-stage-label">
+                        {STAGE_LABELS[stage.stage_key] ?? stage.stage_key}
+                      </span>
+                      <span className="quality-muted">
+                        {PIPELINE_STATUS_LABEL[stage.status] ?? stage.status}
+                      </span>
+                      {stage.message && (
+                        <span className="pipeline-message">{stage.message}</span>
+                      )}
+                    </div>
+                  ))}
+                  <div className="review-actions">
+                    {pipelineJob.status === "paused" && (
+                      <button
+                        type="button"
+                        className="btn-primary"
+                        onClick={() => void handleResumePipeline()}
+                      >
+                        继续下一阶段
+                      </button>
+                    )}
+                    {["queued", "running", "paused"].includes(
+                      pipelineJob.status,
+                    ) && (
+                      <button
+                        type="button"
+                        className="button-danger button-ghost"
+                        onClick={() => void handleStopPipeline()}
+                      >
+                        停止
+                      </button>
+                    )}
+                    {pipelineJob.status === "completed" && (
+                      <span className="quality-good">全部阶段已完成 ✓</span>
+                    )}
+                  </div>
+                </div>
+              )}
+            </section>
             <section className="card quality-panel">
               <div className="quality-head">
                 <h3>质量报告</h3>

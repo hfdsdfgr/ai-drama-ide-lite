@@ -310,6 +310,15 @@ CREATE TABLE IF NOT EXISTS story_consistency_reviews (
     updated_at         TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS pipelines (
+    project_id         TEXT NOT NULL,
+    stage_key          TEXT NOT NULL,
+    status             TEXT NOT NULL DEFAULT 'queued',
+    message            TEXT NOT NULL DEFAULT '',
+    updated_at         TEXT NOT NULL,
+    PRIMARY KEY (project_id, stage_key)
+);
+
 CREATE INDEX IF NOT EXISTS idx_novels_project ON novels(project_id);
 CREATE INDEX IF NOT EXISTS idx_chapters_novel ON chapters(novel_id);
 CREATE INDEX IF NOT EXISTS idx_stories_project ON stories(project_id);

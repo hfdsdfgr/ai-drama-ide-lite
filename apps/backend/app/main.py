@@ -16,6 +16,7 @@ from app.api.routes import (
     jobs,
     novels,
     overview,
+    pipeline,
     production_graph,
     projects,
     quality,
@@ -50,6 +51,7 @@ from app.version import APP_VERSION
 from app.services.dialogue_review_service import DialogueReviewService
 from app.services.visual_review_service import VisualReviewService
 from app.services.story_consistency_service import StoryConsistencyService
+from app.services.pipeline_service import PipelineService
 from app.services.project_repo import migrate_legacy_json_projects
 from app.services.production_graph import ProductionGraphService
 from app.services.provider_repo import ProviderRepository
@@ -166,6 +168,20 @@ def create_app(
     app.state.ai_script_service = AiScriptService(
         app.state.provider_manager, config.db_path
     )
+    app.state.pipeline_service = PipelineService(
+        config.db_path,
+        app.state.provider_manager,
+        story_service=app.state.story_service,
+        ai_script_service=app.state.ai_script_service,
+        asset_service=app.state.asset_service,
+        image_generation_service=app.state.image_generation_service,
+        video_generation_service=app.state.video_generation_service,
+        asset_version_service=app.state.asset_version_service,
+        visual_review_service=app.state.visual_review_service,
+        story_consistency_service=app.state.story_consistency_service,
+        dialogue_review_service=app.state.dialogue_review_service,
+    )
+    app.state.job_worker.pipeline_service = app.state.pipeline_service
     app.add_middleware(
         CORSMiddleware,
         allow_origins=config.cors_origins,
@@ -193,6 +209,7 @@ def create_app(
     app.include_router(visual_reviews.router)
     app.include_router(quality.router)
     app.include_router(story_reviews.router)
+    app.include_router(pipeline.router)
     app.include_router(version.router)
     logger.info("Application started (env=%s)", config.env)
     return app

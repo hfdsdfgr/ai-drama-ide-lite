@@ -31,6 +31,7 @@ from app.services.job_store import (
     JOB_TYPE_DIALOGUE_REVIEW,
     JOB_TYPE_VISUAL_REVIEW,
     JOB_TYPE_STORY_REVIEW,
+    JOB_TYPE_PIPELINE,
     STATUS_CANCELLED,
     STATUS_COMPLETED,
     STATUS_FAILED,
@@ -73,6 +74,7 @@ class JobWorker:
         dialogue_review_service=None,
         visual_review_service=None,
         story_consistency_service=None,
+        pipeline_service=None,
     ) -> None:
         self.store = store
         self.manager = manager
@@ -86,6 +88,7 @@ class JobWorker:
         self.dialogue_review_service = dialogue_review_service
         self.visual_review_service = visual_review_service
         self.story_consistency_service = story_consistency_service
+        self.pipeline_service = pipeline_service
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
 
@@ -147,6 +150,8 @@ class JobWorker:
                 self._run_visual_review(job)
             elif job.type == JOB_TYPE_STORY_REVIEW:
                 self._run_story_review(job)
+            elif job.type == JOB_TYPE_PIPELINE:
+                self._run_pipeline(job)
             else:
                 self.store.mark_failed(
                     job.id, f"未知任务类型: {job.type}", CATEGORY_PERMANENT
@@ -258,6 +263,17 @@ class JobWorker:
             return
         result = self.story_consistency_service.run_model_review(job, self.store)
         self.store.mark_completed(job.id, result_payload=result)
+
+    def _run_pipeline(self, job) -> None:
+        """一键生产编排：顺序执行各阶段；阶段间可暂停等用户确认。"""
+        if self.pipeline_service is None:
+            self.store.mark_failed(
+                job.id, "生产编排服务未初始化", CATEGORY_PERMANENT
+            )
+            return
+        completed = self.pipeline_service.run(job, self.store)
+        if completed:
+            self.store.mark_completed(job.id, result_payload={"status": "completed"})
 
     def _finish_sync(self, job, result) -> None:
         self._persist_image_result(job, result)

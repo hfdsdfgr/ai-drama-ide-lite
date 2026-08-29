@@ -49,6 +49,7 @@ JOB_TYPE_VIDEO_COMPOSE = "video_compose"
 JOB_TYPE_DIALOGUE_REVIEW = "dialogue_review"
 JOB_TYPE_VISUAL_REVIEW = "visual_review"
 JOB_TYPE_STORY_REVIEW = "story_review"
+JOB_TYPE_PIPELINE = "pipeline"
 
 
 def _now_iso() -> str:
