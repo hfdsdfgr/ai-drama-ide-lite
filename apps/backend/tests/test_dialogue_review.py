@@ -35,6 +35,7 @@ class _FakeManager:
     def __init__(self, detected_text="你好，快走。", chat_payload=None):
         self.repo = _FakeRepo()
         self.detected_text = detected_text
+        self.chat_calls = 0
         self.chat_payload = chat_payload or {
             "consistent": False,
             "issue": "台词说成了别的内容",
@@ -45,6 +46,7 @@ class _FakeManager:
         return GenerationResult(urls=[], meta={"text": self.detected_text})
 
     def chat(self, model_id, messages, temperature=0.1, timeout=60):
+        self.chat_calls += 1
         return __import__("json").dumps(self.chat_payload, ensure_ascii=False)
 
 
@@ -66,7 +68,7 @@ def _make_video(path, seconds=2, with_audio=False):
     subprocess.run(cmd, check=True, capture_output=True)
 
 
-def _setup_project(tmp_path) -> tuple:
+def _setup_project(tmp_path, with_audio=True) -> tuple:
     db_path = tmp_path / "test.db"
     projects_dir = tmp_path / "projects"
     init_db(db_path)
@@ -86,7 +88,7 @@ def _setup_project(tmp_path) -> tuple:
         )
     versions = AssetVersionService(db_path, projects_dir)
     video = tmp_path / "shot.mp4"
-    _make_video(video, with_audio=True)
+    _make_video(video, with_audio=with_audio)
     record = versions.add_version(
         "p",
         "shot_video",
@@ -149,6 +151,58 @@ def test_model_review_passes_when_consistent(tmp_path):
 
     assert result["status"] == "passed"
     assert result["issue"] == ""
+
+
+def test_model_review_flags_when_no_speech(tmp_path):
+    """转写为空（视频无人声）应标记 flagged，而不是让任务失败，且不调用 LLM 比对。"""
+    db_path, projects_dir, versions, video_record = _setup_project(tmp_path)
+    manager = _FakeManager(detected_text="")
+    service = DialogueReviewService(db_path, manager, versions, projects_dir)
+    job = _StubStore().create(
+        "dialogue_review",
+        "p",
+        model_id="m_asr",
+        capability="dialogue_review",
+        input_payload={
+            "shot_id": "shot1",
+            "model_id": "m_asr",
+            "script_model_id": "m_llm",
+        },
+    )
+
+    result = service.run_model_review(job, _StubStore())
+
+    assert result["status"] == "flagged"
+    assert result["detected_speech"] == ""
+    assert "未检测到语音" in result["issue"]
+    assert manager.chat_calls == 0
+    review = service.reviews.list_for_shot("p", "shot1")[0]
+    assert review["status"] == "flagged"
+    assert review["video_version_id"] == video_record.id
+
+
+def test_model_review_flags_when_video_has_no_audio_track(tmp_path):
+    """视频完全没有音轨时应标记 flagged（未检测到语音），而不是报错。"""
+    db_path, projects_dir, versions, _ = _setup_project(tmp_path, with_audio=False)
+    manager = _FakeManager(detected_text="")
+    service = DialogueReviewService(db_path, manager, versions, projects_dir)
+    job = _StubStore().create(
+        "dialogue_review",
+        "p",
+        model_id="m_asr",
+        capability="dialogue_review",
+        input_payload={
+            "shot_id": "shot1",
+            "model_id": "m_asr",
+            "script_model_id": "m_llm",
+        },
+    )
+
+    result = service.run_model_review(job, _StubStore())
+
+    assert result["status"] == "flagged"
+    assert "没有音轨" in result["issue"]
+    assert manager.chat_calls == 0
 
 
 def test_manual_review_and_decision(tmp_path):

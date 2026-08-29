@@ -58,8 +58,7 @@ class DashScopeAdapter(OpenAICompatAdapter):
         if capability == "text_to_speech":
             return self._text_to_speech(ctx, request)
         if capability == "speech_to_text":
-            # 百炼兼容模式提供 OpenAI 兼容 /audio/transcriptions
-            return OpenAICompatAdapter._speech_to_text(self, ctx, request)
+            return self._speech_to_text_native(ctx, request)
         if capability not in {
             "text_to_image",
             "image_to_image",
@@ -213,6 +212,39 @@ class DashScopeAdapter(OpenAICompatAdapter):
                     502, "tts_download_failed", f"{ctx.provider_name} 音频下载失败"
                 ) from exc
         return GenerationResult(urls=[str(target)], meta={"voice": voice})
+
+    def _speech_to_text_native(
+        self, ctx: ProviderContext, request: GenerationRequest
+    ) -> GenerationResult:
+        """百炼原生语音转写：兼容模式 /chat/completions + input_audio（base64 Data URL）。
+        参考官方文档（Qwen-ASR OpenAI 兼容）：qwen3-asr-flash 等模型。
+        """
+        audio_path = request.extra.get("audio_path") or (
+            request.images[0] if request.images else ""
+        )
+        if not audio_path or not Path(audio_path).is_file():
+            raise AdapterError(422, "audio_file_not_found", f"音频文件不存在：{audio_path}")
+        mime = mimetypes.guess_type(audio_path)[0] or "audio/wav"
+        data_uri = (
+            f"data:{mime};base64,"
+            + base64.b64encode(Path(audio_path).read_bytes()).decode("ascii")
+        )
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "input_audio",
+                        "input_audio": {"data": data_uri},
+                    }
+                ],
+            }
+        ]
+        text = self.chat(ctx, messages, temperature=0, timeout=180)
+        text = (text or "").strip()
+        # 空转写是有效结果（音频中无人声/无语音内容），由业务层处理，
+        # 不在此处当作错误抛出。
+        return GenerationResult(urls=[], meta={"text": text})
 
     def submit(
         self,

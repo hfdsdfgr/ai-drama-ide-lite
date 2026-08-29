@@ -97,7 +97,21 @@ class DialogueReviewService:
         tmp_dir.mkdir(parents=True, exist_ok=True)
         audio_path = tmp_dir / "speech.wav"
         try:
-            self._extract_audio(video.file_path, str(audio_path))
+            expected = shot.dialogue.strip()
+            try:
+                self._extract_audio(video.file_path, str(audio_path))
+            except AppError as exc:
+                if exc.code == "video_no_audio":
+                    return self._record_review(
+                        project_id,
+                        shot_id,
+                        video,
+                        asr_model_id,
+                        expected,
+                        detected="",
+                        issue="该视频没有音轨，未检测到语音/台词，请确认人物是否开口或重新生成",
+                    )
+                raise
             result = self.manager.generate(
                 asr_model_id,
                 "speech_to_text",
@@ -110,32 +124,31 @@ class DialogueReviewService:
             )
             detected = (result.meta or {}).get("text", "").strip()
             if not detected:
-                raise AppError(502, "stt_empty", "语音转写未返回文本")
+                # 转写为空不是错误，而是有效的审核结果：
+                # 视频中未检测到语音（人物未开口 / 无声生成），直接标记异常。
+                return self._record_review(
+                    project_id,
+                    shot_id,
+                    video,
+                    asr_model_id,
+                    expected,
+                    detected="",
+                    issue="视频中未检测到语音/台词（人物可能未开口或视频为无声生成）",
+                )
 
-            expected = shot.dialogue.strip()
             consistent, issue = self._compare_with_llm(
                 script_model_id, expected, detected
             )
-            review = self.reviews.create(
+            return self._record_review(
                 project_id,
                 shot_id,
-                video.id,
-                mode="model",
-                model_id=asr_model_id,
-                expected_dialogue=expected,
-            )
-            self.reviews.update_result(
-                review["id"],
-                status="passed" if consistent else "flagged",
-                detected_speech=detected,
+                video,
+                asr_model_id,
+                expected,
+                detected=detected,
                 issue=issue,
+                consistent=consistent,
             )
-            return {
-                "review_id": review["id"],
-                "status": "passed" if consistent else "flagged",
-                "detected_speech": detected,
-                "issue": issue,
-            }
         finally:
             try:
                 audio_path.unlink(missing_ok=True)
@@ -186,6 +199,40 @@ class DialogueReviewService:
         return self.reviews.update_decision(review_id, decision)
 
     # ---------- 内部 ----------
+
+    def _record_review(
+        self,
+        project_id: str,
+        shot_id: str,
+        video,
+        model_id: str,
+        expected: str,
+        *,
+        detected: str,
+        issue: str,
+        consistent: bool = False,
+    ) -> dict:
+        """创建并落库一条模型审核结果；转写为空/无音轨时 consistent 保持 False。"""
+        review = self.reviews.create(
+            project_id,
+            shot_id,
+            video.id,
+            mode="model",
+            model_id=model_id,
+            expected_dialogue=expected,
+        )
+        self.reviews.update_result(
+            review["id"],
+            status="passed" if consistent else "flagged",
+            detected_speech=detected,
+            issue=issue,
+        )
+        return {
+            "review_id": review["id"],
+            "status": "passed" if consistent else "flagged",
+            "detected_speech": detected,
+            "issue": issue,
+        }
 
     def _extract_audio(self, video_path: str, output_path: str) -> str:
         video = Path(video_path)

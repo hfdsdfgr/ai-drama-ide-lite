@@ -27,6 +27,8 @@ githubtoken.txt
 apps/backend/data/
 apps/backend/build/
 apps/backend/dist-bundle/
+apps/backend/server.stdout.log
+apps/backend/server.stderr.log
 
 # ---- Tauri / Rust ----
 apps/desktop/src-tauri/target/
