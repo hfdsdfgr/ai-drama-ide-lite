@@ -27,6 +27,7 @@ from app.api.routes import (
     visual_reviews,
 )
 from app.core.config import Settings, get_settings
+from app.core.crash_log import install_crash_handler
 from app.core.errors import register_exception_handlers
 from app.core.logging import get_logger, setup_logging
 from app.db.database import init_db
@@ -73,6 +74,7 @@ def create_app(
     config = settings or get_settings()
     migrate_data_dir(config.data_dir, frozen=getattr(sys, "frozen", False))
     setup_logging(level=config.log_level, log_dir=config.data_dir / "logs")
+    install_crash_handler(config.data_dir / "logs")
     init_db(config.db_path)
     migrate_legacy_json_projects(config.db_path, config.projects_dir)
 
