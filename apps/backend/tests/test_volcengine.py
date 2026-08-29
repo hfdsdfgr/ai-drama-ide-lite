@@ -82,6 +82,7 @@ def _request(
     aspect_ratio=None,
     with_audio=False,
     duration=5,
+    extra=None,
 ):
     return GenerationRequest(
         capability=capability,
@@ -90,7 +91,7 @@ def _request(
         reference_images=reference_images or [],
         aspect_ratio=aspect_ratio,
         duration=duration,
-        extra={"with_audio": with_audio},
+        extra={"with_audio": with_audio, **(extra or {})},
     )
 
 
@@ -186,22 +187,40 @@ def test_submit_ignores_reference_images_on_seedance_1x(monkeypatch, tmp_path):
     assert "reference_image" not in roles
 
 
-def test_submit_rejects_more_than_nine_reference_images(monkeypatch, tmp_path):
+def test_submit_combines_reference_images_when_exceeding_limit(
+    monkeypatch, tmp_path
+):
+    from PIL import Image
+
     frame = tmp_path / "frame.png"
-    frame.write_bytes(b"fake-png-bytes")
+    Image.new("RGB", (64, 64), (10, 20, 30)).save(frame)
     refs = []
     for i in range(10):
         ref = tmp_path / f"ref_{i}.png"
-        ref.write_bytes(b"fake-png-bytes")
+        Image.new("RGB", (64, 64), (i * 10, 80, 120)).save(ref)
         refs.append(str(ref))
-    adapter = VolcengineAdapter()
-    with pytest.raises(AppError) as exc:
-        adapter.submit(
-            _ctx(),
+    client = _FakeClient(payload={"id": "task_999"})
+    monkeypatch.setattr(httpx, "Client", lambda timeout=None: client)
+    VolcengineAdapter().submit(
+        _ctx(),
+        "image_to_video",
+        _request(
             "image_to_video",
-            _request("image_to_video", images=[str(frame)], reference_images=refs),
-        )
-    assert exc.value.code == "too_many_reference_images"
+            images=[str(frame)],
+            reference_images=refs,
+            extra={"max_reference_images": 9},
+        ),
+    )
+    body = client.calls[0]["json"]
+    roles = [item.get("role") for item in body["content"]]
+    assert roles == ["first_frame", "reference_image", None]
+    ref_items = [
+        item
+        for item in body["content"]
+        if item.get("role") == "reference_image"
+    ]
+    assert len(ref_items) == 1
+    assert ref_items[0]["image_url"]["url"].startswith("data:image/png;base64,")
 
 
 def test_submit_with_audio_true(monkeypatch):

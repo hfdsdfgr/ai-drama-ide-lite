@@ -8,8 +8,6 @@
 """
 
 import base64
-import io
-import math
 import mimetypes
 import uuid
 from pathlib import Path
@@ -24,7 +22,7 @@ from app.services.adapters.base import (
     JobStatus,
     ProviderContext,
 )
-from app.services.adapters.openai_compat import OpenAICompatAdapter
+from app.services.adapters.openai_compat import OpenAICompatAdapter, build_reference_sheet
 
 _STATUS_MAP = {
     "PENDING": "queued",
@@ -84,7 +82,7 @@ class DashScopeAdapter(OpenAICompatAdapter):
         except (TypeError, ValueError):
             max_refs = 3
         if capability != "text_to_image" and len(image_inputs) > max_refs:
-            image_inputs = [self._build_reference_sheet(image_inputs)]
+            image_inputs = [build_reference_sheet(image_inputs)]
 
         content: list[dict] = []
         if image_inputs:
@@ -386,66 +384,6 @@ class DashScopeAdapter(OpenAICompatAdapter):
         mime = mimetypes.guess_type(path.name)[0] or "image/png"
         data = base64.b64encode(path.read_bytes()).decode("ascii")
         return f"data:{mime};base64,{data}"
-
-    @staticmethod
-    def _build_reference_sheet(images: list[str]) -> str:
-        """把超出模型声明上限的本地参考图合并为一张 PNG contact sheet。
-
-        具体阈值由 Job 根据 max_reference_images 动态传入；Adapter 不再写死所有
-        模型都只能接收 3 张输入图。
-        """
-        try:
-            from PIL import Image
-        except ImportError as exc:
-            raise AdapterError(
-                500,
-                "reference_sheet_dependency_missing",
-                "无法合并参考图：图像处理组件 Pillow 未安装",
-            ) from exc
-
-        paths: list[Path] = []
-        for value in images:
-            if value.startswith(("http://", "https://", "data:")):
-                raise AdapterError(
-                    422,
-                    "reference_sheet_local_only",
-                    "百炼多参考图合并仅支持本地图片文件",
-                )
-            path = Path(value)
-            if not path.is_file():
-                raise AdapterError(
-                    422,
-                    "image_file_not_found",
-                    f"输入图片不存在: {value}",
-                )
-            paths.append(path)
-
-        count = len(paths)
-        columns = math.ceil(math.sqrt(count))
-        rows = math.ceil(count / columns)
-        max_side = 2048
-        cell = max(1, max_side // max(columns, rows))
-        padding = max(4, cell // 32)
-        canvas_width = columns * cell
-        canvas_height = rows * cell
-        sheet = Image.new("RGBA", (canvas_width, canvas_height), (255, 255, 255, 255))
-
-        for index, path in enumerate(paths):
-            with Image.open(path) as image:
-                image = image.convert("RGBA")
-                target = cell - padding * 2
-                resample = getattr(Image, "Resampling", Image).LANCZOS
-                image.thumbnail((target, target), resample)
-                column = index % columns
-                row = index // columns
-                x = column * cell + (cell - image.width) // 2
-                y = row * cell + (cell - image.height) // 2
-                sheet.alpha_composite(image, (x, y))
-
-        buffer = io.BytesIO()
-        sheet.convert("RGB").save(buffer, format="PNG")
-        encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
-        return f"data:image/png;base64,{encoded}"
 
     @staticmethod
     def _http_detail(status: int, provider_name: str) -> str:

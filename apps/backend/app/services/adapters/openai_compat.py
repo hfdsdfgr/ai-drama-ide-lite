@@ -4,7 +4,9 @@
 """
 
 import base64
+import io
 import json
+import math
 import mimetypes
 import uuid
 from pathlib import Path
@@ -37,6 +39,66 @@ def image_to_data_url(value: str) -> str:
     mime = mimetypes.guess_type(path.name)[0] or "image/png"
     data = base64.b64encode(path.read_bytes()).decode("ascii")
     return f"data:{mime};base64,{data}"
+
+
+def build_reference_sheet(images: list[str]) -> str:
+    """Merge local reference images into a single PNG contact sheet.
+
+    Used when a provider limits the number of input images (e.g. DashScope
+    3 images, Seedance 9 images). Keeps one Job / one model / one provider.
+    """
+    try:
+        from PIL import Image
+    except ImportError as exc:
+        raise AdapterError(
+            500,
+            "reference_sheet_dependency_missing",
+            "无法合并参考图图片：Pillow 未安装",
+        ) from exc
+
+    paths: list[Path] = []
+    for value in images:
+        if value.startswith(("http://", "https://", "data:")):
+            raise AdapterError(
+                422,
+                "reference_sheet_local_only",
+                "本地参考图合并仅支持本地图片文件",
+            )
+        path = Path(value)
+        if not path.is_file():
+            raise AdapterError(
+                422,
+                "image_file_not_found",
+                f"参考图片不存在: {value}",
+            )
+        paths.append(path)
+
+    count = len(paths)
+    columns = math.ceil(math.sqrt(count))
+    rows = math.ceil(count / columns)
+    max_side = 2048
+    cell = max(1, max_side // max(columns, rows))
+    padding = max(4, cell // 32)
+    canvas_width = columns * cell
+    canvas_height = rows * cell
+    sheet = Image.new("RGBA", (canvas_width, canvas_height), (255, 255, 255, 255))
+
+    for index, path in enumerate(paths):
+        with Image.open(path) as image:
+            image = image.convert("RGBA")
+            target = cell - padding * 2
+            resample = getattr(Image, "Resampling", Image).LANCZOS
+            image.thumbnail((target, target), resample)
+            column = index % columns
+            row = index // columns
+            x = column * cell + (cell - image.width) // 2
+            y = row * cell + (cell - image.height) // 2
+            sheet.alpha_composite(image, (x, y))
+
+    buffer = io.BytesIO()
+    sheet.convert("RGB").save(buffer, format="PNG")
+    encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
+    return f"data:image/png;base64,{encoded}"
 
 
 class OpenAICompatAdapter(Adapter):

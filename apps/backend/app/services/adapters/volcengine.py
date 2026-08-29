@@ -15,7 +15,11 @@ from app.services.adapters.base import (
     JobStatus,
     ProviderContext,
 )
-from app.services.adapters.openai_compat import OpenAICompatAdapter, image_to_data_url
+from app.services.adapters.openai_compat import (
+    OpenAICompatAdapter,
+    build_reference_sheet,
+    image_to_data_url,
+)
 
 _STATUS_MAP = {
     "queued": "queued",
@@ -111,13 +115,17 @@ class VolcengineAdapter(OpenAICompatAdapter):
             )
         if "seedance-2" in ctx.model_id.lower():
             reference_images = list(request.reference_images or [])
-            if len(reference_images) > 9:
-                raise AdapterError(
-                    422,
-                    "too_many_reference_images",
-                    f"{ctx.provider_name} 的 {ctx.model_id} 最多支持 9 张参考图，"
-                    f"当前选择了 {len(reference_images)} 张",
+            max_reference_images = request.extra.get("max_reference_images")
+            try:
+                max_refs = (
+                    int(max_reference_images)
+                    if max_reference_images is not None
+                    else 9
                 )
+            except (TypeError, ValueError):
+                max_refs = 9
+            if len(reference_images) > max_refs:
+                reference_images = [build_reference_sheet(reference_images)]
             for ref_path in reference_images:
                 content.append(
                     {
