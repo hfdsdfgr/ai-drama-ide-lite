@@ -27,7 +27,7 @@ class VideoGenerationService:
         *,
         duration: int = 5,
         aspect_ratio: str | None = None,
-        with_audio: bool = False,
+        with_audio: bool | None = None,
         reference_asset_ids: list[str] | None = None,
     ) -> dict:
         shot, _scene = ScriptRepository(self.db_path).get_shot_with_scene(
@@ -46,6 +46,10 @@ class VideoGenerationService:
         model = self.generation_service.manager.repo.get_model(model_id)
         capabilities = list(model.capabilities or [])
         supports_dialogue = "video_dialogue" in capabilities
+        if with_audio is None:
+            # 未显式指定时跟随模型能力：能带原生对白/音效的模型默认带声音，
+            # 避免调用方忘记传参时产出无声视频。
+            with_audio = supports_dialogue or "video_audio" in capabilities
         dialogue = (shot.dialogue or "").strip()
         if with_audio and supports_dialogue and dialogue and dialogue not in prompt:
             # 只有确认能生成原生对白/台词的模型才把台词写入提示词，

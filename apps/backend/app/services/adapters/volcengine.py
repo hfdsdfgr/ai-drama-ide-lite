@@ -163,8 +163,8 @@ class VolcengineAdapter(OpenAICompatAdapter):
             "duration": request.duration or 5,
             "watermark": False,
         }
-        # generate_audio 默认 true（火山方舟默认有声），本项目产品决定「视频默认无声」，
-        # 因此必须显式传 false；仅当用户勾选带音频时才传 true。
+        # generate_audio 默认 true（火山方舟默认有声）。服务层已按模型能力解析
+        # with_audio（支持原生对白/音效的模型默认带声音），这里透传即可。
         if "seedance-1-0" not in ctx.model_id.lower():
             body["generate_audio"] = bool(request.extra.get("with_audio", False))
         if ratio:

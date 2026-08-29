@@ -66,7 +66,8 @@ def test_generate_shot_video_route(client, monkeypatch):
     assert calls["project_id"] == "proj_1"
     assert calls["shot_id"] == "shot_01"
     assert calls["duration"] == 10
-    assert calls["with_audio"] is False
+    # 未传 with_audio 时按 None 交给服务层按模型能力决定
+    assert calls["with_audio"] is None
     assert calls["reference_asset_ids"] == ["char_1", "loc_1"]
 
 
@@ -237,6 +238,20 @@ def test_start_shot_video_marks_strip_audio_when_silent(client, monkeypatch):
     )
 
     assert calls["extra"]["strip_audio"] is True
+
+
+def test_start_shot_video_defaults_audio_for_capable_model(client, monkeypatch):
+    """不传 with_audio 时，支持原生对白/音效的模型默认带声音并写入台词。"""
+    project_id = _create_project_with_shot(client, "你好，快走。")
+    service = client.app.state.video_generation_service
+    calls = {}
+    _capture_create_job(service, calls, monkeypatch)
+
+    service.start_shot_video(project_id, "shot1", "model_video", "镜头缓缓推进")
+
+    assert calls["prompt"] == "镜头缓缓推进\n\n对白：你好，快走。"
+    assert calls["extra"]["with_audio"] is True
+    assert calls["extra"]["strip_audio"] is False
 
 
 def test_start_shot_video_resolves_reference_assets(client, monkeypatch):
