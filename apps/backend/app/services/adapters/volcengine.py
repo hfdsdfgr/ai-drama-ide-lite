@@ -69,7 +69,7 @@ class VolcengineAdapter(OpenAICompatAdapter):
                 504, "image_timeout", f"{ctx.provider_name} 图片生成超时"
             ) from exc
         except httpx.HTTPStatusError as exc:
-            detail = self._http_detail(exc.response.status_code, ctx.provider_name)
+            detail = self._detail_from_response(exc, ctx.provider_name)
             raise AdapterError(
                 exc.response.status_code,
                 "image_failed",
@@ -147,10 +147,11 @@ class VolcengineAdapter(OpenAICompatAdapter):
                 504, "video_submit_timeout", f"{ctx.provider_name} 创建视频任务超时"
             ) from exc
         except httpx.HTTPStatusError as exc:
+            detail = self._detail_from_response(exc, ctx.provider_name)
             raise AdapterError(
                 exc.response.status_code,
                 "video_submit_failed",
-                self._http_detail(exc.response.status_code, ctx.provider_name),
+                f"{ctx.provider_name} 创建视频任务失败：{detail}",
             ) from exc
         except Exception as exc:
             raise AdapterError(
@@ -179,10 +180,11 @@ class VolcengineAdapter(OpenAICompatAdapter):
                 504, "video_poll_timeout", f"查询 {ctx.provider_name} 任务状态超时"
             ) from exc
         except httpx.HTTPStatusError as exc:
+            detail = self._detail_from_response(exc, ctx.provider_name)
             raise AdapterError(
                 exc.response.status_code,
                 "video_poll_failed",
-                self._http_detail(exc.response.status_code, ctx.provider_name),
+                f"{ctx.provider_name} 查询任务状态失败：{detail}",
             ) from exc
         except Exception as exc:
             raise AdapterError(
@@ -219,6 +221,19 @@ class VolcengineAdapter(OpenAICompatAdapter):
                 f"{ctx.provider_name} 任务尚未完成（{status.status}）",
             )
         return status.result
+
+    @staticmethod
+    def _detail_from_response(exc: httpx.HTTPStatusError, provider_name: str) -> str:
+        """优先透传方舟响应体里的 error.message，让用户看到具体原因。"""
+        try:
+            payload = exc.response.json()
+            error = payload.get("error") if isinstance(payload, dict) else None
+            message = error.get("message") if isinstance(error, dict) else None
+            if message:
+                return message
+        except Exception:
+            pass
+        return VolcengineAdapter._http_detail(exc.response.status_code, provider_name)
 
     @staticmethod
     def _seedream_size(aspect_ratio: str | None) -> str:

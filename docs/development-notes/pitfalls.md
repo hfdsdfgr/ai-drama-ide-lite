@@ -51,3 +51,12 @@
 - **现象**：不传 `generate_audio` 时 Seedance 2.0 / 1.5 pro 默认生成有声视频，与产品「视频默认无声」冲突。
 - **根因**：火山方舟视频任务接口的 `generate_audio` 默认值为 true，且仅在模型 ID 含 `seedance-1-0` 时不支持该参数。
 - **解决**：Adapter 显式传 `generate_audio=false`（用户勾选带音频时才 true）；`seedance-1-0*` 模型不传该字段。
+
+## 2026-08-29 火山方舟 Seedance 2.0 拒绝「可能含真人」的参考图
+
+- **现象**：图生视频（image_to_video）提交失败，方舟返回：`The request failed because the input image 'content[0]' may contain real person.`
+- **根因**：Seedance 2.0 系列**不支持直接上传含真人人脸的参考图/视频**（AI 生成的人脸同样会触发检测）；真人素材需走方舟的肖像授权 / 预置虚拟人像方案。
+- **解决/规避**：
+  - 链路验证可先走 text_to_video（无图输入）打通；
+  - 含人脸的图生视频需要用户在方舟控制台开通「人像生成」相关权限，或选择无人物特写的分镜图；
+  - 排查 400/404 时，Adapter 必须透传方舟响应体里的 `error.message`，否则只看到「HTTP 400」无法定位。
