@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 import { listJobs } from "../api/jobs";
 import { listProjects } from "../api/projects";
+import { getAppVersion } from "../api/version";
 import type { JobOut } from "../types/job";
 
 const ACTIVE_STATUSES: JobOut["status"][] = ["queued", "running", "paused"];
@@ -10,6 +11,7 @@ export function StatusBar() {
   const [activeCount, setActiveCount] = useState(0);
   const [progress, setProgress] = useState<number | null>(null);
   const [hasError, setHasError] = useState(false);
+  const [appVersion, setAppVersion] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -50,6 +52,18 @@ export function StatusBar() {
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    getAppVersion()
+      .then((info) => {
+        if (!cancelled) setAppVersion(info.version);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const stateClass = hasError ? "error" : activeCount > 0 ? "active" : "ready";
   const label = hasError
     ? "连接失败"
@@ -65,7 +79,7 @@ export function StatusBar() {
       </span>
       <span className="statusbar-spacer" />
       <span className="statusbar-item statusbar-muted">
-        AI Drama IDE Lite v0.1.0
+        AI Drama IDE Lite{appVersion ? ` v${appVersion}` : ""}
       </span>
     </footer>
   );

@@ -1,6 +1,7 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 
 import { InfoTip } from "../components/InfoTip";
+import { checkAppVersion, getAppVersion } from "../api/version";
 import {
   createGenerationJob,
   getGenerationJob,
@@ -70,6 +71,9 @@ export function SettingsPage() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [showForm, setShowForm] = useState(false);
+  const [appVersion, setAppVersion] = useState("");
+  const [updateInfo, setUpdateInfo] = useState("");
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [editing, setEditing] = useState<Provider | null>(null);
   const [discoveringId, setDiscoveringId] = useState<string | null>(null);
   const [testingId, setTestingId] = useState<string | null>(null);
@@ -127,6 +131,33 @@ export function SettingsPage() {
   useEffect(() => {
     refresh().catch((e) => setError((e as Error).message));
   }, [refresh]);
+
+  useEffect(() => {
+    getAppVersion()
+      .then((info) => setAppVersion(info.version))
+      .catch(() => {});
+  }, []);
+
+  async function handleCheckUpdate() {
+    setCheckingUpdate(true);
+    setUpdateInfo("");
+    try {
+      const result = await checkAppVersion();
+      if (result.error) {
+        setUpdateInfo(result.error);
+      } else if (result.has_update) {
+        setUpdateInfo(
+          `发现新版本 v${result.latest}（当前 v${result.current}），请前往 GitHub Releases 下载。`,
+        );
+      } else {
+        setUpdateInfo(`当前已是最新版本 v${result.current}。`);
+      }
+    } catch {
+      setUpdateInfo("检查更新失败，请稍后重试。");
+    } finally {
+      setCheckingUpdate(false);
+    }
+  }
 
   function resetForm() {
     setFormPreset("");
@@ -449,10 +480,22 @@ export function SettingsPage() {
     <div className="page">
       <div className="page-head">
         <h2>设置</h2>
-        <button type="button" onClick={() => setShowForm((v) => !v)}>
-          {showForm ? "取消" : "添加 Provider"}
-        </button>
+        <div className="page-actions">
+          <button
+            type="button"
+            onClick={() => void handleCheckUpdate()}
+            disabled={checkingUpdate}
+          >
+            {checkingUpdate ? "检查中…" : "检查更新"}
+          </button>
+          <button type="button" onClick={() => setShowForm((v) => !v)}>
+            {showForm ? "取消" : "添加 Provider"}
+          </button>
+        </div>
       </div>
+
+      {updateInfo && <p className="muted">{updateInfo}</p>}
+      {appVersion && <p className="muted">当前版本：v{appVersion}</p>}
 
       <p className="muted">
         API Key 仅保存在本机系统凭据管理器中，不会进入项目文件或日志。

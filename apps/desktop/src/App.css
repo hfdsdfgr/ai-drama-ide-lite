@@ -194,6 +194,12 @@
   justify-content: space-between;
 }
 
+.page-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
 .toolbar {
   display: flex;
   gap: 0.5rem;

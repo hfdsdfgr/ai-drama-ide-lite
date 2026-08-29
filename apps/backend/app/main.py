@@ -1,5 +1,6 @@
 """FastAPI application entrypoint."""
 
+import sys
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -21,6 +22,7 @@ from app.api.routes import (
     providers,
     script,
     story,
+    version,
     videos,
     visual_reviews,
 )
@@ -28,6 +30,7 @@ from app.core.config import Settings, get_settings
 from app.core.errors import register_exception_handlers
 from app.core.logging import get_logger, setup_logging
 from app.db.database import init_db
+from app.services.data_migration import migrate_data_dir
 from app.services.adapters.manager import ProviderManager
 from app.services.ai_novel import AiNovelService
 from app.services.ai_script import AiScriptService
@@ -41,6 +44,7 @@ from app.services.job_store import JobStore
 from app.services.job_worker import JobWorker
 from app.services.lip_sync_service import LipSyncService
 from app.services.video_sequence_service import VideoSequenceService
+from app.version import APP_VERSION
 from app.services.dialogue_review_service import DialogueReviewService
 from app.services.visual_review_service import VisualReviewService
 from app.services.project_repo import migrate_legacy_json_projects
@@ -67,11 +71,12 @@ def create_app(
     secret_store: SecretStore | None = None,
 ) -> FastAPI:
     config = settings or get_settings()
+    migrate_data_dir(config.data_dir, frozen=getattr(sys, "frozen", False))
     setup_logging(level=config.log_level, log_dir=config.data_dir / "logs")
     init_db(config.db_path)
     migrate_legacy_json_projects(config.db_path, config.projects_dir)
 
-    app = FastAPI(title=config.app_name, version="0.1.1", lifespan=_lifespan)
+    app = FastAPI(title=config.app_name, version=APP_VERSION, lifespan=_lifespan)
     app.state.settings = config
     app.state.secret_store = secret_store or KeyringSecretStore()
     app.state.provider_manager = ProviderManager(
@@ -178,6 +183,7 @@ def create_app(
     app.include_router(dialogue_reviews.router)
     app.include_router(visual_reviews.router)
     app.include_router(quality.router)
+    app.include_router(version.router)
     logger.info("Application started (env=%s)", config.env)
     return app
 
