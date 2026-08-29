@@ -10,6 +10,7 @@ export interface VideoGenerateInput {
   duration?: number;
   aspect_ratio?: string;
   with_audio?: boolean;
+  reference_asset_ids?: string[];
 }
 
 export function generateVideo(

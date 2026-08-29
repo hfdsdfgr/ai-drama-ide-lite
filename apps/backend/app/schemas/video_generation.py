@@ -10,6 +10,7 @@ class VideoGenerateRequest(BaseModel):
     duration: int = Field(default=5, ge=2, le=15)
     aspect_ratio: str | None = Field(default=None, max_length=20)
     with_audio: bool = False
+    reference_asset_ids: list[str] = Field(default_factory=list)
 
 
 class VideoComposeRequest(BaseModel):

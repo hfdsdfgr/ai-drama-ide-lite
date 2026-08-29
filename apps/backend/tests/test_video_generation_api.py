@@ -29,6 +29,7 @@ def test_generate_shot_video_route(client, monkeypatch):
         duration=5,
         aspect_ratio=None,
         with_audio=False,
+        reference_asset_ids=None,
     ):
         calls.update(
             {
@@ -38,6 +39,7 @@ def test_generate_shot_video_route(client, monkeypatch):
                 "prompt": prompt,
                 "duration": duration,
                 "with_audio": with_audio,
+                "reference_asset_ids": reference_asset_ids,
             }
         )
         return _job_out(model_id)
@@ -55,6 +57,7 @@ def test_generate_shot_video_route(client, monkeypatch):
             "model_id": "model_video",
             "prompt": "镜头缓缓推进",
             "duration": 10,
+            "reference_asset_ids": ["char_1", "loc_1"],
         },
     )
 
@@ -64,6 +67,7 @@ def test_generate_shot_video_route(client, monkeypatch):
     assert calls["shot_id"] == "shot_01"
     assert calls["duration"] == 10
     assert calls["with_audio"] is False
+    assert calls["reference_asset_ids"] == ["char_1", "loc_1"]
 
 
 def test_generate_shot_video_route_passes_with_audio(client, monkeypatch):
@@ -78,6 +82,7 @@ def test_generate_shot_video_route_passes_with_audio(client, monkeypatch):
         duration=5,
         aspect_ratio=None,
         with_audio=False,
+        reference_asset_ids=None,
     ):
         calls["with_audio"] = with_audio
         return _job_out(model_id)
@@ -232,3 +237,104 @@ def test_start_shot_video_marks_strip_audio_when_silent(client, monkeypatch):
     )
 
     assert calls["extra"]["strip_audio"] is True
+
+
+def test_start_shot_video_resolves_reference_assets(client, monkeypatch):
+    project_id = _create_project_with_shot(client, "")
+    service = client.app.state.video_generation_service
+    calls = {}
+
+    def fake_create_job(model_id, capability, prompt, **kwargs):
+        calls["reference_images"] = kwargs.get("reference_images")
+        return {"job_id": "job_1", "status": "queued"}
+
+    monkeypatch.setattr(service.generation_service, "create_job", fake_create_job)
+    monkeypatch.setattr(
+        service.generation_service.manager.repo,
+        "get_model",
+        lambda model_id: SimpleNamespace(capabilities=["video_dialogue"]),
+    )
+
+    def fake_list_assets(project_id):
+        return [
+            {"asset_id": "char_1", "asset_type": "character", "name": "Alice"},
+            {"asset_id": "loc_1", "asset_type": "location", "name": "Cafe"},
+        ]
+
+    class _FakeStoryRepository:
+        def __init__(self, db_path):
+            self.db_path = db_path
+
+        def list_assets(self, project_id):
+            return fake_list_assets(project_id)
+
+    monkeypatch.setattr(
+        "app.services.video_generation_service.StoryRepository",
+        _FakeStoryRepository,
+    )
+
+    def fake_get_current(project_id, entity_type, entity_id):
+        if entity_type == "shot":
+            return SimpleNamespace(file_path="shot.png")
+        return SimpleNamespace(file_path=f"{entity_id}.png")
+
+    monkeypatch.setattr(service.versions, "get_current", fake_get_current)
+
+    service.start_shot_video(
+        project_id,
+        "shot1",
+        "model_video",
+        "镜头缓缓推进",
+        reference_asset_ids=["char_1", "loc_1"],
+    )
+
+    assert calls["reference_images"] == ["char_1.png", "loc_1.png"]
+
+
+def test_start_shot_video_skips_assets_without_image(client, monkeypatch):
+    project_id = _create_project_with_shot(client, "")
+    service = client.app.state.video_generation_service
+    calls = {}
+
+    def fake_create_job(model_id, capability, prompt, **kwargs):
+        calls["reference_images"] = kwargs.get("reference_images")
+        return {"job_id": "job_1", "status": "queued"}
+
+    monkeypatch.setattr(service.generation_service, "create_job", fake_create_job)
+    monkeypatch.setattr(
+        service.generation_service.manager.repo,
+        "get_model",
+        lambda model_id: SimpleNamespace(capabilities=["video_dialogue"]),
+    )
+
+    def fake_list_assets(project_id):
+        return [{"asset_id": "char_1", "asset_type": "character", "name": "Alice"}]
+
+    class _FakeStoryRepository:
+        def __init__(self, db_path):
+            self.db_path = db_path
+
+        def list_assets(self, project_id):
+            return fake_list_assets(project_id)
+
+    monkeypatch.setattr(
+        "app.services.video_generation_service.StoryRepository",
+        _FakeStoryRepository,
+    )
+
+    def fake_get_current(project_id, entity_type, entity_id):
+        if entity_type == "shot":
+            return SimpleNamespace(file_path="shot.png")
+        return None  # character has no image version yet
+
+    monkeypatch.setattr(service.versions, "get_current", fake_get_current)
+
+    service.start_shot_video(
+        project_id,
+        "shot1",
+        "model_video",
+        "镜头缓缓推进",
+        reference_asset_ids=["char_1"],
+    )
+
+    assert calls["reference_images"] == []

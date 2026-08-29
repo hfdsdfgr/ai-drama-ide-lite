@@ -33,6 +33,7 @@ def generate_video(
         duration=payload.duration,
         aspect_ratio=payload.aspect_ratio,
         with_audio=payload.with_audio,
+        reference_asset_ids=payload.reference_asset_ids,
     )
 
 

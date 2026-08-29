@@ -75,11 +75,19 @@ def _patch_client(monkeypatch, **kwargs):
     )
 
 
-def _request(capability, images=None, aspect_ratio=None, with_audio=False, duration=5):
+def _request(
+    capability,
+    images=None,
+    reference_images=None,
+    aspect_ratio=None,
+    with_audio=False,
+    duration=5,
+):
     return GenerationRequest(
         capability=capability,
         prompt="一只小猫对着镜头打哈欠",
         images=images or [],
+        reference_images=reference_images or [],
         aspect_ratio=aspect_ratio,
         duration=duration,
         extra={"with_audio": with_audio},
@@ -127,6 +135,73 @@ def test_submit_image_to_video_with_local_image(monkeypatch, tmp_path):
     assert body["content"][0]["role"] == "first_frame"
     assert body["content"][0]["image_url"]["url"].startswith("data:image/png;base64,")
     assert body["content"][1]["type"] == "text"
+
+
+def test_submit_image_to_video_with_reference_images(monkeypatch, tmp_path):
+    frame = tmp_path / "frame.png"
+    frame.write_bytes(b"fake-png-bytes")
+    ref_a = tmp_path / "ref_a.png"
+    ref_a.write_bytes(b"fake-png-bytes")
+    ref_b = tmp_path / "ref_b.png"
+    ref_b.write_bytes(b"fake-png-bytes")
+    client = _FakeClient(payload={"id": "task_789"})
+    monkeypatch.setattr(httpx, "Client", lambda timeout=None: client)
+    VolcengineAdapter().submit(
+        _ctx(),
+        "image_to_video",
+        _request(
+            "image_to_video",
+            images=[str(frame)],
+            reference_images=[str(ref_a), str(ref_b)],
+        ),
+    )
+    body = client.calls[0]["json"]
+    roles = [item.get("role") for item in body["content"]]
+    assert roles == ["first_frame", "reference_image", "reference_image", None]
+    assert all(
+        item["image_url"]["url"].startswith("data:image/png;base64,")
+        for item in body["content"]
+        if item["type"] == "image_url"
+    )
+
+
+def test_submit_ignores_reference_images_on_seedance_1x(monkeypatch, tmp_path):
+    frame = tmp_path / "frame.png"
+    frame.write_bytes(b"fake-png-bytes")
+    ref = tmp_path / "ref.png"
+    ref.write_bytes(b"fake-png-bytes")
+    client = _FakeClient(payload={"id": "task_1"})
+    monkeypatch.setattr(httpx, "Client", lambda timeout=None: client)
+    VolcengineAdapter().submit(
+        _ctx(model_id="doubao-seedance-1-5-pro-251215"),
+        "image_to_video",
+        _request(
+            "image_to_video",
+            images=[str(frame)],
+            reference_images=[str(ref)],
+        ),
+    )
+    body = client.calls[0]["json"]
+    roles = [item.get("role") for item in body["content"]]
+    assert "reference_image" not in roles
+
+
+def test_submit_rejects_more_than_nine_reference_images(monkeypatch, tmp_path):
+    frame = tmp_path / "frame.png"
+    frame.write_bytes(b"fake-png-bytes")
+    refs = []
+    for i in range(10):
+        ref = tmp_path / f"ref_{i}.png"
+        ref.write_bytes(b"fake-png-bytes")
+        refs.append(str(ref))
+    adapter = VolcengineAdapter()
+    with pytest.raises(AppError) as exc:
+        adapter.submit(
+            _ctx(),
+            "image_to_video",
+            _request("image_to_video", images=[str(frame)], reference_images=refs),
+        )
+    assert exc.value.code == "too_many_reference_images"
 
 
 def test_submit_with_audio_true(monkeypatch):

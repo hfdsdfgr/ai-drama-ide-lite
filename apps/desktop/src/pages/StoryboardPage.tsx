@@ -724,6 +724,7 @@ export function StoryboardPage({
         prompt,
         duration: videoDuration,
         with_audio: (supportsAudio || supportsDialogue) && withAudio,
+        reference_asset_ids: selectedReferenceAssetIds,
       });
       setVideoJob(job);
       while (true) {

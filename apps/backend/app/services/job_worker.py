@@ -174,6 +174,7 @@ class JobWorker:
             prompt=payload.get("prompt", ""),
             model_id=job.model_id,
             images=payload.get("images") or [],
+            reference_images=payload.get("reference_images") or [],
             aspect_ratio=payload.get("aspect_ratio"),
             duration=payload.get("duration"),
             negative_prompt=payload.get("negative_prompt", ""),

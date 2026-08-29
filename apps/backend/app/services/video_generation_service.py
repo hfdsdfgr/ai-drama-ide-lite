@@ -4,6 +4,7 @@ from app.core.errors import AppError
 from app.services.asset_version_service import AssetVersionService
 from app.services.generation_service import GenerationService
 from app.services.script_repo import ScriptRepository
+from app.services.story_repo import StoryRepository
 
 
 class VideoGenerationService:
@@ -27,6 +28,7 @@ class VideoGenerationService:
         duration: int = 5,
         aspect_ratio: str | None = None,
         with_audio: bool = False,
+        reference_asset_ids: list[str] | None = None,
     ) -> dict:
         shot, _scene = ScriptRepository(self.db_path).get_shot_with_scene(
             project_id, shot_id
@@ -57,6 +59,9 @@ class VideoGenerationService:
             duration=duration,
             project_id=project_id,
             images=[image.file_path],
+            reference_images=self._resolve_reference_image_paths(
+                project_id, reference_asset_ids
+            ),
             extra={
                 "target_type": "shot",
                 "target_id": shot_id,
@@ -72,6 +77,36 @@ class VideoGenerationService:
                 ],
             },
         )
+
+    def _resolve_reference_image_paths(
+        self, project_id: str, reference_asset_ids: list[str] | None
+    ) -> list[str]:
+        """Resolve selected reference assets to their current image versions.
+
+        Assets without an image version are skipped (they do not block video
+        generation); missing asset ids raise a clear error.
+        """
+        if not reference_asset_ids:
+            return []
+        assets = {
+            asset["asset_id"]: asset
+            for asset in StoryRepository(self.db_path).list_assets(project_id)
+        }
+        paths: list[str] = []
+        for asset_id in reference_asset_ids:
+            asset = assets.get(asset_id)
+            if asset is None:
+                raise AppError(
+                    404,
+                    "reference_asset_not_found",
+                    f"reference asset not found: {asset_id}",
+                )
+            current = self.versions.get_current(
+                project_id, asset["asset_type"], asset_id
+            )
+            if current is not None:
+                paths.append(current.file_path)
+        return paths
 
     def get_job(self, project_id: str, job_id: str) -> dict:
         record = self.generation_service.store.get(job_id)

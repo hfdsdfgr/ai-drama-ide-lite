@@ -109,6 +109,23 @@ class VolcengineAdapter(OpenAICompatAdapter):
                     "role": "first_frame",
                 }
             )
+        if "seedance-2" in ctx.model_id.lower():
+            reference_images = list(request.reference_images or [])
+            if len(reference_images) > 9:
+                raise AdapterError(
+                    422,
+                    "too_many_reference_images",
+                    f"{ctx.provider_name} 的 {ctx.model_id} 最多支持 9 张参考图，"
+                    f"当前选择了 {len(reference_images)} 张",
+                )
+            for ref_path in reference_images:
+                content.append(
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": image_to_data_url(ref_path)},
+                        "role": "reference_image",
+                    }
+                )
         if request.prompt:
             content.append({"type": "text", "text": request.prompt})
 

@@ -35,6 +35,7 @@ class GenerationService:
         *,
         project_id: str | None = None,
         images: list[str] | None = None,
+        reference_images: list[str] | None = None,
         negative_prompt: str = "",
         extra: dict | None = None,
     ) -> dict:
@@ -58,6 +59,7 @@ class GenerationService:
                 "aspect_ratio": aspect_ratio,
                 "duration": duration,
                 "images": images or [],
+                "reference_images": reference_images or [],
                 "negative_prompt": negative_prompt or "",
                 "extra": extra,
             },

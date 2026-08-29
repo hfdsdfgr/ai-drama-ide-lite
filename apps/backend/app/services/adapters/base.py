@@ -43,6 +43,7 @@ class GenerationRequest:
     prompt: str
     model_id: str = ""
     images: list[str] = field(default_factory=list)
+    reference_images: list[str] = field(default_factory=list)
     aspect_ratio: str | None = None
     duration: int | None = None
     negative_prompt: str = ""
