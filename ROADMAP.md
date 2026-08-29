@@ -1007,8 +1007,8 @@ Tasks
 - [x] Settings / Project Migration（schema 幂等迁移 + 旧 JSON 项目导入 + 数据目录导入）
 - [x] API Key Migration（keyring 系统凭据管理器按 service 名存储，升级无需迁移）
 - [x] Version Check（`/api/version` + `/api/version/check`（GitHub Releases）+ 设置页「检查更新」+ 状态栏真实版本）
-- [ ] Auto Update（调研完成：tauri-plugin-updater + GitHub Releases + 签名密钥；实施需签名密钥）
-- [ ] Crash Logging
+- [x] Auto Update（tauri-plugin-updater + 本地签名密钥 + GitHub Releases latest.json + `scripts/release.ps1` 一键发布；设置页「检查更新」自动下载安装并重启，非 Tauri 环境回退到版本提示）
+- [x] Crash Logging（后端未捕获异常（主线程 / 子线程）写入 `logs/crash.log`）
 
 最终：
 
