@@ -142,18 +142,39 @@ export function SettingsPage() {
     setCheckingUpdate(true);
     setUpdateInfo("");
     try {
-      const result = await checkAppVersion();
-      if (result.error) {
-        setUpdateInfo(result.error);
-      } else if (result.has_update) {
-        setUpdateInfo(
-          `发现新版本 v${result.latest}（当前 v${result.current}），请前往 GitHub Releases 下载。`,
-        );
+      // Tauri 环境优先走原生 updater（检测 → 下载 → 安装 → 重启）
+      const { check } = await import("@tauri-apps/plugin-updater");
+      const update = await check();
+      if (update) {
+        setUpdateInfo(`发现新版本 v${update.version}，正在下载并安装…`);
+        await update.downloadAndInstall();
+        setUpdateInfo("更新已安装，正在重启应用…");
+        const { relaunch } = await import("@tauri-apps/plugin-process");
+        await relaunch();
       } else {
-        setUpdateInfo(`当前已是最新版本 v${result.current}。`);
+        const result = await checkAppVersion();
+        setUpdateInfo(
+          result.error
+            ? result.error
+            : `当前已是最新版本 v${result.current}。`,
+        );
       }
     } catch {
-      setUpdateInfo("检查更新失败，请稍后重试。");
+      // 浏览器 / 非 Tauri 环境：fallback 到后端版本检查（仅提示）
+      try {
+        const result = await checkAppVersion();
+        if (result.error) {
+          setUpdateInfo(result.error);
+        } else if (result.has_update) {
+          setUpdateInfo(
+            `发现新版本 v${result.latest}（当前 v${result.current}），请前往 GitHub Releases 下载。`,
+          );
+        } else {
+          setUpdateInfo(`当前已是最新版本 v${result.current}。`);
+        }
+      } catch {
+        setUpdateInfo("检查更新失败，请稍后重试。");
+      }
     } finally {
       setCheckingUpdate(false);
     }
