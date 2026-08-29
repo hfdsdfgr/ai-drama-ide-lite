@@ -30,6 +30,7 @@ from app.services.job_store import (
     JOB_TYPE_VIDEO_COMPOSE,
     JOB_TYPE_DIALOGUE_REVIEW,
     JOB_TYPE_VISUAL_REVIEW,
+    JOB_TYPE_STORY_REVIEW,
     STATUS_CANCELLED,
     STATUS_COMPLETED,
     STATUS_FAILED,
@@ -71,6 +72,7 @@ class JobWorker:
         video_sequence_service=None,
         dialogue_review_service=None,
         visual_review_service=None,
+        story_consistency_service=None,
     ) -> None:
         self.store = store
         self.manager = manager
@@ -83,6 +85,7 @@ class JobWorker:
         self.video_sequence_service = video_sequence_service
         self.dialogue_review_service = dialogue_review_service
         self.visual_review_service = visual_review_service
+        self.story_consistency_service = story_consistency_service
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
 
@@ -142,6 +145,8 @@ class JobWorker:
                 self._run_dialogue_review(job)
             elif job.type == JOB_TYPE_VISUAL_REVIEW:
                 self._run_visual_review(job)
+            elif job.type == JOB_TYPE_STORY_REVIEW:
+                self._run_story_review(job)
             else:
                 self.store.mark_failed(
                     job.id, f"未知任务类型: {job.type}", CATEGORY_PERMANENT
@@ -242,6 +247,16 @@ class JobWorker:
             )
             return
         result = self.visual_review_service.run_model_review(job, self.store)
+        self.store.mark_completed(job.id, result_payload=result)
+
+    def _run_story_review(self, job) -> None:
+        """剧情一致性审核：目标镜头 + 前后镜头 → 文本 LLM 判断。"""
+        if self.story_consistency_service is None:
+            self.store.mark_failed(
+                job.id, "剧情审核服务未初始化", CATEGORY_PERMANENT
+            )
+            return
+        result = self.story_consistency_service.run_model_review(job, self.store)
         self.store.mark_completed(job.id, result_payload=result)
 
     def _finish_sync(self, job, result) -> None:

@@ -12,7 +12,7 @@ from pathlib import Path
 from app.core.errors import AppError
 from app.db.database import get_connection
 
-REVIEW_TYPES = ("character", "scene", "continuity")
+REVIEW_TYPES = ("character", "scene", "continuity", "costume")
 
 
 def build_project_quality(db_path: Path, project_id: str) -> dict:
@@ -26,6 +26,9 @@ def build_project_quality(db_path: Path, project_id: str) -> dict:
         visual_reviews = _latest_reviews_by_shot(
             conn, project_id, "shot_visual_reviews", group_by_type=True
         )
+        story_reviews = _latest_reviews_by_shot(
+            conn, project_id, "story_consistency_reviews"
+        )
         images = _shot_image_flags(conn, project_id)
 
     items = []
@@ -38,6 +41,8 @@ def build_project_quality(db_path: Path, project_id: str) -> dict:
         if dialogue:
             reviews.append(dialogue)
         reviews.extend(visuals.values())
+        if shot["id"] in story_reviews:
+            reviews.append(story_reviews[shot["id"]])
 
         item = {
             "shot_id": shot["id"],

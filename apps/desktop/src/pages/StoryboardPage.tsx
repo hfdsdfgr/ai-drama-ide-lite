@@ -46,6 +46,13 @@ import {
   type VisualReviewType,
 } from "../api/visual_reviews";
 import {
+  decideStoryReview,
+  listStoryReviews,
+  runStoryReview,
+  submitManualStoryReview,
+  type StoryReview,
+} from "../api/story_reviews";
+import {
   composeVideos,
   dubShot,
   getComposeJob,
@@ -231,6 +238,14 @@ export function StoryboardPage({
   );
   const [visualManualIssue, setVisualManualIssue] = useState("");
   const [visualDeciding, setVisualDeciding] = useState(false);
+  const [storyReviewingJob, setStoryReviewingJob] = useState<JobOut | null>(
+    null,
+  );
+  const [latestStoryReview, setLatestStoryReview] =
+    useState<StoryReview | null>(null);
+  const [storyModelId, setStoryModelId] = useState("");
+  const [storyManualIssue, setStoryManualIssue] = useState("");
+  const [storyDeciding, setStoryDeciding] = useState(false);
   const [voiceModelId, setVoiceModelId] = useState("");
   const [shotVersions, setShotVersions] = useState<Record<string, AssetVersion>>(
     {},
@@ -327,6 +342,9 @@ export function StoryboardPage({
           vision.some((m) => m.id === prev) ? prev : (vision[0]?.id ?? ""),
         );
         setReviewScriptModelId((prev) =>
+          models.some((m) => m.id === prev) ? prev : (models[0]?.id ?? ""),
+        );
+        setStoryModelId((prev) =>
           models.some((m) => m.id === prev) ? prev : (models[0]?.id ?? ""),
         );
       })
@@ -558,6 +576,9 @@ export function StoryboardPage({
     setLatestVisualReview(null);
     setVisualReviewingJob(null);
     setVisualManualIssue("");
+    setLatestStoryReview(null);
+    setStoryReviewingJob(null);
+    setStoryManualIssue("");
     void getCurrentVideoVersion(projectId, shot.id)
       .then(setShotVideoVersion)
       .catch(() => setShotVideoVersion(null));
@@ -574,6 +595,11 @@ export function StoryboardPage({
         if (reviews.length > 0) setLatestVisualReview(reviews[0]);
       })
       .catch(() => setLatestVisualReview(null));
+    void listStoryReviews(projectId, shot.id)
+      .then((reviews) => {
+        if (reviews.length > 0) setLatestStoryReview(reviews[0]);
+      })
+      .catch(() => setLatestStoryReview(null));
   }
 
   function closeShotDetail() {
@@ -911,6 +937,81 @@ export function StoryboardPage({
       setError((e as Error).message);
     } finally {
       setVisualDeciding(false);
+    }
+  }
+
+  async function handleRunStoryReview() {
+    if (!projectId || !selectedShotId || !storyModelId) {
+      setError("请选择文本模型");
+      return;
+    }
+    setStoryReviewingJob(null);
+    setError("");
+    try {
+      const job = await runStoryReview(projectId, {
+        shot_id: selectedShotId,
+        model_id: storyModelId,
+      });
+      setStoryReviewingJob(job);
+      while (true) {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        const updated = await getJob(job.job_id);
+        setStoryReviewingJob(updated);
+        if (["completed", "failed", "cancelled"].includes(updated.status)) {
+          if (updated.status === "completed") {
+            const reviews = await listStoryReviews(
+              projectId,
+              selectedShotId,
+            );
+            setLatestStoryReview(reviews[0] ?? null);
+          } else if (updated.error) {
+            setError(updated.error);
+          }
+          break;
+        }
+      }
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setStoryReviewingJob(null);
+    }
+  }
+
+  async function handleSubmitManualStoryReview(consistent: boolean) {
+    if (!projectId || !selectedShotId) return;
+    setError("");
+    try {
+      const review = await submitManualStoryReview(projectId, {
+        shot_id: selectedShotId,
+        consistent,
+        issue: storyManualIssue,
+      });
+      setLatestStoryReview(review);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  async function handleStoryDecision(
+    decision: "regenerate" | "delete_shot" | "keep",
+  ) {
+    if (!projectId || !latestStoryReview) return;
+    setStoryDeciding(true);
+    setError("");
+    try {
+      const updated = await decideStoryReview(
+        projectId,
+        latestStoryReview.id,
+        decision,
+      );
+      setLatestStoryReview(updated);
+      if (decision === "delete_shot") {
+        handleDeleteSelectedShot();
+      }
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setStoryDeciding(false);
     }
   }
 
@@ -1732,6 +1833,7 @@ export function StoryboardPage({
                         <option value="character">角色与角色卡</option>
                         <option value="scene">场景与设定</option>
                         <option value="continuity">与前一镜头连续性</option>
+                        <option value="costume">服装一致性</option>
                       </select>
                     </label>
                     <label>
@@ -1890,6 +1992,141 @@ export function StoryboardPage({
                 ) : (
                   <p className="muted">
                     请先生成该镜头的分镜图，再进行视觉一致性检查。
+                  </p>
+                )}
+              </div>
+              <div className="card image-generate-card">
+                <div className="sidebar-head">
+                  <h3>剧情一致性检查</h3>
+                </div>
+                {llmModels.length > 0 ? (
+                  <>
+                    <label>
+                      文本模型
+                      <select
+                        value={storyModelId}
+                        onChange={(e) => setStoryModelId(e.target.value)}
+                        disabled={storyReviewingJob !== null}
+                      >
+                        {llmModels.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.model_id}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      disabled={storyReviewingJob !== null}
+                      onClick={() => void handleRunStoryReview()}
+                    >
+                      {storyReviewingJob ? "审核中…" : "检查剧情衔接"}
+                    </button>
+                    {storyReviewingJob && (
+                      <p className="muted">正在对比前后镜头剧情…</p>
+                    )}
+                    <p className="muted">
+                      检查该镜头与前后镜头的动作 / 台词衔接是否合理（会调用文本模型
+                      API）。
+                    </p>
+                    <p className="muted">
+                      <strong>人工审核：</strong>播放视频或查看上下镜头，判断剧情是否连贯。
+                    </p>
+                    <label>
+                      问题说明（人工审核不一致时填写）
+                      <textarea
+                        value={storyManualIssue}
+                        onChange={(e) => setStoryManualIssue(e.target.value)}
+                        rows={2}
+                        placeholder="例如：台词与动作矛盾"
+                      />
+                    </label>
+                    <div className="review-actions">
+                      <button
+                        type="button"
+                        className="btn-primary"
+                        onClick={() =>
+                          void handleSubmitManualStoryReview(true)
+                        }
+                      >
+                        剧情一致
+                      </button>
+                      <button
+                        type="button"
+                        className="button-ghost"
+                        onClick={() =>
+                          void handleSubmitManualStoryReview(false)
+                        }
+                      >
+                        剧情不一致
+                      </button>
+                    </div>
+                    {latestStoryReview && (
+                      <div
+                        className={`review-result review-${latestStoryReview.status}`}
+                      >
+                        {latestStoryReview.status === "flagged" ? (
+                          <>
+                            <p className="review-issue">
+                              检测到异常：
+                              {latestStoryReview.issue || "剧情衔接不一致"}
+                            </p>
+                            <div className="review-actions">
+                              <button
+                                type="button"
+                                disabled={storyDeciding}
+                                onClick={() =>
+                                  void handleStoryDecision("regenerate")
+                                }
+                              >
+                                重新生成
+                              </button>
+                              <button
+                                type="button"
+                                disabled={storyDeciding}
+                                onClick={() =>
+                                  void handleStoryDecision("delete_shot")
+                                }
+                              >
+                                删除分镜
+                              </button>
+                              <button
+                                type="button"
+                                disabled={storyDeciding}
+                                onClick={() =>
+                                  void handleStoryDecision("keep")
+                                }
+                              >
+                                继续沿用
+                              </button>
+                            </div>
+                            {latestStoryReview.decision && (
+                              <p className="muted">
+                                已选择：
+                                {latestStoryReview.decision === "regenerate"
+                                  ? "重新生成"
+                                  : latestStoryReview.decision === "delete_shot"
+                                    ? "删除分镜"
+                                    : "继续沿用"}
+                              </p>
+                            )}
+                          </>
+                        ) : (
+                          <p className="review-passed">
+                            剧情一致 ✓（
+                            {latestStoryReview.mode === "model"
+                              ? "模型审核"
+                              : "人工审核"}
+                            ）
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <p className="muted">
+                    没有可用的文本模型，请先在「设置」启用。
                   </p>
                 )}
               </div>

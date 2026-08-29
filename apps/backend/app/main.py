@@ -22,6 +22,7 @@ from app.api.routes import (
     providers,
     script,
     story,
+    story_reviews,
     version,
     videos,
     visual_reviews,
@@ -48,6 +49,7 @@ from app.services.video_sequence_service import VideoSequenceService
 from app.version import APP_VERSION
 from app.services.dialogue_review_service import DialogueReviewService
 from app.services.visual_review_service import VisualReviewService
+from app.services.story_consistency_service import StoryConsistencyService
 from app.services.project_repo import migrate_legacy_json_projects
 from app.services.production_graph import ProductionGraphService
 from app.services.provider_repo import ProviderRepository
@@ -119,6 +121,10 @@ def create_app(
         app.state.asset_version_service,
         config.projects_dir,
     )
+    app.state.story_consistency_service = StoryConsistencyService(
+        config.db_path,
+        app.state.provider_manager,
+    )
     app.state.job_worker = JobWorker(
         app.state.job_store,
         app.state.provider_manager,
@@ -129,6 +135,7 @@ def create_app(
         video_sequence_service=app.state.video_sequence_service,
         dialogue_review_service=app.state.dialogue_review_service,
         visual_review_service=app.state.visual_review_service,
+        story_consistency_service=app.state.story_consistency_service,
     )
     app.state.generation_service = GenerationService(
         app.state.job_store,
@@ -185,6 +192,7 @@ def create_app(
     app.include_router(dialogue_reviews.router)
     app.include_router(visual_reviews.router)
     app.include_router(quality.router)
+    app.include_router(story_reviews.router)
     app.include_router(version.router)
     logger.info("Application started (env=%s)", config.env)
     return app
