@@ -41,8 +41,13 @@ class VideoGenerationService:
         prompt = prompt.strip()
         if not prompt:
             raise AppError(422, "prompt_required", "请输入视频生成提示词")
+        model = self.generation_service.manager.repo.get_model(model_id)
+        capabilities = list(model.capabilities or [])
+        supports_dialogue = "video_dialogue" in capabilities
         dialogue = (shot.dialogue or "").strip()
-        if with_audio and dialogue and dialogue not in prompt:
+        if with_audio and supports_dialogue and dialogue and dialogue not in prompt:
+            # 只有确认能生成原生对白/台词的模型才把台词写入提示词，
+            # 仅支持原生音效的模型（如 CogVideoX）不写入，避免产出与剧情无关的音效。
             prompt = f"{prompt}\n\n对白：{dialogue}"
         return self.generation_service.create_job(
             model_id,
@@ -56,6 +61,8 @@ class VideoGenerationService:
                 "target_type": "shot",
                 "target_id": shot_id,
                 "with_audio": with_audio,
+                # 未选择带音频（或模型只能带音效）时，落库前移除音轨，保证无声交付。
+                "strip_audio": not with_audio,
                 "source_refs": [
                     {
                         "type": "shot",

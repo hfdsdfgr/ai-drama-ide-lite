@@ -1,20 +1,23 @@
 """Phase 13 M3 - ImageResultService tests."""
 
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
 from app.db.database import get_connection, init_db
 from app.services.adapters.base import GenerationResult
 from app.services.image_result_service import ImageResultService
+from app.services.media_mix import ffmpeg_exe, _probe_video
 from app.services.story_repo import StoryRepository
 
 
 class _Job:
-    def __init__(self, project_id, input_payload):
+    def __init__(self, project_id, input_payload, capability="image_to_image"):
         self.id = "job_1"
         self.project_id = project_id
         self.model_id = "model_img"
         self.provider_id = "prov_1"
+        self.capability = capability
         self.input_payload = input_payload
 
 
@@ -146,3 +149,115 @@ def test_persist_shot_image_writes_version_and_reference_edges(tmp_path):
         and e.downstream_id == record.id
         for e in edges
     )
+
+
+def test_persist_shot_video_strips_audio_track(tmp_path):
+    """strip_audio=True 时，视频落库前应移除音轨（生成无声版本）。"""
+    db_path = _init_project(tmp_path)
+    service = ImageResultService(db_path, tmp_path / "projects")
+
+    source = tmp_path / "with_audio.mp4"
+    subprocess.run(
+        [
+            ffmpeg_exe(),
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=c=red:s=320x240:d=2",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=440:duration=2",
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-c:a",
+            "aac",
+            "-shortest",
+            str(source),
+        ],
+        check=True,
+        capture_output=True,
+    )
+    assert _probe_video(source)["has_audio"] is True
+
+    job = _Job(
+        "proj_1",
+        {
+            "prompt": "shot motion",
+            "negative_prompt": "",
+            "aspect_ratio": "720P",
+            "extra": {
+                "target_type": "shot",
+                "target_id": "shot_01",
+                "strip_audio": True,
+                "source_refs": [],
+            },
+        },
+        capability="image_to_video",
+    )
+    records = service.persist(
+        job, GenerationResult(urls=[str(source)], meta={})
+    )
+
+    assert len(records) == 1
+    record = records[0]
+    assert record.entity_type == "shot_video"
+    assert _probe_video(Path(record.file_path))["has_audio"] is False
+
+
+def test_persist_shot_video_keeps_audio_when_not_stripping(tmp_path):
+    """未标记 strip_audio 时，视频音轨应原样保留。"""
+    db_path = _init_project(tmp_path)
+    service = ImageResultService(db_path, tmp_path / "projects")
+
+    source = tmp_path / "with_audio.mp4"
+    subprocess.run(
+        [
+            ffmpeg_exe(),
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=c=red:s=320x240:d=2",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=440:duration=2",
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-c:a",
+            "aac",
+            "-shortest",
+            str(source),
+        ],
+        check=True,
+        capture_output=True,
+    )
+
+    job = _Job(
+        "proj_1",
+        {
+            "prompt": "shot motion",
+            "negative_prompt": "",
+            "aspect_ratio": "720P",
+            "extra": {
+                "target_type": "shot",
+                "target_id": "shot_01",
+                "strip_audio": False,
+                "source_refs": [],
+            },
+        },
+        capability="image_to_video",
+    )
+    records = service.persist(
+        job, GenerationResult(urls=[str(source)], meta={})
+    )
+
+    assert len(records) == 1
+    record = records[0]
+    assert _probe_video(Path(record.file_path))["has_audio"] is True

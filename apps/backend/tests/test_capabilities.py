@@ -10,6 +10,7 @@ from app.services.capability_registry import (
     serialize,
     validate_capabilities,
 )
+from app.services.vendor_presets import classify_model
 
 
 def _create_provider(client, preset="openai", **kwargs):
@@ -27,6 +28,22 @@ def _add_model(client, provider_id, model_id, model_type):
 
 
 # ---------- 规则推断（单元） ----------
+
+
+def test_video_dialogue_capability_catalog():
+    """支持原生对白的模型应标注 video_dialogue；仅音效的模型不应标注。"""
+    assert "video_dialogue" in resolve_default_capabilities("openai", "sora-2", "video")
+    assert "video_dialogue" in resolve_default_capabilities("openrouter", "google/veo-3.1", "video")
+    assert "video_dialogue" in resolve_default_capabilities("openrouter", "bytedance/seedance-2.0", "video")
+    # CogVideoX 只有音效、无对白能力
+    caps = resolve_default_capabilities("zhipu", "cogvideox-3", "video")
+    assert "video_audio" not in caps
+    assert "video_dialogue" not in caps
+
+
+def test_bailian_cogvideox_classified_as_video():
+    """百炼 cogvideox-3 应被归类为视频模型（此前被误归为 llm）。"""
+    assert classify_model("bailian", "cogvideox-3") == "video"
 
 
 def test_infer_image_rules():

@@ -216,7 +216,7 @@ export function StoryboardPage({
   const [videoModelId, setVideoModelId] = useState("");
   const [videoPrompt, setVideoPrompt] = useState("");
   const [videoDuration, setVideoDuration] = useState(5);
-  const [withAudio, setWithAudio] = useState(true);
+  const [withAudio, setWithAudio] = useState(false);
   const [audioModels, setAudioModels] = useState<Model[]>([]);
   const [llmModels, setLlmModels] = useState<Model[]>([]);
   const [reviewMode, setReviewMode] = useState<"model" | "manual">("model");
@@ -716,12 +716,14 @@ export function StoryboardPage({
       const videoModel = videoModels.find((m) => m.id === videoModelId);
       const supportsAudio =
         videoModel?.capabilities.includes("video_audio") ?? false;
+      const supportsDialogue =
+        videoModel?.capabilities.includes("video_dialogue") ?? false;
       const job = await generateVideo(projectId, {
         target_id: selectedShotId,
         model_id: videoModelId,
         prompt,
         duration: videoDuration,
-        with_audio: supportsAudio && withAudio,
+        with_audio: (supportsAudio || supportsDialogue) && withAudio,
       });
       setVideoJob(job);
       while (true) {
@@ -747,6 +749,13 @@ export function StoryboardPage({
       );
     }
   }
+
+  useEffect(() => {
+    // 切换视频模型时同步“带音频”开关：
+    // 支持原生对白/台词的模型默认开启；只支持音效或不支持的模型默认无声。
+    const model = videoModels.find((m) => m.id === videoModelId);
+    setWithAudio(model?.capabilities.includes("video_dialogue") ?? false);
+  }, [videoModelId, videoModels]);
 
   async function handleComposeScene(sceneId: string) {
     if (!projectId || composingSceneId) return;
@@ -1526,9 +1535,13 @@ export function StoryboardPage({
                     {videoModelId && (
                       <p className="muted">
                         {videoModels.find((m) => m.id === videoModelId)
-                          ?.capabilities.includes("video_audio")
-                          ? "该模型支持原生音频：开启后视频将直接带声音/台词生成。"
-                          : "该模型生成无声视频；台词与音效可在下方配音流程统一合成。"}
+                          ?.capabilities.includes("video_dialogue")
+                          ? "该模型支持原生对白：开启后视频将直接带台词生成。"
+                          : videoModels
+                                .find((m) => m.id === videoModelId)
+                                ?.capabilities.includes("video_audio")
+                            ? "该模型仅支持原生音效（不含台词），默认无声生成。"
+                            : "该模型生成无声视频。"}
                       </p>
                     )}
                     <label>
@@ -1557,18 +1570,31 @@ export function StoryboardPage({
                         ))}
                       </select>
                     </label>
-                    {videoModels.find((m) => m.id === videoModelId)
-                      ?.capabilities.includes("video_audio") && (
-                      <label>
-                        <input
-                          type="checkbox"
-                          checked={withAudio}
-                          onChange={(e) => setWithAudio(e.target.checked)}
-                          disabled={generatingVideoShotId === selectedShotId}
-                        />
-                        带声音生成（模型原生音效 / 台词）
-                      </label>
-                    )}
+                    {(() => {
+                      const videoModel = videoModels.find(
+                        (m) => m.id === videoModelId,
+                      );
+                      const supportsDialogue =
+                        videoModel?.capabilities.includes("video_dialogue") ??
+                        false;
+                      const supportsAudio =
+                        videoModel?.capabilities.includes("video_audio") ??
+                        false;
+                      if (!supportsDialogue && !supportsAudio) return null;
+                      return (
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={withAudio}
+                            onChange={(e) => setWithAudio(e.target.checked)}
+                            disabled={generatingVideoShotId === selectedShotId}
+                          />
+                          {supportsDialogue
+                            ? "带台词/对白生成"
+                            : "带原生音效生成（仅音效，不含台词）"}
+                        </label>
+                      );
+                    })()}
                     {shotVersions[selectedShotId] ? (
                       <button
                         type="button"

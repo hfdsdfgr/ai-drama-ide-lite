@@ -4,6 +4,8 @@
 并补写 `production_edges`，避免只保存可能过期的厂商临时 URL。
 """
 
+import subprocess
+import uuid
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -12,6 +14,7 @@ import httpx
 from app.core.errors import AppError
 from app.services.asset_version_service import AssetVersionService
 from app.services.adapters.base import GenerationResult
+from app.services.media_mix import ffmpeg_exe
 from app.services.production_graph import ProductionGraphService
 from app.services.story_repo import ASSET_TYPES, StoryRepository
 
@@ -35,6 +38,7 @@ def _extension_from_content_type(content_type: str | None) -> str:
 class ImageResultService:
     def __init__(self, db_path, projects_dir) -> None:
         self.db_path = db_path
+        self.projects_dir = Path(projects_dir)
         self.versions = AssetVersionService(db_path, projects_dir)
         self.graph = ProductionGraphService(db_path)
 
@@ -52,8 +56,13 @@ class ImageResultService:
         )
         records = []
         download_headers = getattr(result, "download_headers", None) or {}
+        strip_audio = bool(extra.get("strip_audio"))
+        is_video = capability in {"text_to_video", "image_to_video", "video_to_video"}
         for url in result.urls:
             file_bytes, source_path, file_ext = self._materialize(url, download_headers)
+            if strip_audio and is_video and file_ext in {"mp4", "webm", "mov"}:
+                source_path, file_ext = self._strip_audio(source_path, file_bytes, file_ext)
+                file_bytes = None
             record = self.versions.add_version(
                 job.project_id,
                 entity_type,
@@ -85,6 +94,55 @@ class ImageResultService:
                 capability,
             )
         return records
+
+    def _strip_audio(
+        self, source_path: Path | None, file_bytes: bytes | None, file_ext: str
+    ) -> tuple[Path, str]:
+        """用 FFmpeg 移除视频音轨（-an），保证交付版本无声。"""
+        tmp_dir = self.projects_dir / ".tmp"
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        input_path = source_path
+        cleanup_input = False
+        if input_path is None:
+            input_path = tmp_dir / f"strip_in_{uuid.uuid4().hex[:8]}.{file_ext}"
+            if file_bytes:
+                input_path.write_bytes(file_bytes)
+            cleanup_input = True
+        output = tmp_dir / f"strip_{uuid.uuid4().hex[:12]}.{file_ext}"
+        try:
+            proc = subprocess.run(
+                [
+                    ffmpeg_exe(),
+                    "-y",
+                    "-i",
+                    str(input_path),
+                    "-an",
+                    "-c:v",
+                    "copy",
+                    str(output),
+                ],
+                capture_output=True,
+                text=True,
+                timeout=180,
+                check=False,
+            )
+        except Exception as exc:  # noqa: BLE001 - 统一转为业务错误
+            raise AppError(
+                500, "video_strip_audio_failed", "移除视频音轨失败（FFmpeg 不可用）"
+            ) from exc
+        finally:
+            if cleanup_input and input_path.is_file():
+                try:
+                    input_path.unlink(missing_ok=True)
+                except OSError:
+                    pass
+        if proc.returncode != 0 or not output.is_file():
+            raise AppError(
+                500,
+                "video_strip_audio_failed",
+                "移除视频音轨失败，无法生成无声版本",
+            )
+        return output, file_ext
 
     def _entity_type_for_target(
         self,

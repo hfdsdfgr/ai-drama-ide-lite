@@ -1125,6 +1125,16 @@ Why a dependency was rejected?
 
 This prevents future AI agents from repeating old investigations.
 
+52.1. Record Pitfalls
+
+Every pitfall encountered and solved during development MUST be appended to:
+
+docs/development-notes/pitfalls.md
+
+Include: date, symptom, root cause, and solution/workaround. Do not skip
+provider API quirks, capability mislabeling, or data/account-level issues
+(e.g. HTTP 429 quota, silent empty responses).
+
 53. Keep an Architecture Decision Record
 
 For major decisions:

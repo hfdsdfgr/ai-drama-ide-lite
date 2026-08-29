@@ -32,6 +32,7 @@ export type CapabilityKey =
   | "last_frame"
   | "first_last_frame"
   | "video_audio"
+  | "video_dialogue"
   | "text_to_speech"
   | "speech_to_text"
   | "vision"
@@ -52,6 +53,7 @@ export const CAPABILITY_LABELS: Record<CapabilityKey, string> = {
   last_frame: "尾帧控制",
   first_last_frame: "首尾帧控制",
   video_audio: "视频自带音效",
+  video_dialogue: "原生对白",
   text_to_speech: "文本转语音",
   speech_to_text: "语音转写",
   vision: "图像理解",
@@ -76,6 +78,7 @@ export const VIDEO_CAPABILITIES: CapabilityKey[] = [
   "last_frame",
   "first_last_frame",
   "video_audio",
+  "video_dialogue",
 ];
 
 export const AUDIO_CAPABILITIES: CapabilityKey[] = [

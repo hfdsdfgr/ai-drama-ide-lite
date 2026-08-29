@@ -144,6 +144,12 @@ def _capture_create_job(service, calls: dict, monkeypatch):
         return {"job_id": "job_1", "status": "queued"}
 
     monkeypatch.setattr(service.generation_service, "create_job", fake_create_job)
+    # 默认模拟一个支持原生对白（video_dialogue）的视频模型
+    monkeypatch.setattr(
+        service.generation_service.manager.repo,
+        "get_model",
+        lambda model_id: SimpleNamespace(capabilities=["video_dialogue"]),
+    )
     monkeypatch.setattr(
         service.versions,
         "get_current",
@@ -192,3 +198,37 @@ def test_start_shot_video_ignores_dialogue_without_audio(client, monkeypatch):
     )
 
     assert calls["prompt"] == "镜头缓缓推进"
+
+
+def test_start_shot_video_audio_only_model_skips_dialogue(client, monkeypatch):
+    """仅支持原生音效（video_audio）的模型即使 with_audio=True 也不应写入对白。"""
+    project_id = _create_project_with_shot(client, "你好，快走。")
+    service = client.app.state.video_generation_service
+    calls = {}
+    _capture_create_job(service, calls, monkeypatch)
+    monkeypatch.setattr(
+        service.generation_service.manager.repo,
+        "get_model",
+        lambda model_id: SimpleNamespace(capabilities=["video_audio"]),
+    )
+
+    service.start_shot_video(
+        project_id, "shot1", "model_video", "镜头缓缓推进", with_audio=True
+    )
+
+    assert calls["prompt"] == "镜头缓缓推进"
+    assert calls["extra"]["strip_audio"] is False
+
+
+def test_start_shot_video_marks_strip_audio_when_silent(client, monkeypatch):
+    """未选择带音频时，落库前应标记移除音轨（strip_audio=True）。"""
+    project_id = _create_project_with_shot(client, "你好，快走。")
+    service = client.app.state.video_generation_service
+    calls = {}
+    _capture_create_job(service, calls, monkeypatch)
+
+    service.start_shot_video(
+        project_id, "shot1", "model_video", "镜头缓缓推进", with_audio=False
+    )
+
+    assert calls["extra"]["strip_audio"] is True
