@@ -39,3 +39,15 @@
 ## 经验：能力标注必须以官方文档调研为准
 
 - 不要凭模型名猜测能力；`video_audio` 不等于"能带台词"。模型能力目录（vendor_models.json）是唯一权威来源，未收录的模型交给保守规则推断，不确定的能力不要默认开启。
+
+## 2026-08-29 火山方舟 Seedream 文生图 400
+
+- **现象**：按 OpenAI 兼容默认尺寸 `1024x1024` 调用 `POST /images/generations` 返回 400。
+- **根因**：Seedream 尺寸约束为总像素 `[3686400, 16777216]`、宽高比 `[1/16, 16]`，`1024x1024` 不满足下限。
+- **解决**：VolcengineAdapter 把常见宽高比映射到合法像素值（1:1→2048x2048、16:9→2560x1440、2:3→2048x3072 等），默认 2048x2048，并显式 `watermark=false`、`response_format=url`。
+
+## 2026-08-29 火山方舟 Seedance generate_audio 默认 true
+
+- **现象**：不传 `generate_audio` 时 Seedance 2.0 / 1.5 pro 默认生成有声视频，与产品「视频默认无声」冲突。
+- **根因**：火山方舟视频任务接口的 `generate_audio` 默认值为 true，且仅在模型 ID 含 `seedance-1-0` 时不支持该参数。
+- **解决**：Adapter 显式传 `generate_audio=false`（用户勾选带音频时才 true）；`seedance-1-0*` 模型不传该字段。

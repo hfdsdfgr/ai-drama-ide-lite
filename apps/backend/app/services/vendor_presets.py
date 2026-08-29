@@ -156,6 +156,19 @@ PRESETS: dict[str, VendorPreset] = {
         base_url="http://127.0.0.1:11434/v1",
         needs_key=False,
     ),
+    "volcengine": VendorPreset(
+        key="volcengine",
+        name="火山引擎（方舟）",
+        base_url="https://ark.cn-beijing.volces.com/api/v3",
+        needs_key=True,
+        protocol="volcengine",
+        discoverable=False,
+        type_rules=(
+            ("seedance", "video"),
+            ("seedream", "image"),
+            ("doubao", "llm"),
+        ),
+    ),
     "elevenlabs": VendorPreset(
         key="elevenlabs",
         name="ElevenLabs",

@@ -240,6 +240,7 @@ Tasks
 - [x] Request Normalization / Response Normalization / Error Normalization
 - [x] Polling（提交→轮询→取结果，状态来自厂商真实返回）
 - [x] Async Job Support（内存 Job 注册表 + /api/generation/jobs；Phase 10 持久化）
+- [x] 火山方舟（Volcengine Ark）Adapter：豆包 LLM（OpenAI 兼容）/ Seedream 文生图 / Seedance 异步视频（2026-08-29，调研见 docs/investigations/volcengine-ark.md）
 - [ ] Webhook（Phase 10 Job 系统按需扩展，当前只做轮询）
 核心结构
 Generation Request
@@ -271,6 +272,7 @@ API
 
 - OpenAI 兼容（chat + 图片同步）— openai / deepseek / siliconflow / openrouter / zhipu / ollama / 百炼兼容端点
 - 阿里云百炼原生（视频异步任务：video-synthesis → 轮询 /api/v1/tasks/{id}）
+- 火山方舟（视频异步任务：contents/generations/tasks → 轮询查询任务；Seedream 图像走 OpenAI 兼容 images/generations，含尺寸下限适配）
 
 验证入口：设置页模型「生成测试」（L3，含费用确认）；小说页 AI 创作走 ProviderManager。
 

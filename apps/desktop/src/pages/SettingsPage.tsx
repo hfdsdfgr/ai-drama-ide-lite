@@ -2,10 +2,7 @@ import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 
 import { InfoTip } from "../components/InfoTip";
 import { checkAppVersion, getAppVersion } from "../api/version";
-import {
-  createGenerationJob,
-  getGenerationJob,
-} from "../api/generation";
+import { createGenerationJob, getGenerationJob } from "../api/generation";
 import {
   bulkAddModels,
   createModel,
@@ -77,12 +74,8 @@ export function SettingsPage() {
   const [editing, setEditing] = useState<Provider | null>(null);
   const [discoveringId, setDiscoveringId] = useState<string | null>(null);
   const [testingId, setTestingId] = useState<string | null>(null);
-  const [testResults, setTestResults] = useState<
-    Record<string, ProviderTestResult>
-  >({});
-  const [collapsedTests, setCollapsedTests] = useState<Record<string, boolean>>(
-    {},
-  );
+  const [testResults, setTestResults] = useState<Record<string, ProviderTestResult>>({});
+  const [collapsedTests, setCollapsedTests] = useState<Record<string, boolean>>({});
   const [builtin, setBuiltin] = useState<Record<string, BuiltinModel[]>>({});
   const [builtinOpen, setBuiltinOpen] = useState<string | null>(null);
   const [builtinBusy, setBuiltinBusy] = useState<string | null>(null);
@@ -154,9 +147,7 @@ export function SettingsPage() {
       } else {
         const result = await checkAppVersion();
         setUpdateInfo(
-          result.error
-            ? result.error
-            : `当前已是最新版本 v${result.current}。`,
+          result.error ? result.error : `当前已是最新版本 v${result.current}。`,
         );
       }
     } catch {
@@ -249,9 +240,7 @@ export function SettingsPage() {
   function toggleCap(cap: CapabilityKey, on: boolean) {
     setCapEdit((prev) => {
       if (!prev) return prev;
-      const caps = on
-        ? [...prev.caps, cap]
-        : prev.caps.filter((c) => c !== cap);
+      const caps = on ? [...prev.caps, cap] : prev.caps.filter((c) => c !== cap);
       return { ...prev, caps };
     });
   }
@@ -268,7 +257,7 @@ export function SettingsPage() {
       prompt: "一只小猫在月光下奔跑",
       capability: model.capabilities.includes(defaultCap as CapabilityKey)
         ? defaultCap
-        : model.capabilities[0] ?? "",
+        : (model.capabilities[0] ?? ""),
     });
     setGenJobs((prev) => {
       const next = { ...prev };
@@ -352,8 +341,11 @@ export function SettingsPage() {
           api_key: formApiKey || undefined,
         });
       }
+      const selectedPresetInfo = presets.find((p) => p.key === formPreset);
       const shouldDiscover =
-        editing || !provider.needs_key || provider.has_api_key;
+        editing ||
+        !provider.needs_key ||
+        (provider.has_api_key && (selectedPresetInfo?.discoverable ?? true));
       resetForm();
       await refresh();
       if (shouldDiscover) {
@@ -574,17 +566,13 @@ export function SettingsPage() {
               <InfoTip text="OpenAI 兼容适合大多数 OpenAI 风格接口；阿里云百炼 / DashScope 使用百炼原生视频与图片协议。" />
               <select
                 value={formProtocol}
-                onChange={(e) =>
-                  setFormProtocol(e.target.value as ProviderProtocol)
-                }
+                onChange={(e) => setFormProtocol(e.target.value as ProviderProtocol)}
               >
-                {(Object.keys(PROTOCOL_LABELS) as ProviderProtocol[]).map(
-                  (protocol) => (
-                    <option key={protocol} value={protocol}>
-                      {PROTOCOL_LABELS[protocol]}
-                    </option>
-                  ),
-                )}
+                {(Object.keys(PROTOCOL_LABELS) as ProviderProtocol[]).map((protocol) => (
+                  <option key={protocol} value={protocol}>
+                    {PROTOCOL_LABELS[protocol]}
+                  </option>
+                ))}
               </select>
             </label>
           )}
@@ -663,7 +651,11 @@ export function SettingsPage() {
           )}
 
           <button type="submit" className="btn-primary">
-            {editing ? "保存" : "添加并拉取模型"}
+            {editing
+              ? "保存"
+              : selectedPreset && !selectedPreset.discoverable
+                ? "添加"
+                : "添加并拉取模型"}
           </button>
         </form>
       )}
@@ -700,8 +692,8 @@ export function SettingsPage() {
                   <strong>{provider.name}</strong>
                   <span className="badge">
                     {provider.preset_key
-                      ? presets.find((p) => p.key === provider.preset_key)?.name ??
-                        provider.preset_key
+                      ? (presets.find((p) => p.key === provider.preset_key)?.name ??
+                        provider.preset_key)
                       : "自定义"}
                   </span>
                   <span className="muted">{PROTOCOL_LABELS[provider.protocol]}</span>
@@ -714,10 +706,7 @@ export function SettingsPage() {
                   {provider.model_count} 个模型
                 </p>
                 <div className="actions">
-                  <button
-                    type="button"
-                    onClick={() => handleToggleProvider(provider)}
-                  >
+                  <button type="button" onClick={() => handleToggleProvider(provider)}>
                     {provider.enabled ? "已启用" : "已禁用"}
                   </button>
                   <button type="button" onClick={() => startEdit(provider)}>
@@ -726,7 +715,21 @@ export function SettingsPage() {
                   <button
                     type="button"
                     onClick={() => discover(provider.id, false)}
-                    disabled={discoveringId === provider.id}
+                    disabled={
+                      discoveringId === provider.id ||
+                      (provider.preset_key
+                        ? !(
+                            presets.find((p) => p.key === provider.preset_key)
+                              ?.discoverable ?? true
+                          )
+                        : false)
+                    }
+                    title={
+                      provider.preset_key &&
+                      !presets.find((p) => p.key === provider.preset_key)?.discoverable
+                        ? "该厂商不支持自动拉取模型列表，请手动添加模型"
+                        : undefined
+                    }
                   >
                     {discoveringId === provider.id ? "拉取中…" : "拉取模型"}
                   </button>
@@ -747,10 +750,7 @@ export function SettingsPage() {
                       >
                         确认删除
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => setConfirmDelete(null)}
-                      >
+                      <button type="button" onClick={() => setConfirmDelete(null)}>
                         取消
                       </button>
                     </>
@@ -769,9 +769,7 @@ export function SettingsPage() {
                   <div className="test-result">
                     <div className="test-result-head">
                       <p className={testResults[provider.id].ok ? "ok" : "error"}>
-                        {testResults[provider.id].ok
-                          ? "连接测试通过"
-                          : "连接测试未通过"}
+                        {testResults[provider.id].ok ? "连接测试通过" : "连接测试未通过"}
                       </p>
                       <button
                         type="button"
@@ -790,11 +788,7 @@ export function SettingsPage() {
                         {testResults[provider.id].checks.map((c, i) => (
                           <li key={i} className={`check-${c.status}`}>
                             <span className="check-mark">
-                              {c.status === "ok"
-                                ? "✓"
-                                : c.status === "fail"
-                                  ? "✕"
-                                  : "–"}
+                              {c.status === "ok" ? "✓" : c.status === "fail" ? "✕" : "–"}
                             </span>
                             {c.label}：{c.detail}
                           </li>
@@ -816,15 +810,13 @@ export function SettingsPage() {
                 <div className="models">
                   {!provider.enabled && (
                     <p className="muted provider-disabled-tip">
-                      此 Provider 已禁用，其模型不会出现在生成 / 创作界面。
-                      启用 Provider 后即可使用。
+                      此 Provider 已禁用，其模型不会出现在生成 / 创作界面。 启用 Provider
+                      后即可使用。
                     </p>
                   )}
                   {models
                     .filter((m) => m.provider_id === provider.id)
-                    .filter(
-                      (m) => modelFilter === "all" || m.model_type === modelFilter,
-                    )
+                    .filter((m) => modelFilter === "all" || m.model_type === modelFilter)
                     .map((model) => (
                       <Fragment key={model.id}>
                         <div className="model-block">
@@ -846,7 +838,7 @@ export function SettingsPage() {
                                   ? VIDEO_CAPABILITIES
                                   : model.model_type === "audio"
                                     ? AUDIO_CAPABILITIES
-                                  : []
+                                    : []
                               ).map((cap) => (
                                 <span
                                   key={cap}
@@ -942,9 +934,7 @@ export function SettingsPage() {
                                     <input
                                       type="checkbox"
                                       checked={capEdit.caps.includes(cap)}
-                                      onChange={(e) =>
-                                        toggleCap(cap, e.target.checked)
-                                      }
+                                      onChange={(e) => toggleCap(cap, e.target.checked)}
                                     />
                                     {CAPABILITY_LABELS[cap]}
                                   </label>
@@ -1000,9 +990,7 @@ export function SettingsPage() {
                                 关闭
                               </button>
                               {genErrors[model.id] && (
-                                <p className="error gen-error">
-                                  {genErrors[model.id]}
-                                </p>
+                                <p className="error gen-error">{genErrors[model.id]}</p>
                               )}
                               {genJobs[model.id] && (
                                 <div className="gen-result">
@@ -1067,10 +1055,7 @@ export function SettingsPage() {
                       <option value="audio">音频模型（Audio）</option>
                     </select>
                     <button type="submit">添加</button>
-                    <button
-                      type="button"
-                      onClick={() => setManualModel(null)}
-                    >
+                    <button type="button" onClick={() => setManualModel(null)}>
                       取消
                     </button>
                   </form>
@@ -1133,8 +1118,7 @@ export function SettingsPage() {
                               {(builtin[provider.id] ?? []).map((m) => {
                                 const added = models.some(
                                   (x) =>
-                                    x.provider_id === provider.id &&
-                                    x.model_id === m.id,
+                                    x.provider_id === provider.id && x.model_id === m.id,
                                 );
                                 return (
                                   <li key={m.id} className="model-row">

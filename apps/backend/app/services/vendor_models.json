@@ -129,6 +129,19 @@
   ],
   "ollama": []
   ,
+  "volcengine": [
+    { "id": "doubao-seed-1-6-250615", "type": "llm" },
+    { "id": "doubao-seed-2-0-pro-260215", "type": "llm" },
+    { "id": "doubao-seed-2-0-lite-260215", "type": "llm" },
+    { "id": "doubao-seedream-4-0-250828", "type": "image", "capabilities": ["text_to_image"] },
+    { "id": "doubao-seedream-5-0-260128", "type": "image", "capabilities": ["text_to_image"] },
+    { "id": "doubao-seedance-2-0-260128", "type": "video", "capabilities": ["image_to_video", "text_to_video", "video_audio", "video_dialogue"] },
+    { "id": "doubao-seedance-2-0-fast-260128", "type": "video", "capabilities": ["image_to_video", "text_to_video", "video_audio", "video_dialogue"] },
+    { "id": "doubao-seedance-2-5-260628", "type": "video", "capabilities": ["image_to_video", "text_to_video", "video_audio", "video_dialogue"] },
+    { "id": "doubao-seedance-1-5-pro-251215", "type": "video", "capabilities": ["image_to_video", "text_to_video", "video_audio", "video_dialogue"] },
+    { "id": "doubao-seedance-1-0-lite-t2v", "type": "video", "capabilities": ["text_to_video"] },
+    { "id": "doubao-seedance-1-0-lite-i2v", "type": "video", "capabilities": ["image_to_video"] }
+  ],
   "elevenlabs": [
     { "id": "eleven_v3", "type": "audio", "capabilities": ["text_to_speech", "tts_timestamps"] },
     { "id": "eleven_multilingual_v2", "type": "audio", "capabilities": ["text_to_speech", "tts_timestamps"] },

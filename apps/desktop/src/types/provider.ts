@@ -6,6 +6,7 @@ export type ProviderProtocol =
   | "openrouter_video"
   | "zhipu_video"
   | "siliconflow_video"
+  | "volcengine"
   | "elevenlabs"
   | "syncso";
 
@@ -16,6 +17,7 @@ export const PROTOCOL_LABELS: Record<ProviderProtocol, string> = {
   openrouter_video: "OpenRouter Video",
   zhipu_video: "智谱 CogVideoX",
   siliconflow_video: "SiliconFlow Video",
+  volcengine: "火山方舟（Volcengine Ark）",
   elevenlabs: "ElevenLabs",
   syncso: "Sync.so",
 };

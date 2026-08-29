@@ -14,6 +14,7 @@ from app.services.adapters.openai_compat import OpenAICompatAdapter
 from app.services.adapters.openrouter_video import OpenRouterVideoAdapter
 from app.services.adapters.siliconflow_video import SiliconFlowVideoAdapter
 from app.services.adapters.sora import SoraVideoAdapter
+from app.services.adapters.volcengine import VolcengineAdapter
 from app.services.adapters.zhipu_video import ZhipuVideoAdapter
 from app.services.capability_registry import VIDEO_CAPABILITIES
 from app.services.provider_repo import ProviderRepository
@@ -29,6 +30,7 @@ class ProviderManager:
             "openrouter_video": OpenRouterVideoAdapter(),
             "zhipu_video": ZhipuVideoAdapter(),
             "siliconflow_video": SiliconFlowVideoAdapter(),
+            "volcengine": VolcengineAdapter(),
         }
 
     # ---------- 校验与上下文 ----------
