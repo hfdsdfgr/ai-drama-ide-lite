@@ -44,6 +44,14 @@ _SEEDREAM_SIZES = {
 # Seedance ratio 支持范围；不支持的比值（如 2:3）映射为 adaptive，避免 400。
 _SUPPORTED_RATIOS = frozenset({"16:9", "4:3", "1:1", "3:4", "9:16", "21:9"})
 
+# Seedance 平台对真实人脸输入有内容风控，命中时给出明确解决方向。
+_FACE_POLICY_HINT = (
+    "画面疑似包含真实人脸，火山 Seedance 拒绝生成。"
+    "建议：①将角色/分镜改为动漫或 3D 等非真人风格；"
+    "②在火山方舟控制台开通人像授权后使用已授权素材；"
+    "③改用火山预置虚拟人像（asset:// ID）作为参考图。"
+)
+
 
 class VolcengineAdapter(OpenAICompatAdapter):
     name = "volcengine"
@@ -227,7 +235,10 @@ class VolcengineAdapter(OpenAICompatAdapter):
             message = (
                 error_obj.get("message") if isinstance(error_obj, dict) else None
             )
-            error = message or f"任务状态：{raw_status}"
+            error = (
+                VolcengineAdapter._friendly_message(message)
+                or f"任务状态：{raw_status}"
+            )
         elif status == "completed":
             content = payload.get("content") if isinstance(payload, dict) else None
             url = content.get("video_url") if isinstance(content, dict) else None
@@ -249,16 +260,26 @@ class VolcengineAdapter(OpenAICompatAdapter):
 
     @staticmethod
     def _detail_from_response(exc: httpx.HTTPStatusError, provider_name: str) -> str:
-        """优先透传方舟响应体里的 error.message，让用户看到具体原因。"""
+        """优先透传方舟响应体里的 error.message，并翻译已知的平台限制。"""
         try:
             payload = exc.response.json()
             error = payload.get("error") if isinstance(payload, dict) else None
             message = error.get("message") if isinstance(error, dict) else None
             if message:
-                return message
+                return VolcengineAdapter._friendly_message(message)
         except Exception:
             pass
         return VolcengineAdapter._http_detail(exc.response.status_code, provider_name)
+
+    @staticmethod
+    def _friendly_message(message: str | None) -> str | None:
+        """把火山英文报错翻译成用户能看懂的中文提示；未知错误保持原样。"""
+        if not message:
+            return message
+        lowered = message.lower()
+        if "may contain real person" in lowered or "real person" in lowered:
+            return _FACE_POLICY_HINT
+        return message
 
     @staticmethod
     def _seedream_size(aspect_ratio: str | None) -> str:

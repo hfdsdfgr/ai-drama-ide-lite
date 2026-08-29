@@ -296,6 +296,64 @@ def test_poll_failed_with_message(monkeypatch):
     assert status.error == "参数不合法"
 
 
+def test_poll_failed_real_person_maps_to_chinese_hint(monkeypatch):
+    _patch_client(
+        monkeypatch,
+        payload={
+            "id": "task_1",
+            "status": "failed",
+            "error": {
+                "code": "BadRequest",
+                "message": (
+                    "The request failed because the input image 'content[0]' "
+                    "may contain real person."
+                ),
+            },
+        },
+    )
+    status = VolcengineAdapter().poll(_ctx(), "task_1")
+    assert status.status == "failed"
+    assert "真实人脸" in status.error
+    assert "Seedance" in status.error
+    assert "asset://" in status.error
+
+
+def test_detail_from_response_maps_real_person_to_chinese_hint():
+    exc = httpx.HTTPStatusError(
+        "Bad Request",
+        request=httpx.Request("POST", "http://fake"),
+        response=httpx.Response(
+            400,
+            request=httpx.Request("POST", "http://fake"),
+            json={
+                "error": {
+                    "code": "BadRequest",
+                    "message": (
+                        "The request failed because the input image 'content[0]' "
+                        "may contain real person."
+                    ),
+                }
+            },
+        ),
+    )
+    detail = VolcengineAdapter._detail_from_response(exc, "火山方舟")
+    assert "真实人脸" in detail
+    assert "火山 Seedance" in detail
+
+
+def test_detail_from_response_passthrough_unknown_message():
+    exc = httpx.HTTPStatusError(
+        "Bad Request",
+        request=httpx.Request("POST", "http://fake"),
+        response=httpx.Response(
+            400,
+            request=httpx.Request("POST", "http://fake"),
+            json={"error": {"code": "BadRequest", "message": "参数不合法"}},
+        ),
+    )
+    assert VolcengineAdapter._detail_from_response(exc, "火山方舟") == "参数不合法"
+
+
 def test_poll_running(monkeypatch):
     _patch_client(monkeypatch, payload={"id": "task_1", "status": "running"})
     status = VolcengineAdapter().poll(_ctx(), "task_1")
