@@ -61,7 +61,9 @@ def test_asset_prompt_reuses_reference_prompt_and_appends_consistency():
         aspect_ratio="2:3",
     )
 
-    assert plan.prompt.startswith("male protagonist")
+    assert plan.prompt.startswith("Character reference sheet")
+    assert "three views" in plan.prompt.lower()
+    assert "male protagonist, short black hair, dark eyes" in plan.prompt
     assert "character reference sheet" in plan.prompt
     assert "consistent character design" in plan.prompt
     assert "no text" in plan.prompt
@@ -69,6 +71,30 @@ def test_asset_prompt_reuses_reference_prompt_and_appends_consistency():
     assert plan.aspect_ratio == "2:3"
     assert (plan.width, plan.height) == (1024, 1536)
     assert "bad hands" in plan.negative_prompt
+
+
+def test_character_asset_prompt_strips_single_view_phrases():
+    """参考描述里的 front view / full body 不应再与三视图模板冲突。"""
+    plan = build_asset_image_prompt(
+        "character",
+        reference_prompt=(
+            "A young man in gray robe, full body, front view, "
+            "natural lighting, high detail"
+        ),
+        art_style="动漫",
+    )
+    assert "three views" in plan.prompt.lower()
+    assert "front view, side view, back view" in plan.prompt.lower()
+    assert "full body, front view" not in plan.prompt.lower()
+    assert "A young man in gray robe, natural lighting, high detail" in plan.prompt
+
+
+def test_character_asset_prompt_uses_three_view_template_first():
+    plan = build_asset_image_prompt(
+        "character",
+        reference_prompt="young man, black bun, gray robe",
+    )
+    assert plan.prompt.startswith("Character reference sheet, three views")
 
 
 def test_asset_prompt_falls_back_to_structured_fields():
@@ -117,11 +143,29 @@ def test_shot_prompt_keeps_user_prompt_and_adds_references():
     assert plan.prompt.startswith("close-up of Lin Fan")
     assert "character reference (林凡)" in plan.prompt
     assert "male protagonist, green cloth robe" in plan.prompt
-    assert "consistent character design" in plan.prompt
+    assert "keep the exact same face, hairstyle and costume" in plan.prompt
     assert "no subtitles" in plan.prompt
     assert plan.aspect_ratio == "16:9"
     assert (plan.width, plan.height) == (1280, 720)
     assert plan.source_refs[0]["id"] == "shot_01"
+
+
+def test_shot_prompt_with_character_reference_no_solo_prop_constraint():
+    """分镜图不能复用资产卡的 solo character / no props 约束，避免与剧情冲突。"""
+    plan = build_shot_image_prompt(
+        _shot(prompt="双人对峙"),
+        _scene(),
+        asset_references=[
+            {
+                "asset_type": "character",
+                "name": "林凡",
+                "reference_prompt": "male protagonist",
+            }
+        ],
+    )
+    assert "solo character" not in plan.prompt.lower()
+    assert "no props" not in plan.prompt.lower()
+    assert "same character identity" in plan.prompt
 
 
 def test_shot_prompt_falls_back_to_shot_fields():

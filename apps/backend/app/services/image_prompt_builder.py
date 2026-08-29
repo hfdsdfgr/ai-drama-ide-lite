@@ -4,6 +4,7 @@
 像素规格。它不调用任何 AI API，也不接触数据库，便于单独测试。
 """
 
+import re
 from dataclasses import dataclass, field
 
 from app.schemas.script import Scene, Shot
@@ -26,6 +27,14 @@ CHARACTER_CONSISTENCY = (
     "solo character, no props, no other characters"
 )
 
+# 角色设定图必须是三视图。放在 prompt 最前面，避免参考描述里的
+# 「front view / full body」等单视图短语把模型带偏成只画正面。
+CHARACTER_THREE_VIEW = (
+    "Character reference sheet, three views of the same character: "
+    "front view, side view, back view, full body, neutral standing pose, "
+    "plain background, consistent face, consistent hairstyle, consistent outfit"
+)
+
 LOCATION_CONSISTENCY = (
     "cinematic establishing shot, consistent environment, "
     "clear spatial layout, no people, no characters, no specific props"
@@ -40,6 +49,18 @@ ASSET_NO_TEXT = "no text, no words, no letters, no watermark"
 
 SHOT_CONSISTENCY = (
     "cinematic still frame, storyboard frame, no text, no subtitles"
+)
+
+# 分镜图里的角色一致性约束：与资产卡不同，分镜图可以有多个角色和道具，
+# 因此不能复用「solo character, no props」；核心是保持与角色参考图相同的
+# 面部、发型、服装，避免模型因剧情描述（痛苦/扭曲等）把脸画崩。
+SHOT_CHARACTER_CONSISTENCY = (
+    "keep the exact same face, hairstyle and costume as the character references, "
+    "same character identity, do not change facial features, age or skin"
+)
+
+_VIEW_PHRASE_RE = re.compile(
+    r"\b(front|side|back) view\b|\bfull body\b", re.IGNORECASE
 )
 
 
@@ -133,6 +154,13 @@ def _asset_consistency(asset_type: str) -> str:
     }.get(asset_type, "")
 
 
+def _strip_view_phrases(text: str) -> str:
+    """去掉参考描述里写死的单视图/全身短语，避免与三视图模板冲突。"""
+    cleaned = _VIEW_PHRASE_RE.sub("", text)
+    parts = [part.strip() for part in cleaned.split(",") if part.strip()]
+    return ", ".join(parts)
+
+
 def build_asset_image_prompt(
     asset_type: str,
     reference_prompt: str = "",
@@ -151,6 +179,9 @@ def build_asset_image_prompt(
     base = reference_prompt.strip() or _asset_fields_prompt(asset_type, fields)
     if not base:
         base = _asset_consistency(asset_type)
+
+    if asset_type == "character":
+        base = _join([CHARACTER_THREE_VIEW, _strip_view_phrases(base)])
 
     style = art_style or fields.get("art_style") or ""
     base = _append_if_missing(base, style)
@@ -231,7 +262,7 @@ def build_shot_image_prompt(
         ref.get("asset_type") == "character"
         for ref in asset_references
     ):
-        base = _append_if_missing(base, CHARACTER_CONSISTENCY)
+        base = _append_if_missing(base, SHOT_CHARACTER_CONSISTENCY)
     base = _append_if_missing(base, SHOT_CONSISTENCY)
     if art_style:
         base = _append_if_missing(base, art_style)
