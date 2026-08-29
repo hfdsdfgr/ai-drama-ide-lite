@@ -1002,13 +1002,13 @@ Tasks
 - [x] Installer（NSIS `-setup.exe`，perUser、中英双语、内嵌 WebView2 引导 + WebView2Loader.dll）
 - [x] 后端 sidecar 生命周期（启动拉起、退出杀进程树、动态端口）
 - [x] 数据目录迁移（打包版 `%LOCALAPPDATA%\AI Drama IDE Lite\data`，开发版项目内 data）
+- [x] 数据目录自动迁移（打包版启动时检测旧位置数据并复制导入，幂等）
 - [x] 前端 API 地址适配（Tauri 环境经 `get_backend_port` 直连，开发走 Vite 代理）
-- [ ] Auto Update
+- [x] Settings / Project Migration（schema 幂等迁移 + 旧 JSON 项目导入 + 数据目录导入）
+- [x] API Key Migration（keyring 系统凭据管理器按 service 名存储，升级无需迁移）
+- [x] Version Check（`/api/version` + `/api/version/check`（GitHub Releases）+ 设置页「检查更新」+ 状态栏真实版本）
+- [ ] Auto Update（调研完成：tauri-plugin-updater + GitHub Releases + 签名密钥；实施需签名密钥）
 - [ ] Crash Logging
-- [ ] Settings Migration
-- [ ] Project Migration
-- [ ] API Key Migration
-- [ ] Version Check
 
 最终：
 
