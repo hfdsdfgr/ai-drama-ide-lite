@@ -138,7 +138,10 @@ def test_submit_image_to_video_with_local_image(monkeypatch, tmp_path):
     assert body["content"][1]["type"] == "text"
 
 
-def test_submit_image_to_video_with_reference_images(monkeypatch, tmp_path):
+def test_submit_image_to_video_skips_reference_images_on_seedance_2x(
+    monkeypatch, tmp_path
+):
+    """Seedance 2.0 内容规则：首帧与参考素材不能混用，图生视频时跳过参考图。"""
     frame = tmp_path / "frame.png"
     frame.write_bytes(b"fake-png-bytes")
     ref_a = tmp_path / "ref_a.png"
@@ -158,12 +161,35 @@ def test_submit_image_to_video_with_reference_images(monkeypatch, tmp_path):
     )
     body = client.calls[0]["json"]
     roles = [item.get("role") for item in body["content"]]
-    assert roles == ["first_frame", "reference_image", "reference_image", None]
+    assert roles == ["first_frame", None]
     assert all(
         item["image_url"]["url"].startswith("data:image/png;base64,")
         for item in body["content"]
         if item["type"] == "image_url"
     )
+
+
+def test_submit_text_to_video_keeps_reference_images_on_seedance_2x(
+    monkeypatch, tmp_path
+):
+    """无首帧时（text_to_video + 参考图）按参考模式提交，参考图保留。"""
+    ref_a = tmp_path / "ref_a.png"
+    ref_a.write_bytes(b"fake-png-bytes")
+    ref_b = tmp_path / "ref_b.png"
+    ref_b.write_bytes(b"fake-png-bytes")
+    client = _FakeClient(payload={"id": "task_789"})
+    monkeypatch.setattr(httpx, "Client", lambda timeout=None: client)
+    VolcengineAdapter().submit(
+        _ctx(),
+        "text_to_video",
+        _request(
+            "text_to_video",
+            reference_images=[str(ref_a), str(ref_b)],
+        ),
+    )
+    body = client.calls[0]["json"]
+    roles = [item.get("role") for item in body["content"]]
+    assert roles == ["reference_image", "reference_image", None]
 
 
 def test_submit_ignores_reference_images_on_seedance_1x(monkeypatch, tmp_path):
@@ -190,10 +216,9 @@ def test_submit_ignores_reference_images_on_seedance_1x(monkeypatch, tmp_path):
 def test_submit_combines_reference_images_when_exceeding_limit(
     monkeypatch, tmp_path
 ):
+    """无首帧的参考模式下，超过上限的参考图合并为拼图（text_to_video + 参考图）。"""
     from PIL import Image
 
-    frame = tmp_path / "frame.png"
-    Image.new("RGB", (64, 64), (10, 20, 30)).save(frame)
     refs = []
     for i in range(10):
         ref = tmp_path / f"ref_{i}.png"
@@ -203,17 +228,16 @@ def test_submit_combines_reference_images_when_exceeding_limit(
     monkeypatch.setattr(httpx, "Client", lambda timeout=None: client)
     VolcengineAdapter().submit(
         _ctx(),
-        "image_to_video",
+        "text_to_video",
         _request(
-            "image_to_video",
-            images=[str(frame)],
+            "text_to_video",
             reference_images=refs,
             extra={"max_reference_images": 9},
         ),
     )
     body = client.calls[0]["json"]
     roles = [item.get("role") for item in body["content"]]
-    assert roles == ["first_frame", "reference_image", None]
+    assert roles == ["reference_image", None]
     ref_items = [
         item
         for item in body["content"]

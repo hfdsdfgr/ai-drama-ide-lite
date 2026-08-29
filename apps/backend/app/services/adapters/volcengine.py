@@ -47,9 +47,8 @@ _SUPPORTED_RATIOS = frozenset({"16:9", "4:3", "1:1", "3:4", "9:16", "21:9"})
 # Seedance 平台对真实人脸输入有内容风控，命中时给出明确解决方向。
 _FACE_POLICY_HINT = (
     "画面疑似包含真实人脸，火山 Seedance 拒绝生成。"
-    "建议：①将角色/分镜改为动漫或 3D 等非真人风格；"
-    "②在火山方舟控制台开通人像授权后使用已授权素材；"
-    "③改用火山预置虚拟人像（asset:// ID）作为参考图。"
+    "建议先把画风改成动漫 / 3D 等非真人风格（角色和分镜图都重新生成）；"
+    "若确需真人形象，再到火山方舟控制台开通人像授权或改用预置虚拟人像（asset:// ID）。"
 )
 
 
@@ -123,25 +122,28 @@ class VolcengineAdapter(OpenAICompatAdapter):
             )
         if "seedance-2" in ctx.model_id.lower():
             reference_images = list(request.reference_images or [])
-            max_reference_images = request.extra.get("max_reference_images")
-            try:
-                max_refs = (
-                    int(max_reference_images)
-                    if max_reference_images is not None
-                    else 9
-                )
-            except (TypeError, ValueError):
-                max_refs = 9
-            if len(reference_images) > max_refs:
-                reference_images = [build_reference_sheet(reference_images)]
-            for ref_path in reference_images:
-                content.append(
-                    {
-                        "type": "image_url",
-                        "image_url": {"url": image_to_data_url(ref_path)},
-                        "role": "reference_image",
-                    }
-                )
+            # Seedance 2.0 内容规则：首尾帧与参考素材不能混用。
+            # 图生视频（首帧模式）时参考图会触发 400，分镜图本身已含角色/场景一致性，直接跳过。
+            if capability != "image_to_video":
+                max_reference_images = request.extra.get("max_reference_images")
+                try:
+                    max_refs = (
+                        int(max_reference_images)
+                        if max_reference_images is not None
+                        else 9
+                    )
+                except (TypeError, ValueError):
+                    max_refs = 9
+                if len(reference_images) > max_refs:
+                    reference_images = [build_reference_sheet(reference_images)]
+                for ref_path in reference_images:
+                    content.append(
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": image_to_data_url(ref_path)},
+                            "role": "reference_image",
+                        }
+                    )
         if request.prompt:
             content.append({"type": "text", "text": request.prompt})
 
