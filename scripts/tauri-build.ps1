@@ -27,7 +27,7 @@ try {
   Pop-Location
 }
 
-$installer = Get-ChildItem -Path (Join-Path $link 'apps\desktop\src-tauri\target\release\bundle\nsis') -Filter '*.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
+$installer = Get-ChildItem -Path (Join-Path $link 'apps\desktop\src-tauri\target\release\bundle\nsis') -Filter '*.exe' -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
 if ($installer) {
   Write-Output "INSTALLER: $($installer.FullName)"
 } else {

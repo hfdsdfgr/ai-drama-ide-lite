@@ -1,4 +1,4 @@
-# 一键发布（Phase 21 Auto Update）：
+﻿# 一键发布（Phase 21 Auto Update）：
 # 构建（带签名 updater 产物）-> 生成 latest.json -> gh release 上传。
 #
 # 用法：
@@ -20,6 +20,7 @@ if (-not (Test-Path -LiteralPath $keyFile) -or -not (Test-Path -LiteralPath $pas
   throw "签名密钥缺失：$keyFile / $passFile（请先运行 npx tauri signer generate）"
 }
 $env:TAURI_SIGNING_PRIVATE_KEY_PATH = $keyFile
+$env:TAURI_SIGNING_PRIVATE_KEY = (Get-Content -LiteralPath $keyFile -Raw).Trim()
 $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = (Get-Content -LiteralPath $passFile -Raw).Trim()
 
 # 1) 构建（PyInstaller 后端 + Tauri release，含 updater artifacts）
@@ -27,9 +28,9 @@ $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = (Get-Content -LiteralPath $passFile -R
 
 # 2) 定位产物
 $bundle = Join-Path $root 'apps\desktop\src-tauri\target\release\bundle'
-$nsisZip = Get-ChildItem -Path $bundle -Recurse -Filter '*.nsis.zip' -ErrorAction Stop | Select-Object -First 1
-$sig = Get-ChildItem -Path $bundle -Recurse -Filter '*.sig' -ErrorAction Stop | Select-Object -First 1
 $installer = Get-ChildItem -Path (Join-Path $bundle 'nsis') -Filter '*.exe' -ErrorAction Stop | Select-Object -First 1
+$installer = Get-ChildItem -Path (Join-Path $bundle 'nsis') -Filter '*.exe' -ErrorAction Stop | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+$sig = Get-ChildItem -Path (Join-Path $bundle 'nsis') -Filter "$($installer.BaseName)*.sig" -ErrorAction Stop | Select-Object -First 1
 
 if (-not $Version) {
   $conf = Get-Content -Raw (Join-Path $root 'apps\desktop\src-tauri\tauri.conf.json') | ConvertFrom-Json
@@ -38,7 +39,7 @@ if (-not $Version) {
 
 # 3) latest.json（updater 静态清单，托管在 GitHub Releases）
 $sigContent = (Get-Content -LiteralPath $sig.FullName -Raw).Trim()
-$fileName = Split-Path -Leaf $nsisZip.Name
+$fileName = $installer.Name
 $downloadUrl = "https://github.com/hfdsdfgr/ai-drama-ide-lite/releases/download/v$Version/$fileName"
 $latest = @{
   version = $Version
