@@ -37,6 +37,10 @@ _TYPE_TEXT = {
         "请判断目标分镜图与前一镜头分镜图中同一角色/场景是否连续"
         "（服装、发型、道具、场景不应发生无理由突变）。"
     ),
+    "costume": (
+        "请专门检查目标分镜图中角色的服装是否与角色参考图一致"
+        "（颜色、款式、材质、配饰），以及同角色跨镜头时服装是否无理由变化。"
+    ),
 }
 
 
@@ -67,7 +71,7 @@ class VisualReviewService:
                 "shot_image_missing",
                 "该镜头还没有分镜图，无法进行视觉审核",
             )
-        if review_type not in ("character", "scene", "continuity"):
+        if review_type not in ("character", "scene", "continuity", "costume"):
             raise AppError(422, "invalid_review_type", "视觉审核类型不合法")
         self._pick_vision_model(model_id)
         return store.create(
@@ -145,7 +149,7 @@ class VisualReviewService:
         consistent: bool,
         issue: str = "",
     ) -> dict:
-        if review_type not in ("character", "scene", "continuity"):
+        if review_type not in ("character", "scene", "continuity", "costume"):
             raise AppError(422, "invalid_review_type", "视觉审核类型不合法")
         image = self.versions.get_current(project_id, "shot", shot_id)
         if image is None:
@@ -210,6 +214,21 @@ class VisualReviewService:
                     refs.append(
                         {"label": "前一镜头分镜图", "path": record.file_path}
                     )
+        elif review_type == "costume":
+            names = [
+                name.strip()
+                for name in re.split(r"[,，、]", shot.characters or "")
+                if name.strip()
+            ]
+            for name in names[:2]:
+                record = self._asset_current_image(project_id, "character", name)
+                if record:
+                    refs.append({"label": f"角色参考：{name}", "path": record.file_path})
+            prev = self._previous_shot(project_id, shot)
+            if prev is not None:
+                record = self.versions.get_current(project_id, "shot", prev)
+                if record:
+                    refs.append({"label": "前一镜头分镜图", "path": record.file_path})
         return refs
 
     def _asset_current_image(self, project_id: str, asset_type: str, name: str):

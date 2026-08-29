@@ -1,7 +1,11 @@
 import type { JobOut } from "../types/job";
 import { request } from "./client";
 
-export type VisualReviewType = "character" | "scene" | "continuity";
+export type VisualReviewType =
+  | "character"
+  | "scene"
+  | "continuity"
+  | "costume";
 
 export interface VisualReview {
   id: string;

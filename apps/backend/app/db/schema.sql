@@ -287,7 +287,20 @@ CREATE TABLE IF NOT EXISTS shot_visual_reviews (
     project_id         TEXT NOT NULL,
     shot_id            TEXT NOT NULL,
     image_version_id   TEXT NOT NULL,
-    review_type        TEXT NOT NULL DEFAULT 'character' CHECK (review_type IN ('character', 'scene', 'continuity')),
+    review_type        TEXT NOT NULL DEFAULT 'character' CHECK (review_type IN ('character', 'scene', 'continuity', 'costume')),
+    mode               TEXT NOT NULL DEFAULT 'manual' CHECK (mode IN ('model', 'manual')),
+    model_id           TEXT NOT NULL DEFAULT '',
+    status             TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'passed', 'flagged')),
+    issue              TEXT NOT NULL DEFAULT '',
+    decision           TEXT NOT NULL DEFAULT '' CHECK (decision IN ('', 'regenerate', 'delete_shot', 'keep')),
+    created_at         TEXT NOT NULL,
+    updated_at         TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS story_consistency_reviews (
+    id                 TEXT PRIMARY KEY,
+    project_id         TEXT NOT NULL,
+    shot_id            TEXT NOT NULL,
     mode               TEXT NOT NULL DEFAULT 'manual' CHECK (mode IN ('model', 'manual')),
     model_id           TEXT NOT NULL DEFAULT '',
     status             TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'passed', 'flagged')),
@@ -320,3 +333,4 @@ CREATE INDEX IF NOT EXISTS idx_models_provider ON models(provider_id);
 CREATE INDEX IF NOT EXISTS idx_models_type ON models(model_type);
 CREATE INDEX IF NOT EXISTS idx_dialogue_reviews_shot ON shot_dialogue_reviews(project_id, shot_id);
 CREATE INDEX IF NOT EXISTS idx_visual_reviews_shot ON shot_visual_reviews(project_id, shot_id);
+CREATE INDEX IF NOT EXISTS idx_story_reviews_shot ON story_consistency_reviews(project_id, shot_id);

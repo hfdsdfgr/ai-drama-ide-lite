@@ -51,6 +51,7 @@ def _apply_safe_migrations(conn: sqlite3.Connection) -> None:
     """幂等加列迁移：旧库补列，已存在则静默跳过（见 DEVELOPMENT_PITFALLS.md）。"""
     _migrate_jobs_table(conn)
     _migrate_models_audio_type(conn)
+    _migrate_visual_reviews_costume(conn)
     statements = [
         "ALTER TABLE novels ADD COLUMN deleted_at TEXT",
         "ALTER TABLE novels ADD COLUMN ai_brief TEXT NOT NULL DEFAULT ''",
@@ -226,6 +227,49 @@ def _migrate_models_audio_type(conn: sqlite3.Connection) -> None:
     )
     conn.execute("DROP TABLE models_old")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_models_provider ON models(provider_id)")
+
+
+def _migrate_visual_reviews_costume(conn: sqlite3.Connection) -> None:
+    """旧库 shot_visual_reviews 的 review_type CHECK 缺少 costume，重建表保留数据。"""
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='shot_visual_reviews'"
+    ).fetchone()
+    if row is None or "costume" in (row["sql"] or ""):
+        return
+    conn.execute("ALTER TABLE shot_visual_reviews RENAME TO shot_visual_reviews_legacy")
+    conn.executescript(
+        """
+        CREATE TABLE shot_visual_reviews (
+            id                 TEXT PRIMARY KEY,
+            project_id         TEXT NOT NULL,
+            shot_id            TEXT NOT NULL,
+            image_version_id   TEXT NOT NULL,
+            review_type        TEXT NOT NULL DEFAULT 'character' CHECK (review_type IN ('character', 'scene', 'continuity', 'costume')),
+            mode               TEXT NOT NULL DEFAULT 'manual' CHECK (mode IN ('model', 'manual')),
+            model_id           TEXT NOT NULL DEFAULT '',
+            status             TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'passed', 'flagged')),
+            issue              TEXT NOT NULL DEFAULT '',
+            decision           TEXT NOT NULL DEFAULT '' CHECK (decision IN ('', 'regenerate', 'delete_shot', 'keep')),
+            created_at         TEXT NOT NULL,
+            updated_at         TEXT NOT NULL
+        );
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO shot_visual_reviews (
+            id, project_id, shot_id, image_version_id, review_type,
+            mode, model_id, status, issue, decision, created_at, updated_at
+        )
+        SELECT id, project_id, shot_id, image_version_id, review_type,
+               mode, model_id, status, issue, decision, created_at, updated_at
+        FROM shot_visual_reviews_legacy
+        """
+    )
+    conn.execute("DROP TABLE shot_visual_reviews_legacy")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_visual_reviews_shot ON shot_visual_reviews(project_id, shot_id)"
+    )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_models_type ON models(model_type)")
 
 

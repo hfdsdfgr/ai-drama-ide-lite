@@ -148,6 +148,20 @@ def test_continuity_review_uses_previous_shot(tmp_path):
     assert result["status"] == "flagged"
 
 
+def test_costume_review_uses_character_ref_and_previous_shot(tmp_path):
+    db_path, projects_dir, versions = _setup_project(tmp_path)
+    service = VisualReviewService(
+        db_path, _FakeManager(), versions, projects_dir
+    )
+
+    result = service.run_model_review(_make_job(None, "shot2", "costume"), None)
+
+    assert result["status"] == "flagged"
+    assert result["review_type"] == "costume"
+    review = service.reviews.list_for_shot("p", "shot2")[0]
+    assert review["review_type"] == "costume"
+
+
 def test_continuity_review_no_previous_shot(tmp_path):
     db_path, projects_dir, versions = _setup_project(tmp_path)
     service = VisualReviewService(
@@ -156,6 +170,19 @@ def test_continuity_review_no_previous_shot(tmp_path):
 
     with pytest.raises(Exception) as exc_info:
         service.run_model_review(_make_job(None, "shot1", "continuity"), None)
+    assert "参考图" in str(exc_info.value)
+
+
+def test_costume_review_without_character_ref_rejected(tmp_path):
+    db_path, projects_dir, versions = _setup_project(tmp_path)
+    service = VisualReviewService(
+        db_path, _FakeManager(), versions, projects_dir
+    )
+    # shot1 无前一镜头、且无角色资产匹配（_setup 里有林凡角色资产，这里删除）
+    with get_connection(db_path) as conn:
+        conn.execute("DELETE FROM assets")
+    with pytest.raises(Exception) as exc_info:
+        service.run_model_review(_make_job(None, "shot1", "costume"), None)
     assert "参考图" in str(exc_info.value)
 
 
