@@ -1,0 +1,150 @@
+name: Build & Release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+env:
+  TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+  TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install backend deps
+        shell: powershell
+        run: |
+          python -m venv apps/backend/.venv
+          apps/backend/.venv/Scripts/python.exe -m pip install --upgrade pip
+          apps/backend/.venv/Scripts/python.exe -m pip install -r apps/backend/requirements.txt pyinstaller
+      - name: Build backend sidecar
+        shell: powershell
+        run: powershell -ExecutionPolicy Bypass -File scripts/build-backend.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backend-windows
+          path: apps/desktop/src-tauri/binaries/
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Detect macOS arch
+        id: arch
+        shell: bash
+        run: |
+          if [ "$(uname -m)" = "arm64" ]; then
+            echo "triple=aarch64-apple-darwin" >> "$GITHUB_OUTPUT"
+          else
+            echo "triple=x86_64-apple-darwin" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Install backend deps
+        shell: bash
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install -r apps/backend/requirements.txt pyinstaller
+      - name: Build backend sidecar
+        shell: bash
+        run: bash scripts/build-backend-mac.sh "${{ steps.arch.outputs.triple }}"
+      - name: Save macOS triple
+        shell: bash
+        run: echo "${{ steps.arch.outputs.triple }}" > triple.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backend-macos
+          path: apps/desktop/src-tauri/binaries/
+          include-hidden-files: true
+
+  build-app:
+    needs: [build-windows, build-macos]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: windows
+            os: windows-latest
+            backend-artifact: backend-windows
+          - name: macos
+            os: macos-latest
+            backend-artifact: backend-macos
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.backend-artifact }}
+          path: apps/desktop/src-tauri/binaries/
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install frontend deps
+        run: npm ci
+        working-directory: apps/desktop
+      - name: Tauri build
+        working-directory: apps/desktop
+        run: npm run tauri build
+      - name: Collect artifacts (Windows)
+        if: matrix.name == 'windows'
+        shell: powershell
+        run: |
+          $nsis = Get-ChildItem "apps/desktop/src-tauri/target/release/bundle/nsis/*_x64-setup.exe" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          New-Item -ItemType Directory -Force -Path artifacts | Out-Null
+          Copy-Item $nsis.FullName "artifacts/ai-drama-ide-lite-windows-x86_64-setup.exe"
+          Copy-Item "$($nsis.FullName).sig" "artifacts/ai-drama-ide-lite-windows-x86_64-setup.exe.sig"
+      - name: Collect artifacts (macOS)
+        if: matrix.name == 'macos'
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          dmg=$(ls -t apps/desktop/src-tauri/target/release/bundle/dmg/*.dmg | head -1)
+          arch=$(uname -m)
+          if [ "$arch" = "arm64" ]; then plat="aarch64"; else plat="x86_64"; fi
+          cp "$dmg" "artifacts/ai-drama-ide-lite-macos-${plat}.dmg"
+          cp "${dmg}.sig" "artifacts/ai-drama-ide-lite-macos-${plat}.dmg.sig"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bundle-${{ matrix.name }}
+          path: artifacts/
+
+  release:
+    needs: [build-app]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Generate latest.json
+        shell: bash
+        run: python3 scripts/make_latest.py artifacts "${{ github.ref_name }}" "${{ github.repository }}"
+      - name: Publish release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ github.ref_name }}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release delete "$TAG" --yes
+          fi
+          find artifacts -type f \( -name "*.exe" -o -name "*.exe.sig" -o -name "*.dmg" -o -name "*.dmg.sig" \) -print0 | xargs -0 -I{} cp {} .
+          gh release create "$TAG" \
+            ai-drama-ide-lite-*.exe ai-drama-ide-lite-*.exe.sig \
+            ai-drama-ide-lite-*.dmg ai-drama-ide-lite-*.dmg.sig \
+            latest.json \
+            --title "$TAG" \
+            --notes "AI Drama IDE Lite $TAG"
