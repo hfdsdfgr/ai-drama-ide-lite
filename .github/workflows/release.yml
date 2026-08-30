@@ -94,6 +94,14 @@ jobs:
       - name: Install frontend deps
         run: npm ci
         working-directory: apps/desktop
+      - name: Download WebView2Loader (Windows)
+        if: matrix.name == 'windows'
+        shell: powershell
+        run: |
+          Invoke-WebRequest -Uri "https://www.nuget.org/api/v2/package/Microsoft.Web.WebView2/1.0.3650.58" -OutFile wv2.zip
+          Expand-Archive wv2.zip -DestinationPath wv2
+          New-Item -ItemType Directory -Force -Path apps/desktop/src-tauri/target/release | Out-Null
+          Copy-Item wv2/runtimes/win-x64/native/WebView2Loader.dll apps/desktop/src-tauri/target/release/
       - name: Tauri build
         working-directory: apps/desktop
         run: npm run tauri build
@@ -111,10 +119,12 @@ jobs:
         run: |
           mkdir -p artifacts
           dmg=$(ls -t apps/desktop/src-tauri/target/release/bundle/dmg/*.dmg | head -1)
+          targz=$(ls -t apps/desktop/src-tauri/target/release/bundle/macos/*.app.tar.gz | head -1)
           arch=$(uname -m)
           if [ "$arch" = "arm64" ]; then plat="aarch64"; else plat="x86_64"; fi
           cp "$dmg" "artifacts/ai-drama-ide-lite-macos-${plat}.dmg"
-          cp "${dmg}.sig" "artifacts/ai-drama-ide-lite-macos-${plat}.dmg.sig"
+          cp "$targz" "artifacts/ai-drama-ide-lite-macos-${plat}.app.tar.gz"
+          cp "${targz}.sig" "artifacts/ai-drama-ide-lite-macos-${plat}.app.tar.gz.sig"
       - uses: actions/upload-artifact@v4
         with:
           name: bundle-${{ matrix.name }}
@@ -141,10 +151,11 @@ jobs:
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release delete "$TAG" --yes
           fi
-          find artifacts -type f \( -name "*.exe" -o -name "*.exe.sig" -o -name "*.dmg" -o -name "*.dmg.sig" \) -print0 | xargs -0 -I{} cp {} .
+          find artifacts -type f \( -name "*.exe" -o -name "*.exe.sig" -o -name "*.dmg" -o -name "*.app.tar.gz" -o -name "*.app.tar.gz.sig" \) -print0 | xargs -0 -I{} cp {} .
           gh release create "$TAG" \
             ai-drama-ide-lite-*.exe ai-drama-ide-lite-*.exe.sig \
-            ai-drama-ide-lite-*.dmg ai-drama-ide-lite-*.dmg.sig \
+            ai-drama-ide-lite-*.dmg \
+            ai-drama-ide-lite-*.app.tar.gz ai-drama-ide-lite-*.app.tar.gz.sig \
             latest.json \
             --title "$TAG" \
             --notes "AI Drama IDE Lite $TAG"

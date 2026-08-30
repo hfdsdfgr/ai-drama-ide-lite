@@ -23,7 +23,7 @@ def main() -> None:
         )
         if not m:
             continue
-        sig = exe.with_suffix(".exe.sig")
+        sig = Path(str(exe) + ".sig")
         if not sig.exists():
             print(f"WARN: missing sig for {exe.name}")
             continue
@@ -33,17 +33,18 @@ def main() -> None:
             "signature": sig.read_text(encoding="utf-8", errors="replace").strip(),
         }
 
-    for dmg in artifacts_dir.rglob("*.dmg"):
-        m = re.match(r"ai-drama-ide-lite-macos-([a-z0-9]+)\.dmg", dmg.name)
+    # macOS updater 产物是 .app.tar.gz（首次安装用 dmg，自动更新用 tar.gz）
+    for targz in artifacts_dir.rglob("*.app.tar.gz"):
+        m = re.match(r"ai-drama-ide-lite-macos-([a-z0-9]+)\.app\.tar\.gz", targz.name)
         if not m:
             continue
-        sig = dmg.with_suffix(".dmg.sig")
+        sig = Path(str(targz) + ".sig")
         if not sig.exists():
-            print(f"WARN: missing sig for {dmg.name}")
+            print(f"WARN: missing sig for {targz.name}")
             continue
         arch = m.group(1)  # aarch64 / x86_64
         platforms[f"darwin-{arch}"] = {
-            "url": f"https://github.com/{repo}/releases/download/v{tag}/{dmg.name}",
+            "url": f"https://github.com/{repo}/releases/download/v{tag}/{targz.name}",
             "signature": sig.read_text(encoding="utf-8", errors="replace").strip(),
         }
 
