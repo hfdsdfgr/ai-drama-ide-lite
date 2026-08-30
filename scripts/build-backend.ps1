@@ -1,13 +1,13 @@
-# 打包 Python 后端为 PyInstaller onefile exe，并复制为 Tauri sidecar。
-#
-# 用法：powershell -ExecutionPolicy Bypass -File scripts\build-backend.ps1
+# Package the Python backend as a PyInstaller onefile exe and copy it as the
+# Tauri sidecar. Usage: powershell -ExecutionPolicy Bypass -File scripts\build-backend.ps1
 $ErrorActionPreference = 'Stop'
 
 $root = Split-Path -Parent $PSScriptRoot
 $backend = Join-Path $root 'apps\backend'
 $distExe = Join-Path $backend 'dist-bundle\ai-drama-backend.exe'
 $sidecarDir = Join-Path $root 'apps\desktop\src-tauri\binaries'
-# 运行时按 Rust 目标 triple（GNU）解析，Tauri bundler 按 Windows 默认 triple（MSVC）解析：两个后缀都要有。
+# Runtime resolves by Rust target triple (GNU); Tauri bundler resolves by the
+# Windows default triple (MSVC). Both suffixes are required.
 $sidecarNames = @('ai-drama-backend-x86_64-pc-windows-gnu.exe','ai-drama-backend-x86_64-pc-windows-msvc.exe')
 
 Push-Location $backend
@@ -29,7 +29,7 @@ try {
 }
 
 if (-not (Test-Path -LiteralPath $distExe)) {
-  throw "PyInstaller 输出缺失: $distExe"
+  throw "PyInstaller output missing: $distExe"
 }
 
 New-Item -ItemType Directory -Path $sidecarDir -Force | Out-Null
