@@ -4,6 +4,103 @@
 >
 > **用户是导演，AI 是制作团队。**
 
+## 下载与安装
+
+**最新版本：v0.2.1**（Windows x64 + macOS Apple Silicon）
+
+下载地址：[GitHub Releases](https://github.com/hfdsdfgr/ai-drama-ide-lite/releases)
+
+### Windows
+
+1. 下载 `ai-drama-ide-lite-windows-x86_64-setup.exe`；
+2. 双击安装（按当前用户安装，无需管理员权限；缺少 WebView2 时会自动引导安装）；
+3. 从开始菜单或桌面快捷方式启动。
+
+### macOS
+
+1. 下载 `ai-drama-ide-lite-macos-aarch64.dmg`；
+2. 打开 dmg，把 `AI Drama IDE Lite` 拖入「应用程序」；
+3. 首次打开若被系统拦截（未做 Apple 公证），请在「应用程序」中**右键 → 打开**，并在弹窗中确认。
+
+> 当前 macOS 版未做 Apple 开发者签名/公证，Windows 版未做代码签名，杀毒软件/系统可能提示未知发布者，属正常现象。
+
+### 自动更新
+
+应用内置自动更新（设置 → 检查更新）。Windows 与 macOS 都支持，更新包同样来自 GitHub Releases。
+
+### 系统要求
+
+- Windows 10/11 x64（需 WebView2 运行时，安装包会自动处理）
+- macOS 12+（Apple Silicon，即 M1/M2/M3 及更新机型；Intel Mac 暂未提供）
+- 需要可访问互联网（调用 AI Provider API 与自动更新）
+- 需要至少一个 AI 模型提供商的 API Key（OpenAI 兼容、阿里云百炼、智谱、火山方舟、硅基流动等）
+
+---
+
+## 快速上手（使用教程）
+
+整个产品遵循一条流水线：**小说 → Story Bible → 剧本 → 资产 → 分镜 → 图片 → 视频**。每一步都由 AI 生成、用户审核后确认进入下一步，随时可以重做。
+
+### 第 1 步：配置 AI 模型（设置）
+
+首次使用先到「设置」添加模型提供商：
+
+1. 点击「添加 Provider」，选择一个预设（如 OpenAI、阿里云百炼、智谱、火山方舟、硅基流动、Ollama 等），或自定义 Base URL；
+2. 填入 API Key（自动保存到系统凭据管理器，不落盘到项目文件）；
+3. 「拉取模型」获取该提供商的模型列表，按需启用文本 / 图片 / 视频模型；
+4. 建议分别设置一个默认「图片模型」和默认「视频模型」，生成界面会自动读取已启用且通过能力检测的模型。
+
+> 提示：不同用途需要不同模型——写小说/生成剧本用**文本模型**，生成角色/场景/道具图用**图片模型**，分镜视频用支持图生视频的**视频模型**。界面上的信息图标会提示 API Key 在哪里申请。
+
+### 第 2 步：创建项目
+
+在「项目」页新建项目（如「我的第一部动画」），之后的小说、剧本、资产、视频都挂在项目下。
+
+### 第 3 步：创作小说
+
+在「小说工作室」中：
+
+- **新建小说**：设置题材、受众、情节复杂度（1–10，越简单越接近爽文），输入初步想法，由 AI 撰写完整章节；
+- **导入小说**：支持 TXT / Markdown / DOCX，自动按标题分章；
+- 章节支持 AI 续写 / 扩写 / 重写，正文可随时手动编辑，预览时可将当前章节导出为 TXT。
+
+### 第 4 步：生成 Story Bible（故事圣经）
+
+对小说运行「分析故事」，AI 会整理出世界观、角色、地点、道具等设定。这些是后续所有生成的"事实依据"，可以手动修正。
+
+### 第 5 步：生成剧本
+
+按章节生成分集剧本（场景 + 对白 + 分镜描述），可逐场景生成分镜（镜头类型、景别、运镜、人物、动作、光线）。
+
+### 第 6 步：生成资产
+
+在资产页为角色 / 场景 / 道具生成参考图：
+
+- 角色设定图为**三视图**（正面 / 侧面 / 背面），保证后续镜头里形象一致；
+- 可切换画风（动漫、3D、国风、写实等），建议动漫风可避免真人风控问题；
+- 每张图都有版本历史，可对比、可回退。
+
+### 第 7 步：分镜与视频
+
+在分镜页：
+
+1. 选中镜头 → 选择图片模型 → 「生成分镜图」（自动引用场景中出现的资产）；
+2. 选中视频模型 → 可勾选「带台词/对白生成」→ 「生成视频」；
+3. 生成的视频可直接预览，不满意可换模型或改提示词后重做当前镜头。
+
+### 第 8 步：生成中心一键生成
+
+在「生成中心」可以一键跑完整流水线（分析 → 剧本 → 资产 → 分镜 → 图片 → 可选视频），每阶段默认暂停等您确认；也可单独运行质量审查（视觉一致性 / 剧情一致性 / 台词审核）与场景、分集视频合成。
+
+### 常用提示
+
+- **费用**：所有 AI 生成都调用您自己的 API，按服务商计费。生成前界面会明确列出阶段与模型，视频生成默认不勾选，避免误触发费用。
+- **真人风控**：若视频模型提示"画面含真实人脸"，把画风改成动漫 / 3D 后重新生成角色和分镜图即可。
+- **形象一致性**：保持角色一致的要点是先生成三视图设定图，再让分镜图引用它。
+- **数据安全**：项目数据保存在本机（Windows：`%LOCALAPPDATA%\AI Drama IDE Lite\data`；macOS：`~/Library/Application Support/AI Drama IDE Lite/data`），API Key 存系统凭据管理器。
+
+---
+
 ## 这是什么
 
 AI Drama IDE Lite 是一个 Story-to-Drama 的 AI 生产 IDE，把「小说 → 漫剧」的完整生产过程放进一个可观察、可干预、可暂停、可重做的桌面应用。
@@ -154,42 +251,28 @@ Create Project
 
 ## 当前状态
 
-**Phase 0（项目初始化）进行中**。已完成：
+**当前进度：MVP 功能已完成并发布 v0.2.1（Windows + macOS 双平台）**，完整计划见 [ROADMAP.md](ROADMAP.md)。
 
-- Git 仓库、基础目录结构（`apps/desktop` + `apps/backend`）
-- Python FastAPI 后端：环境变量、日志、错误处理、健康检查、最小 Project 接口（JSON 文件存储，Phase 1 迁移 SQLite）
-- React + TypeScript 前端：Vite 代理、统一 API 客户端、Project 页面（创建/保存/打开）、Settings 占位页
-- 测试：后端 pytest 5 项、前端 Vitest 3 项；lint / build 通过；端到端验证通过
-- Tauri 2 桌面壳：已初始化并通过编译验证（Rust GNU 工具链 + MinGW）
-- **注意**：MinGW 工具链无法处理含空格的构建路径（`G:\Vibe Coding\AICV`），桌面构建必须通过无空格 junction 路径，见下方「桌面模式」。
+已完成的核心能力：
 
-**Phase 1（Project System）已完成**：
+- **桌面应用**：Tauri 2 + React + FastAPI，Windows NSIS 安装包 / macOS dmg，内置自动更新
+- **项目管理**：创建 / 导入 / 导出 / 软删除，自动保存与重启恢复
+- **小说**：AI 创作（题材 / 受众 / 情节复杂度）+ TXT / MD / DOCX 导入 + 章节 AI 续写 / 扩写 / 重写
+- **Story Bible**：AI 分析故事，整理世界观 / 角色 / 地点 / 道具设定
+- **剧本引擎**：分集剧本、场景、分镜（镜头类型 / 景别 / 运镜 / 光线）
+- **资产系统**：角色三视图设定图 / 场景 / 道具参考图，画风可选，版本历史可回退
+- **分镜与视频**：分镜图生成（自动引用资产）、图生视频（支持带原生对白/音效的模型）
+- **Provider / Adapter**：OpenAI 兼容 + 阿里云百炼 + 智谱 + 火山方舟（Seedance）+ 硅基流动等；能力检测驱动模型下拉，不做多模型并行
+- **生成中心**：一键流水线（每阶段可暂停确认）、质量审查（视觉一致性 / 剧情一致性 / 台词审核）、场景 / 分集视频合成
+- **Job 系统**：所有耗时任务持久化（排队 / 运行 / 暂停 / 完成 / 失败 / 取消），可中断可恢复
+- **API Key 安全**：系统凭据管理器存储，不落项目文件 / 日志 / Git
 
-- SQLite 结构化存储（基线 schema 覆盖 Novel/Story/Characters/Locations/Props/Episodes/Scenes/Shots/Assets/Jobs/Versions）
-- Project CRUD（软删除）+ 自动保存 + 重启恢复
-- 项目导入 / 导出（zip + manifest，含 zip-slip 防护）
-- Phase 0 JSON 项目自动迁移归档；Asset ID / Project ID 规范
-- 测试：后端 pytest 16 项、前端 Vitest 5 项；lint / build 通过；端到端验证通过
+已发布版本：
 
-**Phase 2（Novel Studio）已完成**：
+- **v0.2.1**：Windows x64 + macOS Apple Silicon，CI 自动构建发布（见 [Releases](https://github.com/hfdsdfgr/ai-drama-ide-lite/releases)）
+- **v0.2.0**：完整 AI 漫剧生产流水线（一键生成 + 质量审查 + 分镜合成 + 自动更新）
 
-- 新建小说；TXT / Markdown / DOCX 导入（编码探测 + 按标题自动分章）
-- 章节管理：新增 / 重命名 / 编辑 / 删除，编辑器自动保存
-- 小说与章节搜索；导出 / 导入项目时小说内容一并随包迁移
-- AI 续写 / 扩写 / 重写入口已占位（Phase 3 接入 AI Provider 后启用）
-- 测试：后端 pytest 26 项、前端 Vitest 6 项；lint / build 通过；端到端验证通过
-
-**Phase 3（AI Provider 基础系统）已完成**：
-
-- 内置厂商预设（OpenAI / OpenRouter / DeepSeek / 阿里云百炼 / 智谱 / 硅基流动 / Ollama）：选厂商 + 填 API Key 即可
-- 自动拉取模型列表（OpenAI 兼容 /models），按预设规则归类 LLM / Image / Video；模型显示名 = 模型 ID，不支持取名
-- Provider / Model 管理（增删改、启用/禁用、软删除）；默认 Image / Video 模型（同类型全局唯一）
-- API Key 安全存储：keyring → 系统凭据管理器，不落数据库 / 日志 / 项目文件
-- 模型下拉数据源接口：`/api/models?model_type=image&enabled_only=true`
-- 表单字段带 InfoTip 悬停说明（API 在哪找等）；能力检测留 Phase 4
-- 测试：后端 pytest 41 项、前端 Vitest 8 项；lint / build 通过；端到端验证通过
-
-## 快速开始
+## 开发模式
 
 环境要求：Python 3.12+、Node.js 20+、Git。
 
@@ -212,7 +295,7 @@ npm run dev
 
 打开 http://localhost:5173 即可使用。
 
-### 3. 桌面模式（Tauri）
+### 3. 桌面模式（Tauri，仅 Windows 开发环境）
 
 环境要求：Rust（GNU 工具链）+ MinGW（`C:\Qt\Tools\mingw1310_64`）。
 
@@ -222,6 +305,8 @@ npm run dev
 ```
 
 该脚本会自动创建无空格 junction 路径（`C:\Users\Administrator\ai-drama-ide` → 本项目）并从该路径启动 `tauri dev`，以绕过 MinGW 的路径空格问题。
+
+macOS / Linux 开发环境直接在本机安装 Rust 工具链后执行 `npm run tauri dev` 即可（需先启动后端）。
 
 ### 4. 运行测试
 
