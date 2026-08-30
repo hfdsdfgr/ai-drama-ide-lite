@@ -36,9 +36,6 @@
   "bundle": {
     "active": true,
     "createUpdaterArtifacts": true,
-    "targets": [
-      "nsis"
-    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -49,22 +46,6 @@
     "externalBin": [
       "binaries/ai-drama-backend"
     ],
-    "resources": {
-      "target/release/WebView2Loader.dll": "WebView2Loader.dll"
-    },
-    "windows": {
-      "webviewInstallMode": {
-        "type": "embedBootstrapper"
-      },
-      "nsis": {
-        "languages": [
-          "SimpChinese",
-          "English"
-        ],
-        "displayLanguageSelector": true,
-        "installMode": "currentUser"
-      }
-    },
     "android": {
       "debugApplicationIdSuffix": ".debug"
     }

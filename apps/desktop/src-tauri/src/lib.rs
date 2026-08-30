@@ -11,7 +11,7 @@ struct BackendPort(Mutex<u16>);
 #[allow(dead_code)]
 struct BackendChild(Mutex<Option<Child>>);
 
-#[cfg(not(debug_assertions))]
+#[cfg(all(not(debug_assertions), target_os = "windows"))]
 fn resolve_backend_exe() -> Option<PathBuf> {
   // 安装版：后端 exe 与 app.exe 同目录；开发 release 目录没有时回退到 binaries。
   let dir = std::env::current_exe().ok()?.parent()?.to_path_buf();
@@ -22,13 +22,37 @@ fn resolve_backend_exe() -> Option<PathBuf> {
   candidates.into_iter().find(|path| path.exists())
 }
 
-#[cfg(not(debug_assertions))]
+#[cfg(all(not(debug_assertions), target_os = "macos"))]
+fn resolve_backend_exe() -> Option<PathBuf> {
+  // macOS app bundle：主程序在 Contents/MacOS，sidecar 在 Contents/Resources。
+  let dir = std::env::current_exe().ok()?.parent()?.to_path_buf();
+  let resources = dir.join("../Resources");
+  let candidates = [
+    resources.join("ai-drama-backend-aarch64-apple-darwin"),
+    resources.join("ai-drama-backend-x86_64-apple-darwin"),
+    resources.join("ai-drama-backend"),
+  ];
+  candidates.into_iter().find(|path| path.exists())
+}
+
+#[cfg(all(not(debug_assertions), not(any(target_os = "windows", target_os = "macos"))))]
+fn resolve_backend_exe() -> Option<PathBuf> {
+  None
+}
+
+#[cfg(all(not(debug_assertions), target_os = "windows"))]
 fn kill_process_tree(pid: u32) {
   use std::os::windows::process::CommandExt;
   let _ = Command::new("taskkill")
     .args(["/PID", &pid.to_string(), "/T", "/F"])
     .creation_flags(0x08000000) // CREATE_NO_WINDOW
     .output();
+}
+
+#[cfg(all(not(debug_assertions), not(target_os = "windows")))]
+fn kill_process_tree(pid: u32) {
+  // macOS/Linux：直接结束子进程；PyInstaller onefile 的孙进程随父进程退出清理。
+  let _ = Command::new("kill").args(["-9", &pid.to_string()]).status();
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

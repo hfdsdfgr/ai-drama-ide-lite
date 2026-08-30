@@ -14,7 +14,11 @@ BACKEND_ROOT = Path(__file__).resolve().parents[2]
 def _default_data_dir() -> Path:
     """数据目录：PyInstaller 打包版用用户目录（防临时解压目录丢数据），开发版保持项目内。"""
     if getattr(sys, "frozen", False):
-        base = Path(os.environ.get("LOCALAPPDATA", str(Path.home())))
+        if sys.platform == "darwin":
+            # macOS 惯例：~/Library/Application Support/<App>/data
+            base = Path.home() / "Library" / "Application Support"
+        else:
+            base = Path(os.environ.get("LOCALAPPDATA", str(Path.home())))
         return base / "AI Drama IDE Lite" / "data"
     return BACKEND_ROOT / "data"
 
