@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { InfoTip } from "../components/InfoTip";
 import { Stepper } from "../components/Stepper";
@@ -107,9 +107,14 @@ async function consumeSse(
 
 interface NovelPageProps {
   active: boolean;
+  jumpTo?: {
+    projectId: string;
+    novelId: string;
+    chapterId?: string | null;
+  } | null;
 }
 
-export function NovelPage({ active }: NovelPageProps) {
+export function NovelPage({ active, jumpTo }: NovelPageProps) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState("");
   const [novels, setNovels] = useState<Novel[]>([]);
@@ -165,13 +170,33 @@ export function NovelPage({ active }: NovelPageProps) {
     [],
   );
 
+  const pendingJump = useRef<NovelPageProps["jumpTo"] | null>(null);
+
   useEffect(() => {
     if (!projectId) return;
+    const j = pendingJump.current;
+    if (j && j.projectId === projectId) {
+      pendingJump.current = null;
+      void refreshNovels(projectId, "");
+      void getNovel(projectId, j.novelId)
+        .then((loaded) => {
+          setDetail(loaded);
+          setChapterId(j.chapterId ?? loaded.chapters[0]?.id ?? null);
+        })
+        .catch((e) => setError((e as Error).message));
+      return;
+    }
     setDetail(null);
     setChapterId(null);
     setAiResult("");
     void refreshNovels(projectId, "");
   }, [projectId, refreshNovels]);
+
+  useEffect(() => {
+    if (!jumpTo) return;
+    pendingJump.current = jumpTo;
+    setProjectId(jumpTo.projectId);
+  }, [jumpTo]);
 
   useEffect(() => {
     if (!active) return;

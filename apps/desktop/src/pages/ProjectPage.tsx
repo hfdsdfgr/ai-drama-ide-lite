@@ -10,7 +10,11 @@ import {
 } from "../api/projects";
 import type { Project } from "../types/project";
 
-export function ProjectPage() {
+interface ProjectPageProps {
+  openProjectId?: string | null;
+}
+
+export function ProjectPage({ openProjectId }: ProjectPageProps) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [selected, setSelected] = useState<Project | null>(null);
   const [name, setName] = useState("");
@@ -88,6 +92,23 @@ export function ProjectPage() {
     setConfirmDeleteId(null);
     setError("");
   }
+
+  // 全局侧栏切换项目：选中对应项目并滚动到详情
+  useEffect(() => {
+    if (!openProjectId) return;
+    void listProjects()
+      .then((list) => {
+        const p = list.find((x) => x.id === openProjectId);
+        if (p) {
+          setSelected(p);
+          setNameDraft(p.name);
+          setDraft(p.description);
+          setConfirmDeleteId(null);
+          setError("");
+        }
+      })
+      .catch(() => {});
+  }, [openProjectId]);
 
   function handleNew() {
     setSelected(null);
