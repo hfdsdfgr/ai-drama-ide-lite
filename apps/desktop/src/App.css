@@ -1669,6 +1669,10 @@ button:disabled {
 .project-pane {
   min-height: 0;
   overflow-y: auto;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0.75rem;
 }
 
 .project-detail {
@@ -1681,6 +1685,11 @@ button:disabled {
   display: flex;
   align-items: stretch;
   gap: 0.5rem;
+}
+
+.project-row:hover .project-item {
+  border-color: var(--border-strong);
+  background: var(--bg-hover);
 }
 
 .project-row .project-item {
@@ -1703,14 +1712,23 @@ button:disabled {
   text-align: left;
   display: flex;
   justify-content: space-between;
+  align-items: center;
   gap: 1rem;
-  background: transparent;
+  padding: 0.6rem 0.8rem;
+  background: var(--bg-elevated);
   color: inherit;
   border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
 }
 
 .project-name {
   font-weight: 600;
+  color: var(--text-h);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .muted {
