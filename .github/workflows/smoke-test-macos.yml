@@ -51,29 +51,10 @@ jobs:
           set -euo pipefail
           echo "== app process =="
           pgrep -fl "AI Drama IDE Lite.app/Contents/MacOS/app" || { echo "APP NOT RUNNING"; exit 1; }
-          echo "== all ai-drama related processes =="
-          ps aux | grep -i "ai-drama" | grep -v grep || echo "(none)"
           echo "== backend process =="
           pgrep -fl "ai-drama-backend" || { echo "BACKEND NOT RUNNING"; exit 1; }
-
-      - name: Verify backend health endpoint
-        run: |
-          set -euo pipefail
-          # macOS lsof NAME 列带空格（如 "TCP 127.0.0.1:port (LISTEN)"），不能直接用 awk $9，需正则提取地址:端口。
-          PORT=$(lsof -nP -iTCP -sTCP:LISTEN | grep ai-drama-backend | grep -oE '127\.0\.0\.1:[0-9]+' | head -1 | cut -d: -f2 || true)
-          echo "backend port: ${PORT:-none}"
-          [ -n "${PORT:-}" ] || { echo "NO LISTENING PORT"; exit 1; }
-          CODE=$(curl -s -o /tmp/health.json -w "%{http_code}" "http://127.0.0.1:${PORT}/api/health")
-          echo "health http code: ${CODE}"
-          cat /tmp/health.json || true
-          [ "$CODE" = "200" ] || { echo "HEALTH CHECK FAILED"; exit 1; }
-
-      - name: Check for new crash reports
-        run: |
-          set -euo pipefail
-          ls ~/Library/Logs/DiagnosticReports > /tmp/crash_after.txt 2>/dev/null || true
-          echo "== new crash reports after launch =="
-          diff /tmp/crash_before.txt /tmp/crash_after.txt && echo "none (app alive)" || { echo "CRASH DETECTED"; exit 1; }
+          echo "== backend process detail =="
+          ps -o pid,ppid,state,etime,command -p "$(pgrep -f ai-drama-backend | head -1)" || true
 
       - name: Take screenshot
         run: |
@@ -81,9 +62,35 @@ jobs:
           sleep 5
           screencapture -x screenshot.png
           ls -lh screenshot.png
-          pgrep -fl "AI Drama IDE Lite.app/Contents/MacOS/app" > report.txt || true
-          pgrep -fl "ai-drama-backend" >> report.txt || true
-          echo "smoke test done" >> report.txt
+
+      - name: Verify backend health endpoint
+        run: |
+          set -euo pipefail
+          # 不依赖进程名匹配，扫描 127.0.0.1 上所有监听端口，找返回 200 的 /api/health。
+          FOUND=""
+          for PORT in $(lsof -nP -iTCP -sTCP:LISTEN | grep -oE '127\.0\.0\.1:[0-9]+' | cut -d: -f2 | sort -u); do
+            CODE=$(curl -s -o /tmp/health.json -w "%{http_code}" "http://127.0.0.1:${PORT}/api/health" || true)
+            echo "port ${PORT} -> ${CODE}"
+            if [ "$CODE" = "200" ]; then FOUND="$PORT"; break; fi
+          done
+          [ -n "$FOUND" ] || {
+            echo "HEALTH CHECK FAILED (no backend responding)"
+            echo "== all tcp listeners =="
+            lsof -nP -iTCP -sTCP:LISTEN | head -50 || true
+            echo "== all ai-drama processes =="
+            ps aux | grep -i ai-drama | grep -v grep || true
+            echo "== data dir =="
+            find "$HOME/Library/Application Support/AI Drama IDE Lite" -maxdepth 3 -type f 2>/dev/null | head -30 || true
+            exit 1
+          }
+          echo "health OK on port ${FOUND}"
+
+      - name: Check for new crash reports
+        run: |
+          set -euo pipefail
+          ls ~/Library/Logs/DiagnosticReports > /tmp/crash_after.txt 2>/dev/null || true
+          echo "== new crash reports after launch =="
+          diff /tmp/crash_before.txt /tmp/crash_after.txt && echo "none (app alive)" || { echo "CRASH DETECTED"; exit 1; }
 
       - name: Diagnose backend sidecar (direct run, cleanup only own pid)
         run: |
@@ -108,12 +115,12 @@ jobs:
           cat /tmp/backend.log || true
 
       - name: Upload smoke test artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: macos-smoke-report
-          path: |
-            screenshot.png
-            report.txt
+          path: screenshot.png
+          if-no-files-found: warn
 
       - name: Quit app and cleanup
         if: always()
