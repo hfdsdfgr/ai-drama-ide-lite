@@ -1,0 +1,99 @@
+name: macOS Smoke Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version to verify (e.g. 0.2.3)"
+        required: true
+        default: "0.2.3"
+
+jobs:
+  smoke-test:
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - name: Download macOS package
+        run: |
+          set -euo pipefail
+          V="${{ inputs.version }}"
+          curl -sL -o app.tar.gz "https://github.com/hfdsdfgr/ai-drama-ide-lite/releases/download/v${V}/ai-drama-ide-lite-macos-aarch64.app.tar.gz"
+          ls -lh app.tar.gz
+
+      - name: Extract and install
+        run: |
+          set -euo pipefail
+          tar -xzf app.tar.gz
+          rm -rf "/Applications/AI Drama IDE Lite.app"
+          cp -R "AI Drama IDE Lite.app" /Applications/
+          # Clear extended attributes (quarantine) in case Gatekeeper would block.
+          xattr -cr "/Applications/AI Drama IDE Lite.app" || true
+          echo "== code signature =="
+          codesign -dv "/Applications/AI Drama IDE Lite.app" 2>&1 | head -5 || true
+          echo "== bundle version =="
+          /usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" "/Applications/AI Drama IDE Lite.app/Contents/Info.plist"
+
+      - name: Snapshot crash reports before launch
+        run: |
+          ls ~/Library/Logs/DiagnosticReports > /tmp/crash_before.txt 2>/dev/null || true
+          echo "crash reports before launch:"
+          cat /tmp/crash_before.txt
+
+      - name: Launch app
+        run: |
+          set -euo pipefail
+          open "/Applications/AI Drama IDE Lite.app"
+          # PyInstaller onefile backend extraction + uvicorn init + WebView render need time.
+          sleep 35
+
+      - name: Verify app and backend processes alive
+        run: |
+          set -euo pipefail
+          echo "== app process =="
+          pgrep -fl "AI Drama IDE Lite.app/Contents/MacOS/app" || { echo "APP NOT RUNNING"; exit 1; }
+          echo "== backend process =="
+          pgrep -fl "ai-drama-backend" || { echo "BACKEND NOT RUNNING"; exit 1; }
+
+      - name: Verify backend health endpoint
+        run: |
+          set -euo pipefail
+          PORT=$(lsof -nP -iTCP -sTCP:LISTEN | grep ai-drama-backend | awk '{print $9}' | head -1 | sed 's/.*://')
+          echo "backend port: ${PORT:-none}"
+          [ -n "${PORT:-}" ] || { echo "NO LISTENING PORT"; exit 1; }
+          CODE=$(curl -s -o /tmp/health.json -w "%{http_code}" "http://127.0.0.1:${PORT}/api/health")
+          echo "health http code: ${CODE}"
+          cat /tmp/health.json || true
+          [ "$CODE" = "200" ] || { echo "HEALTH CHECK FAILED"; exit 1; }
+
+      - name: Check for new crash reports
+        run: |
+          set -euo pipefail
+          ls ~/Library/Logs/DiagnosticReports > /tmp/crash_after.txt 2>/dev/null || true
+          echo "== new crash reports after launch =="
+          diff /tmp/crash_before.txt /tmp/crash_after.txt && echo "none (app alive)" || { echo "CRASH DETECTED"; exit 1; }
+
+      - name: Take screenshot
+        run: |
+          set -euo pipefail
+          sleep 5
+          screencapture -x screenshot.png
+          ls -lh screenshot.png
+          pgrep -fl "AI Drama IDE Lite.app/Contents/MacOS/app" > report.txt || true
+          pgrep -fl "ai-drama-backend" >> report.txt || true
+          echo "smoke test done" >> report.txt
+
+      - name: Upload smoke test artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-smoke-report
+          path: |
+            screenshot.png
+            report.txt
+
+      - name: Quit app and cleanup
+        if: always()
+        run: |
+          osascript -e 'tell application "AI Drama IDE Lite" to quit' || true
+          pkill -f "AI Drama IDE Lite" || true
+          pkill -f ai-drama-backend || true
+          echo "cleaned up"
