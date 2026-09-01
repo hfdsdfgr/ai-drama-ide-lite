@@ -794,6 +794,14 @@ button:disabled {
   cursor: pointer;
   text-align: left;
   box-sizing: border-box;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease,
+    transform 0.15s ease;
+}
+
+.shot-card:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
 }
 
 .shot-card:hover {
@@ -808,6 +816,8 @@ button:disabled {
 .shot-card-dragging {
   opacity: 0.6;
   z-index: 10;
+  border-color: var(--accent-border);
+  box-shadow: var(--shadow-lg);
 }
 
 .shot-frame {
