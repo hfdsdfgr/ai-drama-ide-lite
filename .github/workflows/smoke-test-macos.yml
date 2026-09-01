@@ -92,6 +92,41 @@ jobs:
           esac
           echo "health body: $(cat /tmp/health.json)"
 
+      - name: Verify provider presets and keychain flow
+        run: |
+          set -euo pipefail
+          PORT=$(lsof -nP -iTCP -sTCP:LISTEN | grep -oE '127\.0\.0\.1:[0-9]+' | head -1 | cut -d: -f2)
+          BASE="http://127.0.0.1:${PORT}"
+          echo "== presets =="
+          curl -s "$BASE/api/providers/presets" -o /tmp/presets.json
+          python3 - <<'PYEOF'
+          import json
+          data = json.load(open('/tmp/presets.json'))
+          keys = [p["key"] for p in data]
+          print("preset count:", len(data))
+          print("presets:", keys)
+          assert len(data) >= 5, f"presets too few: {keys}"
+          assert "openai" in keys and "bailian" in keys, f"missing builtin presets: {keys}"
+          PYEOF
+          echo "== create provider with api key (keychain write) =="
+          curl -s -X POST "$BASE/api/providers" \
+            -H 'Content-Type: application/json' \
+            -d '{"name":"smoke-test-provider","preset_key":"","api_base_url":"http://127.0.0.1:9/v1","needs_key":true,"api_key":"smoke-test-key-do-not-use","protocol":"openai_compat"}' \
+            -o /tmp/create.json -w "create_http=%{http_code}\n"
+          cat /tmp/create.json
+          python3 - <<'PYEOF'
+          import json
+          data = json.load(open('/tmp/create.json'))
+          assert data.get("id"), f"create failed: {data}"
+          assert data.get("has_api_key") is True, f"key not stored: {data}"
+          print("provider created:", data["id"], "has_api_key:", data["has_api_key"])
+          PYEOF
+          PROVIDER_ID=$(python3 -c "import json;print(json.load(open('/tmp/create.json'))['id'])")
+          echo "== list providers =="
+          curl -s "$BASE/api/providers" | python3 -c "import json,sys; d=json.load(sys.stdin); print('provider count:', len(d)); assert any(p['id']=='$PROVIDER_ID' for p in d), 'created provider missing from list'"
+          echo "== delete provider =="
+          curl -s -X DELETE "$BASE/api/providers/$PROVIDER_ID" -o /dev/null -w "delete_http=%{http_code}\n"
+
       - name: Check for new crash reports
         run: |
           set -euo pipefail
