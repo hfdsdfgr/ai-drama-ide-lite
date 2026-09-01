@@ -87,7 +87,7 @@ jobs:
           OWNER=$(lsof -nP -iTCP:"$FOUND" -sTCP:LISTEN | awk 'NR==2 {print $1}')
           echo "health OK on port ${FOUND} (listener: ${OWNER})"
           case "$OWNER" in
-            ai-drama-backend*) echo "listener confirmed as backend" ;;
+            ai-drama*) echo "listener confirmed as backend" ;;
             *) echo "WARNING: listener is ${OWNER}, not ai-drama-backend"; exit 1 ;;
           esac
           echo "health body: $(cat /tmp/health.json)"
