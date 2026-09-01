@@ -65,8 +65,6 @@ function App() {
     <div className="app">
       <div className="app-shell">
         <AppSidebar
-          view={view}
-          onNavigate={(v) => setView(v as View)}
           activeProjectId={activeProjectId}
           onSelectProject={handleSelectProject}
           onJump={handleNovelJump}

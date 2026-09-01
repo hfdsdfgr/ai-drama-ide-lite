@@ -11,16 +11,12 @@ export interface NovelJump {
 }
 
 interface AppSidebarProps {
-  view: string;
-  onNavigate: (view: string) => void;
   activeProjectId: string;
   onSelectProject: (projectId: string) => void;
   onJump: (target: NovelJump) => void;
 }
 
 export function AppSidebar({
-  view,
-  onNavigate,
   activeProjectId,
   onSelectProject,
   onJump,
@@ -148,21 +144,6 @@ export function AppSidebar({
         </div>
       )}
 
-      <div className="sidebar-section sidebar-modules">
-        <div className="sidebar-section-title">模块</div>
-        {["project", "novel", "bible", "script", "assets", "storyboard", "generation"].map(
-          (key) => (
-            <button
-              key={key}
-              type="button"
-              className={`side-module${view === key ? " active" : ""}`}
-              onClick={() => onNavigate(key)}
-            >
-              {key === "project" ? "主页" : key === "bible" ? "故事圣经" : key === "storyboard" ? "分镜" : key === "generation" ? "生成中心" : key === "assets" ? "资产" : key === "script" ? "剧本" : "小说"}
-            </button>
-          ),
-        )}
-      </div>
     </aside>
   );
 }
