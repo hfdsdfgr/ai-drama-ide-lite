@@ -87,6 +87,10 @@ jobs:
         with:
           name: ${{ matrix.backend-artifact }}
           path: apps/desktop/src-tauri/binaries/
+      - name: Ensure sidecar executable (macOS)
+        if: matrix.name == 'macos'
+        shell: bash
+        run: chmod +x apps/desktop/src-tauri/binaries/ai-drama-backend-* 2>/dev/null || true
       - uses: actions/setup-node@v4
         with:
           node-version: 20
