@@ -1095,6 +1095,16 @@ button:disabled {
   background: var(--accent-bg);
 }
 
+.chapter-row:hover .chapter-item {
+  border-color: var(--border-strong);
+  background: var(--bg-hover);
+}
+
+.chapter-row.active:hover .chapter-item {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
+
 .novel-main {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
