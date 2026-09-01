@@ -7,6 +7,13 @@ from app.services.script_repo import ScriptRepository
 from app.services.story_repo import StoryRepository
 
 
+VIDEO_MOTION_CONSISTENCY = (
+    "\n\n动作自然连贯，符合真实重力与物理规律；"
+    "角色外观、发型、服装、场景与首帧画面及参考图保持一致，画风统一；"
+    "画面中不要出现文字、字幕、水印。"
+)
+
+
 class VideoGenerationService:
     def __init__(
         self,
@@ -43,6 +50,8 @@ class VideoGenerationService:
         prompt = prompt.strip()
         if not prompt:
             raise AppError(422, "prompt_required", "请输入视频生成提示词")
+        # 图生视频首帧已锁定画面，文字补充运动与一致性约束，避免角色/画风漂移。
+        prompt = prompt + VIDEO_MOTION_CONSISTENCY
         model = self.generation_service.manager.repo.get_model(model_id)
         capabilities = list(model.capabilities or [])
         supports_dialogue = "video_dialogue" in capabilities

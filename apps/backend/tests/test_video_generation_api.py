@@ -3,6 +3,7 @@
 from types import SimpleNamespace
 
 from app.db.database import get_connection
+from app.services.video_generation_service import VIDEO_MOTION_CONSISTENCY
 
 
 def _job_out(model_id="model_video", capability="image_to_video"):
@@ -173,7 +174,11 @@ def test_start_shot_video_appends_dialogue_when_with_audio(client, monkeypatch):
         project_id, "shot1", "model_video", "镜头缓缓推进", with_audio=True
     )
 
-    assert calls["prompt"] == "镜头缓缓推进\n\n对白：你好，快走。"
+    assert calls["prompt"] == (
+        "镜头缓缓推进"
+        + VIDEO_MOTION_CONSISTENCY
+        + "\n\n对白：你好，快走。"
+    )
 
 
 def test_start_shot_video_skips_dialogue_already_in_prompt(client, monkeypatch):
@@ -190,7 +195,9 @@ def test_start_shot_video_skips_dialogue_already_in_prompt(client, monkeypatch):
         with_audio=True,
     )
 
-    assert calls["prompt"] == "镜头缓缓推进，人物说：你好，快走。"
+    assert calls["prompt"] == (
+        "镜头缓缓推进，人物说：你好，快走。" + VIDEO_MOTION_CONSISTENCY
+    )
 
 
 def test_start_shot_video_ignores_dialogue_without_audio(client, monkeypatch):
@@ -203,7 +210,7 @@ def test_start_shot_video_ignores_dialogue_without_audio(client, monkeypatch):
         project_id, "shot1", "model_video", "镜头缓缓推进", with_audio=False
     )
 
-    assert calls["prompt"] == "镜头缓缓推进"
+    assert calls["prompt"] == "镜头缓缓推进" + VIDEO_MOTION_CONSISTENCY
 
 
 def test_start_shot_video_audio_only_model_skips_dialogue(client, monkeypatch):
@@ -222,7 +229,7 @@ def test_start_shot_video_audio_only_model_skips_dialogue(client, monkeypatch):
         project_id, "shot1", "model_video", "镜头缓缓推进", with_audio=True
     )
 
-    assert calls["prompt"] == "镜头缓缓推进"
+    assert calls["prompt"] == "镜头缓缓推进" + VIDEO_MOTION_CONSISTENCY
     assert calls["extra"]["strip_audio"] is False
 
 
@@ -249,7 +256,11 @@ def test_start_shot_video_defaults_audio_for_capable_model(client, monkeypatch):
 
     service.start_shot_video(project_id, "shot1", "model_video", "镜头缓缓推进")
 
-    assert calls["prompt"] == "镜头缓缓推进\n\n对白：你好，快走。"
+    assert calls["prompt"] == (
+        "镜头缓缓推进"
+        + VIDEO_MOTION_CONSISTENCY
+        + "\n\n对白：你好，快走。"
+    )
     assert calls["extra"]["with_audio"] is True
     assert calls["extra"]["strip_audio"] is False
 

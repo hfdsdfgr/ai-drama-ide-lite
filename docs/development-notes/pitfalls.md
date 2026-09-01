@@ -60,3 +60,16 @@
   - 链路验证可先走 text_to_video（无图输入）打通；
   - 含人脸的图生视频需要用户在方舟控制台开通「人像生成」相关权限，或选择无人物特写的分镜图；
   - 排查 400/404 时，Adapter 必须透传方舟响应体里的 `error.message`，否则只看到「HTTP 400」无法定位。
+
+## 2026-09-02 一键生成视频时长被硬编码成 5 秒
+
+- **现象**：分镜阶段 LLM 已按 5/10/15 档位生成 `duration`，但一键生产（Pipeline）生成视频时全部变成 5 秒，与用户看到的「每个分镜都是 5 秒」吻合。
+- **根因**：`pipeline_service._run_videos` 调用 `start_shot_video(..., duration=5)` 硬编码，忽略了分镜自身时长。
+- **解决**：改用 `row["duration"]`，并对旧数据（非 5 的倍数）归一化到最近 5 秒档（≤5→5、>15→15、其余四舍五入到 5 的倍数）；模型侧时长限制（如智谱 >10s 截断）由 Adapter 负责。
+- **教训**：凡是「分镜/剧本阶段已生成的结构化字段」，下游消费时必须以该字段为准，禁止再次硬编码默认值；此类问题应在写代码时搜索同字段的所有消费点。
+
+## 2026-09-02 GitHub 直连 clone / 网页抓取被重置
+
+- **现象**：`git clone https://github.com/...` 报 `RPC failed; curl 56 Recv failure: Connection was reset`；`open_page` 抓 GitHub 中文路径文件返回超时/BAD_CONTENT。
+- **解决**：改用 `Invoke-WebRequest` 下载 `https://codeload.github.com/{owner}/{repo}/zip/refs/heads/{branch}` 压缩包再解压，可稳定获取调研仓库内容。
+- **教训**：调研 GitHub 仓库时优先走 codeload zip，路径含中文时不要直接请求 raw 文件。

@@ -297,12 +297,21 @@ class PipelineService:
             prompt = (row["prompt"] or row["action"] or "").strip()
             if not prompt:
                 continue
+            # 分镜时长由剧本阶段按 5/10/15 档位生成；这里必须使用分镜自身时长，
+            # 不能硬编码 5 秒。旧数据可能不是 5 的倍数，归一化到最近的 5 秒档。
+            duration = int(row["duration"] or 5)
+            if duration <= 5:
+                duration = 5
+            elif duration > 15:
+                duration = 15
+            else:
+                duration = round(duration / 5) * 5
             job = self.video_generation_service.start_shot_video(
                 project_id,
                 row["id"],
                 model.id,
                 prompt,
-                duration=5,
+                duration=duration,
                 with_audio=supports_audio,
             )
             self._poll_job(store, job["job_id"])

@@ -52,6 +52,9 @@ _CONSOLIDATION_SYSTEM = (
     "reference_prompt 必须是固定人设提示词（推荐英文，包含性别、发型发色、瞳色、脸型、"
     "身材、服装单品与配色、特殊标记、整体风格），并用 consistent character design 等关键词"
     "强调一致性；已有实体（合并模式）保持原字段不变，只补充缺失字段。"
+    "严格隔离三类资产：角色 reference_prompt 只能描述该角色自身（外貌、服装、气质、特殊标记），"
+    "严禁混入独立道具、地点、其他角色或剧情动作；地点 reference_prompt 只能描述环境、时间段、光线与风格，"
+    "不得出现任何角色或独立道具；道具 reference_prompt 只能描述道具本身，不得出现角色动作或地点。"
     "只输出一个 JSON 对象，不要输出解释或代码块标记。"
     'JSON 结构必须严格为：{"synopsis": "", "characters": [{"name": "", "aliases": [], '
     '"summary": "", "role_hint": "", "identity": "", "appearance": "", "hairstyle": "", '

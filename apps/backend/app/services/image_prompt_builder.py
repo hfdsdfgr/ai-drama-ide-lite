@@ -18,7 +18,9 @@ SHOT_ASPECT_RATIO = "16:9"
 
 DEFAULT_NEGATIVE_PROMPT = (
     "lowres, bad anatomy, bad hands, extra fingers, deformed, blurry, "
-    "watermark, text, logo, extra limbs, cropped, jpeg artifacts"
+    "watermark, text, logo, extra limbs, cropped, jpeg artifacts, "
+    "oversaturated, overexposed, stiff expression, frozen face, "
+    "disfigured, ugly, duplicate, extra eyes, missing fingers"
 )
 
 CHARACTER_CONSISTENCY = (
@@ -49,6 +51,18 @@ ASSET_NO_TEXT = "no text, no words, no letters, no watermark"
 
 SHOT_CONSISTENCY = (
     "cinematic still frame, storyboard frame, no text, no subtitles"
+)
+
+SHOT_STYLE_LOCK = (
+    "consistent art style, unified visual style across all shots, "
+    "same art direction as the character and location references, "
+    "cinematic film still"
+)
+
+# 角色三视图专项负面词：三视图之间脸/服装漂移是生图通病，单独追加。
+CHARACTER_VIEW_NEGATIVE = (
+    "inconsistent face between views, different outfits between views, "
+    "smiling, exaggerated expression, open-mouth shouting"
 )
 
 # 分镜图里的角色一致性约束：与资产卡不同，分镜图可以有多个角色和道具，
@@ -189,9 +203,12 @@ def build_asset_image_prompt(
     base = _append_if_missing(base, ASSET_NO_TEXT)
 
     spec = _asset_spec(asset_type, aspect_ratio or fields.get("aspect_ratio") or None)
+    negative = DEFAULT_NEGATIVE_PROMPT
+    if asset_type == "character":
+        negative = _join([negative, CHARACTER_VIEW_NEGATIVE])
     return ImagePromptPlan(
         prompt=base,
-        negative_prompt=DEFAULT_NEGATIVE_PROMPT,
+        negative_prompt=negative,
         aspect_ratio=spec["aspect_ratio"],
         width=spec["width"],
         height=spec["height"],
@@ -264,6 +281,7 @@ def build_shot_image_prompt(
     ):
         base = _append_if_missing(base, SHOT_CHARACTER_CONSISTENCY)
     base = _append_if_missing(base, SHOT_CONSISTENCY)
+    base = _append_if_missing(base, SHOT_STYLE_LOCK)
     if art_style:
         base = _append_if_missing(base, art_style)
 
