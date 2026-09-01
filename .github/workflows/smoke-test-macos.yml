@@ -66,10 +66,11 @@ jobs:
       - name: Verify backend health endpoint
         run: |
           set -euo pipefail
-          # 不依赖进程名匹配，扫描 127.0.0.1 上所有监听端口，找返回 200 的 /api/health。
+          # 后端真实健康接口是 /health（前端 /api/health 只探测端口可达，404 也算就绪）。
+          # 扫描 127.0.0.1 上所有监听端口，找返回 200 的 /health 并确认监听进程名。
           FOUND=""
           for PORT in $(lsof -nP -iTCP -sTCP:LISTEN | grep -oE '127\.0\.0\.1:[0-9]+' | cut -d: -f2 | sort -u); do
-            CODE=$(curl -s -o /tmp/health.json -w "%{http_code}" "http://127.0.0.1:${PORT}/api/health" || true)
+            CODE=$(curl -s -o /tmp/health.json -w "%{http_code}" "http://127.0.0.1:${PORT}/health" || true)
             echo "port ${PORT} -> ${CODE}"
             if [ "$CODE" = "200" ]; then FOUND="$PORT"; break; fi
           done
@@ -83,7 +84,13 @@ jobs:
             find "$HOME/Library/Application Support/AI Drama IDE Lite" -maxdepth 3 -type f 2>/dev/null | head -30 || true
             exit 1
           }
-          echo "health OK on port ${FOUND}"
+          OWNER=$(lsof -nP -iTCP:"$FOUND" -sTCP:LISTEN | awk 'NR==2 {print $1}')
+          echo "health OK on port ${FOUND} (listener: ${OWNER})"
+          case "$OWNER" in
+            ai-drama-backend*) echo "listener confirmed as backend" ;;
+            *) echo "WARNING: listener is ${OWNER}, not ai-drama-backend"; exit 1 ;;
+          esac
+          echo "health body: $(cat /tmp/health.json)"
 
       - name: Check for new crash reports
         run: |
