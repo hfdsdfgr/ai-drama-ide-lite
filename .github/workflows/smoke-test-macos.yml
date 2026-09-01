@@ -59,7 +59,8 @@ jobs:
       - name: Verify backend health endpoint
         run: |
           set -euo pipefail
-          PORT=$(lsof -nP -iTCP -sTCP:LISTEN | grep ai-drama-backend | awk '{print $9}' | head -1 | sed 's/.*://')
+          # macOS lsof NAME 列带空格（如 "TCP 127.0.0.1:port (LISTEN)"），不能直接用 awk $9，需正则提取地址:端口。
+          PORT=$(lsof -nP -iTCP -sTCP:LISTEN | grep ai-drama-backend | grep -oE '127\.0\.0\.1:[0-9]+' | head -1 | cut -d: -f2 || true)
           echo "backend port: ${PORT:-none}"
           [ -n "${PORT:-}" ] || { echo "NO LISTENING PORT"; exit 1; }
           CODE=$(curl -s -o /tmp/health.json -w "%{http_code}" "http://127.0.0.1:${PORT}/api/health")
