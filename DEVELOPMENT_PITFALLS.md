@@ -147,6 +147,7 @@
 - **x64 应用找不到 WebView2 运行时**：本机 WebView2 只注册在 `WOW6432Node`（32 位视图），x64 Tauri app 初始化失败报「找不到 WebView2」。对策：`webviewInstallMode: { "type": "embedBootstrapper" }`，安装器检测缺失时联网静默补装（+1.8MB）。
 - **退出时清理 sidecar 进程树**：PyInstaller onefile 有父（bootloader）+ 子（解压运行）两个进程。清理顺序必须先 `taskkill /PID <pid> /T /F`（父还活着才能枚举子进程）再 `child.kill()`；先杀父会让 `/T` 失效、子进程残留。
 - **NSIS 静默安装/卸载验证**：`setup.exe /S` 静默安装到 `%LOCALAPPDATA%\AI Drama IDE Lite`（perUser 模式），`uninstall.exe /S` 静默卸载；卸载不会删 `data/` 用户数据（符合预期）。验证安装包用「卸载→重装→启动→taskkill 关闭」链路。
+- **macOS 安装后提示「应用已损坏，无法打开」（Gatekeeper 未签名拦截）**：未做 Apple 开发者签名/公证的 dmg 应用从浏览器下载后带 quarantine 隔离属性，Gatekeeper 直接报「已损坏」而非「无法验证开发者」，容易误判为安装包损坏。免费解法：Tauri 打包用 ad-hoc 签名（`tauri.macos.conf.json` 的 `bundle.macOS.signingIdentity: "-"`），报错会变成「无法验证开发者」，用户右键 → 打开 → 确认即可运行；个别系统仍报损坏时执行 `xattr -dr com.apple.quarantine "/Applications/AI Drama IDE Lite.app"`。根治方案是 Apple Developer 账号 + notarization（付费，长期项）。注意：改 tauri 配置后务必同步升 tauri.conf.json / Cargo.toml 版本号（v0.2.1 曾只打 tag 未同步版本，导致应用内版本落后于 Release）。
 
 ## 10. 视频生成与多 Provider 协议（Phase 14）
 

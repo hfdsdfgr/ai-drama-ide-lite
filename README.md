@@ -6,7 +6,7 @@
 
 ## 下载与安装
 
-**最新版本：v0.2.1**（Windows x64 + macOS Apple Silicon）
+**最新版本：v0.2.2**（Windows x64 + macOS Apple Silicon）
 
 下载地址：[GitHub Releases](https://github.com/hfdsdfgr/ai-drama-ide-lite/releases)
 
@@ -20,9 +20,14 @@
 
 1. 下载 `ai-drama-ide-lite-macos-aarch64.dmg`；
 2. 打开 dmg，把 `AI Drama IDE Lite` 拖入「应用程序」；
-3. 首次打开若被系统拦截（未做 Apple 公证），请在「应用程序」中**右键 → 打开**，并在弹窗中确认。
+3. 首次打开若提示「无法验证开发者」，请在「应用程序」中**右键 → 打开**，并在弹窗中确认；
+4. 若仍提示「应用已损坏」，打开「终端」执行以下命令后重新打开即可：
 
-> 当前 macOS 版未做 Apple 开发者签名/公证，Windows 版未做代码签名，杀毒软件/系统可能提示未知发布者，属正常现象。
+   ```bash
+   xattr -dr com.apple.quarantine "/Applications/AI Drama IDE Lite.app"
+   ```
+
+> 当前 macOS 版使用 ad-hoc 签名（未做 Apple 开发者公证），Windows 版未做代码签名，杀毒软件/系统可能提示未知发布者，属正常现象。
 
 ### 自动更新
 
@@ -251,7 +256,7 @@ Create Project
 
 ## 当前状态
 
-**当前进度：MVP 功能已完成并发布 v0.2.1（Windows + macOS 双平台）**，完整计划见 [ROADMAP.md](ROADMAP.md)。
+**当前进度：MVP 功能已完成并发布 v0.2.2（Windows + macOS 双平台）**，完整计划见 [ROADMAP.md](ROADMAP.md)。
 
 已完成的核心能力：
 
@@ -269,6 +274,7 @@ Create Project
 
 已发布版本：
 
+- **v0.2.2**：macOS 改用 ad-hoc 签名，修复「应用已损坏」无法打开的问题
 - **v0.2.1**：Windows x64 + macOS Apple Silicon，CI 自动构建发布（见 [Releases](https://github.com/hfdsdfgr/ai-drama-ide-lite/releases)）
 - **v0.2.0**：完整 AI 漫剧生产流水线（一键生成 + 质量审查 + 分镜合成 + 自动更新）
 
