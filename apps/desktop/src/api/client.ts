@@ -58,7 +58,16 @@ export function getApiBase(): Promise<string> {
             return `http://127.0.0.1:${port}`;
           }
         } catch {
-          // 拿不到端口时回退到相对路径（开发模式）
+          // 拿不到端口时按环境处理（见下）
+        }
+        // 生产环境拿不到后端端口说明 sidecar 未启动，给出明确错误而非模糊的“请求失败”；
+        // Tauri dev 模式由外部启动后端，回退相对路径走 Vite 代理。
+        if (!import.meta.env.DEV) {
+          throw new ApiError(
+            503,
+            "backend_not_started",
+            "后端服务未启动，请重启应用后重试",
+          );
         }
       }
       return "";

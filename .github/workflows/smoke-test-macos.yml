@@ -156,12 +156,21 @@ jobs:
           echo "== backend.log =="
           cat /tmp/backend.log || true
 
+      - name: Collect backend logs
+        run: |
+          mkdir -p smoke-logs
+          cp "$HOME/Library/Application Support/AI Drama IDE Lite/data/logs/app.log" smoke-logs/ 2>/dev/null || true
+          cp "$HOME/Library/Application Support/AI Drama IDE Lite/data/logs/crash.log" smoke-logs/ 2>/dev/null || true
+          ls -la smoke-logs/ || true
+
       - name: Upload smoke test artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: macos-smoke-report
-          path: screenshot.png
+          path: |
+            screenshot.png
+            smoke-logs/
           if-no-files-found: warn
 
       - name: Quit app and cleanup
