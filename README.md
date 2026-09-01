@@ -6,7 +6,7 @@
 
 ## 下载与安装
 
-**最新版本：v0.2.4**（Windows x64 + macOS Apple Silicon）
+**最新版本：v0.2.5**（Windows x64 + macOS Apple Silicon）
 
 下载地址：[GitHub Releases](https://github.com/hfdsdfgr/ai-drama-ide-lite/releases)
 
@@ -256,7 +256,7 @@ Create Project
 
 ## 当前状态
 
-**当前进度：MVP 功能已完成并发布 v0.2.4（Windows + macOS 双平台）**，完整计划见 [ROADMAP.md](ROADMAP.md)。
+**当前进度：MVP 功能已完成并发布 v0.2.5（Windows + macOS 双平台）**，完整计划见 [ROADMAP.md](ROADMAP.md)。
 
 已完成的核心能力：
 
@@ -274,6 +274,7 @@ Create Project
 
 已发布版本：
 
+- **v0.2.5**：后端未启动时前端明确报错；macOS 冒烟测试收集后端日志
 - **v0.2.4**：修复 macOS 后端无法启动（sidecar 丢失可执行权限）
 - **v0.2.3**：修复 macOS 启动闪退（sidecar 路径查错导致 panic）
 - **v0.2.2**：macOS 改用 ad-hoc 签名，修复「应用已损坏」无法打开的问题

@@ -1,6 +1,6 @@
 [package]
 name = "app"
-version = "0.2.4"
+version = "0.2.5"
 description = "AI Drama IDE Lite desktop shell"
 authors = ["AI Drama IDE Lite"]
 license = ""
