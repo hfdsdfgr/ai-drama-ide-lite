@@ -266,6 +266,28 @@
   flex-direction: column;
 }
 
+/* 窄窗口响应式：收窄固定列，避免中央工作区被异常压缩 */
+@media (max-width: 1440px) {
+  .app-main {
+    padding: 1rem;
+  }
+  .novel-workspace {
+    grid-template-columns: 220px minmax(0, 1fr) 330px;
+  }
+  .generation-layout {
+    grid-template-columns: 260px minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 1240px) {
+  .novel-workspace {
+    grid-template-columns: 200px minmax(0, 1fr) 300px;
+  }
+  .shot-card {
+    width: 168px;
+  }
+}
+
 .view-pane {
   display: none;
   flex: 1;
@@ -787,6 +809,7 @@ button:disabled {
   flex-direction: column;
   gap: 0.4rem;
   width: 184px;
+  flex-shrink: 0;
   padding: 0.5rem;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
