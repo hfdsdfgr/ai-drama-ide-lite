@@ -46,27 +46,6 @@ jobs:
           # PyInstaller onefile backend extraction + uvicorn init + WebView render need time.
           sleep 35
 
-      - name: Diagnose backend sidecar (direct run)
-        run: |
-          set -euo pipefail
-          SIDECAR="/Applications/AI Drama IDE Lite.app/Contents/MacOS/ai-drama-backend"
-          echo "== sidecar file =="
-          ls -lh "$SIDECAR" || true
-          echo "== run sidecar directly (10s) =="
-          "$SIDECAR" --host 127.0.0.1 --port 18080 > /tmp/backend.log 2>&1 &
-          BPID=$!
-          sleep 10
-          if kill -0 "$BPID" 2>/dev/null; then
-            echo "SIDECAR ALIVE after 10s"
-            kill -9 "$BPID" || true
-          else
-            echo "SIDECAR DIED"
-            wait "$BPID" || echo "sidecar exit code: $?"
-          fi
-          pkill -9 -f ai-drama-backend || true
-          echo "== backend.log =="
-          cat /tmp/backend.log || true
-
       - name: Verify app and backend processes alive
         run: |
           set -euo pipefail
@@ -104,6 +83,28 @@ jobs:
           pgrep -fl "AI Drama IDE Lite.app/Contents/MacOS/app" > report.txt || true
           pgrep -fl "ai-drama-backend" >> report.txt || true
           echo "smoke test done" >> report.txt
+
+      - name: Diagnose backend sidecar (direct run, cleanup only own pid)
+        run: |
+          set -euo pipefail
+          SIDECAR="/Applications/AI Drama IDE Lite.app/Contents/MacOS/ai-drama-backend"
+          echo "== sidecar file =="
+          ls -lh "$SIDECAR" || true
+          echo "== run sidecar directly (10s) =="
+          "$SIDECAR" --host 127.0.0.1 --port 18080 > /tmp/backend.log 2>&1 &
+          BPID=$!
+          sleep 10
+          if kill -0 "$BPID" 2>/dev/null; then
+            echo "SIDECAR ALIVE after 10s"
+          else
+            echo "SIDECAR DIED"
+            wait "$BPID" || echo "sidecar exit code: $?"
+          fi
+          # Kill only the directly spawned bootloader and its child, never app-spawned backend.
+          pkill -9 -P "$BPID" || true
+          kill -9 "$BPID" || true
+          echo "== backend.log =="
+          cat /tmp/backend.log || true
 
       - name: Upload smoke test artifacts
         uses: actions/upload-artifact@v4
