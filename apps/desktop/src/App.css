@@ -1037,6 +1037,23 @@ button:disabled {
   margin-left: auto;
 }
 
+.provider-collapse {
+  padding: 0.2rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.provider-collapse:hover {
+  color: var(--text-h);
+  border-color: var(--border-strong);
+}
+
 .badge {
   display: inline-block;
   padding: 0.1rem 0.5rem;

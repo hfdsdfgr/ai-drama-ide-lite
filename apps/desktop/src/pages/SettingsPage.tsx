@@ -76,6 +76,7 @@ export function SettingsPage() {
   const [testingId, setTestingId] = useState<string | null>(null);
   const [testResults, setTestResults] = useState<Record<string, ProviderTestResult>>({});
   const [collapsedTests, setCollapsedTests] = useState<Record<string, boolean>>({});
+  const [collapsedProviders, setCollapsedProviders] = useState<Record<string, boolean>>({});
   const [builtin, setBuiltin] = useState<Record<string, BuiltinModel[]>>({});
   const [builtinOpen, setBuiltinOpen] = useState<string | null>(null);
   const [builtinBusy, setBuiltinBusy] = useState<string | null>(null);
@@ -700,7 +701,22 @@ export function SettingsPage() {
                   <span className="muted">
                     {provider.has_api_key ? "密钥已配置" : "密钥未配置"}
                   </span>
+                  <button
+                    type="button"
+                    className="provider-collapse"
+                    aria-expanded={!collapsedProviders[provider.id]}
+                    onClick={() =>
+                      setCollapsedProviders((prev) => ({
+                        ...prev,
+                        [provider.id]: !prev[provider.id],
+                      }))
+                    }
+                  >
+                    {collapsedProviders[provider.id] ? "展开" : "收起"}
+                  </button>
                 </div>
+                {!collapsedProviders[provider.id] && (
+                  <>
                 <p className="muted">
                   Base URL：{provider.api_base_url || "（未设置）"} ·{" "}
                   {provider.model_count} 个模型
@@ -1147,6 +1163,8 @@ export function SettingsPage() {
                       </div>
                     )}
                   </div>
+                )}
+                  </>
                 )}
               </div>
             ))}
