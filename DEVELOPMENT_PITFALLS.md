@@ -148,6 +148,7 @@
 - **退出时清理 sidecar 进程树**：PyInstaller onefile 有父（bootloader）+ 子（解压运行）两个进程。清理顺序必须先 `taskkill /PID <pid> /T /F`（父还活着才能枚举子进程）再 `child.kill()`；先杀父会让 `/T` 失效、子进程残留。
 - **NSIS 静默安装/卸载验证**：`setup.exe /S` 静默安装到 `%LOCALAPPDATA%\AI Drama IDE Lite`（perUser 模式），`uninstall.exe /S` 静默卸载；卸载不会删 `data/` 用户数据（符合预期）。验证安装包用「卸载→重装→启动→taskkill 关闭」链路。
 - **macOS 安装后提示「应用已损坏，无法打开」（Gatekeeper 未签名拦截）**：未做 Apple 开发者签名/公证的 dmg 应用从浏览器下载后带 quarantine 隔离属性，Gatekeeper 直接报「已损坏」而非「无法验证开发者」，容易误判为安装包损坏。免费解法：Tauri 打包用 ad-hoc 签名（`tauri.macos.conf.json` 的 `bundle.macOS.signingIdentity: "-"`），报错会变成「无法验证开发者」，用户右键 → 打开 → 确认即可运行；个别系统仍报损坏时执行 `xattr -dr com.apple.quarantine "/Applications/AI Drama IDE Lite.app"`。根治方案是 Apple Developer 账号 + notarization（付费，长期项）。注意：改 tauri 配置后务必同步升 tauri.conf.json / Cargo.toml 版本号（v0.2.1 曾只打 tag 未同步版本，导致应用内版本落后于 Release）。
+- **macOS 安装后启动即闪退（sidecar 路径查错 + panic）**：Tauri 2 在 macOS 把 externalBin（PyInstaller 后端）放在 `Contents/MacOS/`（与主程序同目录），不是 `Contents/Resources/`。旧 `resolve_backend_exe` 只查 Resources → 返回 None → `expect("backend sidecar exe not found")` panic，应用启动即闪退（v0.2.2 加了 ad-hoc 签名能打开后此 bug 才暴露）。修复：macOS 分支优先查主程序同目录（`dir.join("ai-drama-backend")`），Resources 兜底；同时把 sidecar 缺失/spawn 失败从 panic 改为 `log::error` + 应用照常打开，由前端提示后端未就绪，任何后端问题都不再导致整个 app 崩溃。排查方法：下载 release 的 `.app.tar.gz` 解包看 `Contents/MacOS/` 是否有 `ai-drama-backend`。另外：`lib.rs` 是 UTF-8 + CRLF，apply_patch 会因行尾匹配失败，先转 LF 再改（git autocrlf 会归一化，diff 无噪音）。
 
 ## 10. 视频生成与多 Provider 协议（Phase 14）
 

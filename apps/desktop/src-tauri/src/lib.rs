@@ -24,10 +24,15 @@ fn resolve_backend_exe() -> Option<PathBuf> {
 
 #[cfg(all(not(debug_assertions), target_os = "macos"))]
 fn resolve_backend_exe() -> Option<PathBuf> {
-  // macOS app bundle：主程序在 Contents/MacOS，sidecar 在 Contents/Resources。
+  // macOS app bundle：Tauri 2 把 externalBin 放在 Contents/MacOS（与主程序同目录），
+  // 旧实现只查 Contents/Resources 会找不到 sidecar，导致启动 panic 闪退。
+  // 优先查主程序同目录，Resources 仅作兜底。
   let dir = std::env::current_exe().ok()?.parent()?.to_path_buf();
   let resources = dir.join("../Resources");
   let candidates = [
+    dir.join("ai-drama-backend"),
+    dir.join("ai-drama-backend-aarch64-apple-darwin"),
+    dir.join("ai-drama-backend-x86_64-apple-darwin"),
     resources.join("ai-drama-backend-aarch64-apple-darwin"),
     resources.join("ai-drama-backend-x86_64-apple-darwin"),
     resources.join("ai-drama-backend"),
@@ -77,11 +82,22 @@ pub fn run() {
       #[cfg(not(debug_assertions))]
       {
         let port = find_free_port();
-        let exe = resolve_backend_exe().expect("backend sidecar exe not found");
-        let child = Command::new(exe)
+        // 后端缺失/启动失败不允许让整个应用 panic 闪退：
+        // 找不到或 spawn 失败时只记录错误，应用照常打开，由前端给出明确错误提示。
+        let Some(exe) = resolve_backend_exe() else {
+          log::error!("backend sidecar exe not found; app will run without backend");
+          return Ok(());
+        };
+        let child = match Command::new(exe)
           .args(["--host", "127.0.0.1", "--port", &port.to_string()])
           .spawn()
-          .expect("failed to spawn backend sidecar");
+        {
+          Ok(child) => child,
+          Err(err) => {
+            log::error!("failed to spawn backend sidecar: {err}");
+            return Ok(());
+          }
+        };
         app.manage(BackendPort(Mutex::new(port)));
         app.manage(BackendChild(Mutex::new(Some(child))));
         log::info!("backend sidecar started on port {}", port);
