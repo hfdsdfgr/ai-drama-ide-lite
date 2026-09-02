@@ -117,7 +117,7 @@ function App() {
               />
             </div>
             <div className={view === "bible" ? "view-pane active" : "view-pane"}>
-              <StoryBiblePage />
+              <StoryBiblePage active={view === "bible"} />
             </div>
             <div className={view === "script" ? "view-pane active" : "view-pane"}>
               <ScriptPage active={view === "script"} />

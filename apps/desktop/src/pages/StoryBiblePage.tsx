@@ -38,7 +38,7 @@ function isChatModel(model: Model): boolean {
   return !NON_CHAT_LLM_FRAGMENTS.some((fragment) => id.includes(fragment));
 }
 
-export function StoryBiblePage() {
+export function StoryBiblePage({ active }: { active: boolean }) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState("");
   const [novels, setNovels] = useState<Novel[]>([]);
@@ -51,14 +51,13 @@ export function StoryBiblePage() {
   const [error, setError] = useState("");
   const analysisPollRef = useRef<string | null>(null);
 
+  // 模型与项目是全局配置；页面常驻挂载，只有切到本页（active）才加载，
+  // 避免应用启动时后端尚未就绪导致请求失败后永不重试。
   useEffect(() => {
+    if (!active) return;
     listProjects()
       .then(setProjects)
       .catch((e) => setError((e as Error).message));
-  }, []);
-
-  // 模型是全局配置，页面挂载即加载
-  useEffect(() => {
     listModels({ model_type: "llm", enabled_only: true })
       .then((models) => {
         const usable = models.filter(isChatModel);
@@ -68,7 +67,7 @@ export function StoryBiblePage() {
         );
       })
       .catch((e) => setError((e as Error).message));
-  }, []);
+  }, [active]);
 
   const refreshNovels = useCallback(async (pid: string) => {
     setError("");
