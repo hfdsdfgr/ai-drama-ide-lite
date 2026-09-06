@@ -14,10 +14,10 @@
   --bg-active: rgba(255, 255, 255, 0.08);
 
   /* 文本层级 */
-  --text: #a7abb8;
+  --text: #aeb3c0;
   --text-h: #f1f2f6;
-  --text-secondary: #8b90a0;
-  --text-faint: #62677a;
+  --text-secondary: #969baa;
+  --text-faint: #6c7184;
   --text-on-accent: #ffffff;
 
   /* 主色：紫蓝（克制使用） */
@@ -69,8 +69,8 @@
   --fs-base: 14px;
   --fs-lg: 16px;
   --fs-xl: 20px;
-  --fs-2xl: 26px;
-  --fs-display: 34px;
+  --fs-2xl: 24px;
+  --fs-display: 30px;
 
   /* 字体 */
   --sans: system-ui, "Segoe UI", "PingFang SC", "Microsoft YaHei", Roboto,

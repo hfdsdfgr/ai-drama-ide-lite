@@ -382,9 +382,9 @@ input,
 textarea,
 select {
   padding: 0.45rem 0.6rem;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
-  background: var(--bg-panel);
+  background: var(--bg-input);
   color: var(--text-h);
   font: inherit;
 }
