@@ -202,7 +202,7 @@ export function ProjectPage({
         <h2>主页</h2>
         <div className="toolbar">
           <button type="button" onClick={handleNew}>
-            新建项目
+            新建
           </button>
           <input
             type="file"
@@ -225,7 +225,7 @@ export function ProjectPage({
           {loading ? (
             <p>加载中…</p>
           ) : projects.length === 0 ? (
-            <p className="muted">还没有项目，点右上角「新建项目」创建一个。</p>
+            <p className="muted">还没有项目，在右侧创建第一个。</p>
           ) : (
             <ul className="project-list">
               {projects.map((project) => (

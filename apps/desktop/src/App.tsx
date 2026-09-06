@@ -70,10 +70,6 @@ function App() {
         />
         <div className="app-content">
           <header className="app-header">
-            <div className="app-brand">
-              <span className="app-logo">AI Drama IDE</span>
-              <span className="app-version">Lite</span>
-            </div>
             <nav className="module-nav" aria-label="主导航">
               {CREATION_MODULES.map((m) => (
                 <button

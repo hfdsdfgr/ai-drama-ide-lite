@@ -79,7 +79,7 @@ export function StatusBar() {
       </span>
       <span className="statusbar-spacer" />
       <span className="statusbar-item statusbar-muted">
-        AI Drama IDE Lite{appVersion ? ` v${appVersion}` : ""}
+        {appVersion ? `v${appVersion}` : ""}
       </span>
     </footer>
   );
