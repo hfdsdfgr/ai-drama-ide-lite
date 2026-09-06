@@ -120,7 +120,7 @@ def run_asset_completion(
     bible = repo.get_bible(project_id)
     if bible is None:
         raise AppError(
-            422, "no_bible", "该项目还没有 Story Bible，请先运行「分析故事」。"
+            422, "no_bible", "该项目还没有故事圣经，请先运行「分析故事」。"
         )
     text = manager.chat(
         model_id,
@@ -167,7 +167,7 @@ class AssetGenerationService:
             raise AppError(
                 422,
                 "no_assets",
-                "该项目还没有资产。请先运行「分析故事」生成 Story Bible 后再补全资产卡。",
+                "该项目还没有资产。请先运行「分析故事」生成故事圣经后再补全资产卡。",
             )
         try:
             provider_id = self.manager.repo.get_model(model_id).provider_id

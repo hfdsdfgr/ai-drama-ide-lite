@@ -698,7 +698,7 @@ button:disabled {
   max-height: 480px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
-  background: #000;
+  background: var(--media-stage);
 }
 
 .review-actions {
@@ -844,7 +844,7 @@ button:disabled {
   border-radius: 50%;
   border: 1px solid var(--border-strong);
   background: rgba(0, 0, 0, 0.58);
-  color: #fff;
+  color: var(--text-h);
   font-size: 0.72rem;
   line-height: 1;
   cursor: pointer;
@@ -920,7 +920,7 @@ button:disabled {
   max-height: 240px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  background: #000;
+  background: var(--media-stage);
 }
 
 .reference-picker {
@@ -1235,23 +1235,23 @@ button:disabled {
 }
 
 .badge-image {
-  border-color: var(--success);
-  color: var(--success);
+  border-color: var(--type-image);
+  color: var(--type-image);
 }
 
 .badge-video {
-  border-color: #7a5bd6;
-  color: #7a5bd6;
+  border-color: var(--type-video);
+  color: var(--type-video);
 }
 
 .badge-audio {
-  border-color: #d77a3b;
-  color: #d77a3b;
+  border-color: var(--type-audio);
+  color: var(--type-audio);
 }
 
 .badge-llm {
-  border-color: #3b7dd8;
-  color: #3b7dd8;
+  border-color: var(--type-llm);
+  color: var(--type-llm);
 }
 
 .badge-default {
@@ -1617,9 +1617,11 @@ button:disabled {
   z-index: 20;
   width: 280px;
   padding: 0.5rem 0.65rem;
-  background: #333;
-  color: #fff;
-  border-radius: 6px;
+  background: var(--bg-elevated);
+  color: var(--text-h);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
   font-size: 0.78rem;
   line-height: 1.5;
   font-weight: 400;
@@ -2212,7 +2214,7 @@ button:disabled {
   max-height: calc(88vh - 48px);
   border-radius: var(--radius-md);
   border: 1px solid var(--border-strong);
-  background: #000;
+  background: var(--media-stage);
 }
 
 .image-lightbox-inner button {

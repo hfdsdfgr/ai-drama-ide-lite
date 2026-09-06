@@ -35,6 +35,15 @@
   --danger-bg: rgba(239, 106, 106, 0.12);
   --danger-border: rgba(239, 106, 106, 0.42);
 
+  /* 类型色（模型能力 / 素材类别） */
+  --type-image: var(--success);
+  --type-video: #7a5bd6;
+  --type-audio: #d77a3b;
+  --type-llm: #3b7dd8;
+
+  /* 媒体播放黑场 */
+  --media-stage: #000;
+
   /* 边框 */
   --border: #262933;
   --border-strong: #343847;

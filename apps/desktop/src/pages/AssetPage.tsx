@@ -874,7 +874,7 @@ export function AssetPage({
         <aside className="novel-inspector">
           <div className="panel-head">
             <h3>AI 向导</h3>
-            <p className="muted">从 Story Bible 补全视觉资产卡</p>
+            <p className="muted">从故事圣经补全视觉资产卡</p>
           </div>
           <div className="card inspector-card">
             <h3>生成资产卡</h3>

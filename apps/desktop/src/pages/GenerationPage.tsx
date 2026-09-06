@@ -73,7 +73,7 @@ const FILTERS: { key: Filter; label: string }[] = [
 ];
 
 const STAGE_LABELS: Record<string, string> = {
-  novel_analysis: "小说分析 / Story Bible",
+  novel_analysis: "小说分析 / 故事圣经",
   script: "剧本生成（分集 / 场景）",
   assets: "资产卡补全",
   storyboard: "分镜生成",

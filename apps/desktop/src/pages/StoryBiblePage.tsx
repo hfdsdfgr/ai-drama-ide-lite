@@ -124,10 +124,6 @@ export function StoryBiblePage({
 
   return (
     <div className="page">
-      <div className="page-head">
-        <h2>故事圣经</h2>
-      </div>
-
       <div className="toolbar">
         <label>
           小说
@@ -150,15 +146,15 @@ export function StoryBiblePage({
 
       <div className="card">
         <div className="panel-head">
-          <h3>Story Bible</h3>
+          <h3>故事设定库</h3>
           <p className="muted">
             项目长期设定：世界观、人物、地点、时间线。AI 写作会以它为设定依据。
           </p>
         </div>
         {llmModels.length === 0 ? (
           <p className="muted">
-            没有可用的文本模型。请在「设置」中启用至少一个文本模型，
-            并确认其 Provider 已启用（Provider 和模型需要同时启用）。
+            没有可用的文本模型。请在「设置」中启用一个文本模型
+            （Provider 与模型需同时启用）。
           </p>
         ) : (
           <>
@@ -280,7 +276,7 @@ export function StoryBiblePage({
             ) : (
               novelId && (
                 <p className="muted">
-                  还没有 Story Bible。点击「分析故事」从当前小说提取角色、地点、道具与事件。
+                  还没有设定结果。点击「分析故事」从当前小说提取角色、地点、道具与事件。
                 </p>
               )
             )}

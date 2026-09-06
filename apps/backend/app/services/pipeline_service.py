@@ -23,7 +23,7 @@ from app.services.novel_repo import NovelRepository
 from app.services.script_repo import ScriptRepository
 
 PIPELINE_STAGES: tuple[dict, ...] = (
-    {"key": "novel_analysis", "label": "小说分析 / Story Bible", "kind": "llm"},
+    {"key": "novel_analysis", "label": "小说分析 / 故事圣经", "kind": "llm"},
     {"key": "script", "label": "剧本生成（分集 / 场景）", "kind": "llm"},
     {"key": "assets", "label": "资产卡补全", "kind": "llm"},
     {"key": "storyboard", "label": "分镜生成", "kind": "llm"},

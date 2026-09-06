@@ -22,7 +22,7 @@ ACTIVE_STATUSES = ("queued", "running", "paused")
 
 STAGES: tuple[tuple[str, str], ...] = (
     ("novel_analysis", "小说分析"),
-    ("story_bible", "Story Bible"),
+    ("story_bible", "故事圣经"),
     ("character_extraction", "人物提取"),
     ("script_generation", "剧本生成"),
     ("character_asset", "人物资产"),
