@@ -171,3 +171,19 @@
 - **M3 时间轴不依赖 LLM / 字符数估算**：`TimelineService.probe_audio_duration` 用 FFmpeg 探测真实时长；TTS Provider 返回 timestamps 时才用字符/词级 alignment，否则一律 `audio_duration_only`。任何「每句话 X 秒」「按字符数估算」的实现都不允许出现。
 - **Seedance 2.0 禁止「首帧/尾帧」与「参考素材」混用**：`content` 里同时放 `role=first_frame` 和 `role=reference_image` 会返回 HTTP 400 `first/last frame content cannot be mixed with reference media content`。官方规则：图生视频（I2V）只放 first_frame（可加 last_frame），多模态参考模式只放 reference_image / reference_video / reference_audio，两种模式不能混。修复：`VolcengineAdapter.submit` 在 `image_to_video`（首帧模式）时跳过参考图（分镜图本身已含角色/场景一致性）；`text_to_video` + 参考图按参考模式保留。参考图合并拼图逻辑只在无首帧的参考模式触发。
 - **Seedance 真人风控 `may contain real person`**：分镜首帧（`content[0]`）是写实风格人物时，任务在 poll 阶段失败。官方不支持直接上传含真人人脸的输入；默认解决方向是让用户把画风改成动漫 / 3D 等非真人风格并重新生成角色与分镜图（`_FACE_POLICY_HINT` 已给出该建议），确需真人形象时才考虑火山人像授权或预置虚拟人像 `asset://` ID。素材库上传走火山 OpenAPI AK/SK 签名且要求公网 URL，本地桌面版当前无法直传。
+
+## 11. 本机全新环境搭建（AI Drama IDE，2026-09-05/06）
+
+> 本节记录在全新 Windows 机器（无 VS Build Tools、无 Qt/MinGW、无 Rust）上从零搭起本项目
+> 开发/桌面环境时踩到的坑，按「现象 / 原因 / 解决」记录。
+
+- **系统默认 `python` 是 Python 2.7（Anaconda）**：`python --version` 输出 2.7.3，直接 `python -m venv` 会建出错误的旧版环境。项目要求 Python 3.12+。解决：用 `py -0p` 找本机真实解释器（本机为 `E:\python\python.exe`，3.13.7），创建 venv 时显式指定：`& "E:\python\python.exe" -m venv .venv`。后续 pip/pytest/uvicorn 一律用 `.venv\Scripts\python.exe`。
+- **PowerShell 默认编码读 UTF-8 中文乱码**：`Get-Content` 不带编码会把 UTF-8 中文按 GBK 误读成乱码（README 等文档看似损坏，实际正常）。读文件统一 `Get-Content -Encoding UTF8`；补丁里的中文上下文必须与文件真实 UTF-8 内容一致。
+- **rustup 装 GNU 工具链后没有写入用户 PATH**：`rustup-init -y --default-host x86_64-pc-windows-gnu` 安装成功并提示重启 shell，但用户 PATH（HKCU\Environment）里没有 `.cargo\bin`（本机初始 PATH 只有 WindowsApps）。解决：手动追加 `C:\Users\28193\.cargo\bin` 与 MinGW `bin` 到用户 PATH；沙箱内读用户 PATH 与提权读不一致（权限虚拟化），写入/验证 PATH 要走提权。
+- **Rust GNU 工具链必须配 UCRT/POSIX 版 MinGW-w64**：项目要求 GNU 工具链，本机无 Qt/MinGW。选择 WinLibs 独立包 `gcc-16.2.0-mingw-w64ucrt-14.0.0`（POSIX threads + SEH + UCRT），解压到 `C:\Users\28193\mingw64` 即可；cargo check 全链路编译通过。下载 261MB 时网络仅 ~250KB/s，需耐心等待，`curl -fL --retry 5` 比裸下载稳。
+- **Tauri cargo check 报 `resource path binaries\ai-drama-backend-x86_64-pc-windows-gnu.exe doesn't exist`**：`tauri.conf.json` 的 `externalBin` 要求 sidecar 后端二进制在 `apps/desktop/src-tauri/binaries/` 下，而它由 PyInstaller 打包生成、不在 Git 里。解决：先给 backend venv `pip install pyinstaller`，再执行仓库脚本 `powershell -ExecutionPolicy Bypass -File scripts\build-backend.ps1`（生成 GNU/MSVC 双后缀，各约 60MB）。
+- **Tauri cargo check 报 `resource path target\release\WebView2Loader.dll doesn't exist`**：`tauri.windows.conf.json` 的 `bundle.resources` 显式引用了该 DLL，但 GNU 构建不会自动收集。解决（同 release.yml）：从 NuGet 下载 `Microsoft.Web.WebView2/1.0.3650.58`，取 `runtimes/win-x64/native/WebView2Loader.dll` 放到 `apps/desktop/src-tauri/target/release/`。
+- **`scripts\tauri-dev.ps1` / `tauri-build.ps1` 硬编码了原作者机器**：脚本写死 `G:\Vibe Coding\AICV` 和 `C:\Users\Administrator\ai-drama-ide`，在本机直接跑会失败。本仓库路径 `D:\vibecoding\ai-drama-ide-lite` 无空格，不需要 junction，直接 `cd apps\desktop && npm run tauri dev` 即可（先单独启动后端，uvicorn 无 `--reload`）。
+- **cargo 运行会把过期 Cargo.lock 悄悄改掉**：仓库 Cargo.lock 中 `app` 版本停在 0.2.5，而 Cargo.toml 已是 0.2.61，首次 `cargo check` 自动同步产生 1 行 diff（属合理修复，非故障）。改 Cargo.toml 版本时记得同步提交 Cargo.lock。
+- **PyInstaller 打包注意事项**：`build-backend.ps1` 已用 `--add-data` 收集运行时文件（`schema.sql`、`vendor_models.json`）与 `--hidden-import keyring.backends.Windows`，不要漏；onefile 后端是父（bootloader）+ 子（解压运行）双进程，退出时先 `taskkill /PID <pid> /T /F` 再杀父进程，否则子进程残留。
+- **沙箱（sandbox）与提权的差异是很多“灵异现象”的来源**：GUI 窗口、外网、keyring 写系统凭据、写用户目录（`.codex` / `.cargo` / 注册表 PATH）、git 写 `.git` 都必须提权执行；沙箱内能读但不能写这些位置。开发后端需要 keyring 时也必须提权启动（沙箱内 `CredWrite` 报 WinError 1312）。
