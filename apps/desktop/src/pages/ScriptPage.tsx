@@ -466,7 +466,7 @@ export function ScriptPage({
               ) : (
                 episodeDetail.scenes.map((scene) => {
                   return (
-                    <div className="card" key={scene.id}>
+                    <div className="card scene-card" key={scene.id}>
                       <div className="scene-head">
                         <span
                           style={{

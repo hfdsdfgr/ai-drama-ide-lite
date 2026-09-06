@@ -144,7 +144,7 @@ export function StoryBiblePage({
 
       {error && <p className="error">{error}</p>}
 
-      <div className="card">
+      <div className="card bible-card">
         <div className="panel-head">
           <h3>故事设定库</h3>
           <p className="muted">

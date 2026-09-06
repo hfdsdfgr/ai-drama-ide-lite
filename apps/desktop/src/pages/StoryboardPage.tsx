@@ -1202,7 +1202,7 @@ export function StoryboardPage({
                 episodeDetail.scenes.map((scene) => {
                   const shots = sceneDetails[scene.id]?.shots ?? [];
                   return (
-                    <div className="card" key={scene.id}>
+                    <div className="card scene-card" key={scene.id}>
                       <div className="scene-head">
                         <strong>{scene.slugline || scene.title}</strong>
                         <span className="badge">{shots.length} 个镜头</span>

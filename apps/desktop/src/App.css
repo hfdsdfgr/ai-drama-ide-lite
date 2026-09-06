@@ -2303,3 +2303,113 @@ button:disabled {
   border-radius: var(--radius-md);
   padding: 1rem 1.25rem;
 }
+
+/* =========================================================
+   DESIGN 简约收敛：内容区一律扁平化，边框只留给真实控件与可点选图块
+   ========================================================= */
+
+/* 模块左栏分区：去框，只保留标题与间距 */
+.sidebar-block {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  padding: 0.25rem 0;
+}
+
+/* 编辑 / 内容主区：与页面同底色 */
+.novel-main {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+
+/* 生成中心三大面板与通用任务卡：去掉容器框 */
+.generation-layout > .card {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+}
+
+/* 场景块：以留白 + 细分隔线组织，不再每块加圆角边框 */
+.card.scene-card {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  padding: 1rem 0;
+}
+
+.card.scene-card + .card.scene-card {
+  border-top: 1px solid var(--border);
+}
+
+/* 行级内容容器：去框 */
+.scene-head,
+.scene-dialogue,
+.job-row,
+.pipeline-stage,
+.asset-item,
+.asset-spec-card,
+.bible-section {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* 可点选行 hover：只用背景轻反馈，不再用边框/投影 */
+.scene-dialogue:hover,
+.job-row:hover,
+.asset-item:hover,
+.asset-spec-card:hover {
+  border-color: transparent;
+  background: var(--bg-hover);
+  box-shadow: none;
+}
+
+/* 右侧检查器分区：去框成段落式，块间细分隔线 */
+.inspector-card {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  padding: 0.75rem 0;
+}
+
+.inspector-card + .inspector-card {
+  border-top: 1px solid var(--border);
+}
+
+/* 故事圣经外层去框 */
+.bible-card {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+}
+
+/* 质量列表项：用状态底色而非每项一个框 */
+.quality-item {
+  border: none;
+  border-radius: 0;
+  padding: 0.4rem 0.5rem;
+}
+
+/* 扁平化后保留状态语义：细左缘标记 + 淡底色 */
+.pipeline-stage-not_ready {
+  border-left: 2px solid var(--danger);
+  background: var(--danger-bg);
+}
+
+.pipeline-stage-running {
+  border-left: 2px solid var(--accent);
+  background: var(--accent-bg);
+}
+
+.pipeline-stage-completed {
+  border-left: 2px solid var(--success);
+}
+
+.review-flagged {
+  border-left: 2px solid var(--danger-border);
+  background: var(--danger-bg);
+}
