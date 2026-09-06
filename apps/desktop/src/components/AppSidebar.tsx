@@ -1,8 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { listProjects } from "../api/projects";
 import { getNovel, listNovels } from "../api/novels";
-import type { Project } from "../types/project";
 import type { Chapter, Novel } from "../types/novel";
 
 export interface NovelJump {
@@ -12,26 +10,17 @@ export interface NovelJump {
 
 interface AppSidebarProps {
   activeProjectId: string;
-  onSelectProject: (projectId: string) => void;
   onJump: (target: NovelJump) => void;
 }
 
 export function AppSidebar({
   activeProjectId,
-  onSelectProject,
   onJump,
 }: AppSidebarProps) {
-  const [projects, setProjects] = useState<Project[]>([]);
   const [novels, setNovels] = useState<Novel[]>([]);
   const [chapters, setChapters] = useState<Record<string, Chapter[]>>({});
   const [openNovelId, setOpenNovelId] = useState<string | null>(null);
   const [busyNovelId, setBusyNovelId] = useState<string | null>(null);
-
-  useEffect(() => {
-    listProjects()
-      .then(setProjects)
-      .catch(() => setProjects([]));
-  }, []);
 
   useEffect(() => {
     if (!activeProjectId) {
@@ -62,8 +51,6 @@ export function AppSidebar({
     }
   }
 
-  const activeProject = projects.find((p) => p.id === activeProjectId) ?? null;
-
   return (
     <aside className="app-sidebar">
       <div className="sidebar-brand">
@@ -71,26 +58,7 @@ export function AppSidebar({
         <span className="sidebar-version">Lite</span>
       </div>
 
-      <div className="sidebar-section">
-        <div className="sidebar-section-title">项目</div>
-        {projects.length === 0 ? (
-          <p className="sidebar-empty">暂无项目</p>
-        ) : (
-          <select
-            className="sidebar-project-select"
-            value={activeProjectId}
-            onChange={(e) => onSelectProject(e.target.value)}
-          >
-            {projects.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name || "未命名项目"}
-              </option>
-            ))}
-          </select>
-        )}
-      </div>
-
-      {activeProject && (
+      {activeProjectId ? (
         <div className="sidebar-section sidebar-tree">
           <div className="sidebar-section-title">小说结构</div>
           {novels.length === 0 ? (
@@ -141,6 +109,11 @@ export function AppSidebar({
               );
             })
           )}
+        </div>
+      ) : (
+        <div className="sidebar-section">
+          <div className="sidebar-section-title">项目</div>
+          <p className="sidebar-empty">在「主页」打开或新建项目</p>
         </div>
       )}
 

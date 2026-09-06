@@ -12,9 +12,13 @@ import type { Project } from "../types/project";
 
 interface ProjectPageProps {
   openProjectId?: string | null;
+  onSelectProject: (projectId: string) => void;
 }
 
-export function ProjectPage({ openProjectId }: ProjectPageProps) {
+export function ProjectPage({
+  openProjectId,
+  onSelectProject,
+}: ProjectPageProps) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [selected, setSelected] = useState<Project | null>(null);
   const [name, setName] = useState("");
@@ -80,6 +84,7 @@ export function ProjectPage({ openProjectId }: ProjectPageProps) {
       setSelected(project);
       setNameDraft(project.name);
       setDraft(project.description);
+      onSelectProject(project.id);
     } catch (err) {
       setError((err as Error).message);
     }
@@ -91,6 +96,7 @@ export function ProjectPage({ openProjectId }: ProjectPageProps) {
     setDraft(project.description);
     setConfirmDeleteId(null);
     setError("");
+    onSelectProject(project.id);
   }
 
   // 全局侧栏切换项目：选中对应项目并滚动到详情
@@ -156,6 +162,7 @@ export function ProjectPage({ openProjectId }: ProjectPageProps) {
         setNameDraft("");
         setDraft("");
         setSaveState("idle");
+        onSelectProject("");
       }
     } catch (err) {
       setError((err as Error).message);
@@ -173,6 +180,7 @@ export function ProjectPage({ openProjectId }: ProjectPageProps) {
       setSelected(project);
       setNameDraft(project.name);
       setDraft(project.description);
+      onSelectProject(project.id);
     } catch (err) {
       setError((err as Error).message);
     }

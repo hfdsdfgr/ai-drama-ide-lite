@@ -66,7 +66,6 @@ function App() {
       <div className="app-shell">
         <AppSidebar
           activeProjectId={activeProjectId}
-          onSelectProject={handleSelectProject}
           onJump={handleNovelJump}
         />
         <div className="app-content">
@@ -104,7 +103,10 @@ function App() {
           </header>
           <main className="app-main">
             <div className={view === "project" ? "view-pane active" : "view-pane"}>
-              <ProjectPage openProjectId={activeProjectId} />
+              <ProjectPage
+                openProjectId={activeProjectId}
+                onSelectProject={handleSelectProject}
+              />
             </div>
             <div className={view === "novel" ? "view-pane active" : "view-pane"}>
               <NovelPage

@@ -79,10 +79,6 @@
   padding: 0.2rem 0.4rem;
 }
 
-.sidebar-project-select {
-  width: 100%;
-}
-
 .sidebar-tree {
   flex: 1;
   overflow-y: auto;
