@@ -15,12 +15,10 @@ import {
 } from "../api/asset_versions";
 import { getApiBase } from "../api/client";
 import { generateImage, getImageJob } from "../api/images";
-import { listProjects } from "../api/projects";
 import { listModels } from "../api/providers";
 import type { GenerationJob } from "../types/generation";
 import type { AssetVersion } from "../types/asset_version";
 import type { Model } from "../types/provider";
-import type { Project } from "../types/project";
 import type {
   AssetCard,
   AssetGenerateJob,
@@ -169,9 +167,13 @@ function formatVersionTime(iso: string): string {
   return `${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-export function AssetPage({ active }: { active: boolean }) {
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [projectId, setProjectId] = useState("");
+export function AssetPage({
+  active,
+  projectId,
+}: {
+  active: boolean;
+  projectId: string;
+}) {
   const [assets, setAssets] = useState<AssetCard[]>([]);
   const [assetType, setAssetType] = useState<AssetType>("character");
   const [selectedName, setSelectedName] = useState<string | null>(null);
@@ -217,19 +219,6 @@ export function AssetPage({ active }: { active: boolean }) {
   useEffect(() => {
     if (!active) return;
     void getApiBase().then(setApiBase).catch(() => {});
-    listProjects()
-      .then((data) => {
-        const sorted = [...data].sort((a, b) =>
-          b.created_at.localeCompare(a.created_at),
-        );
-        setProjects(sorted);
-        setProjectId((prev) =>
-          prev && sorted.some((p) => p.id === prev)
-            ? prev
-            : (sorted[0]?.id ?? ""),
-        );
-      })
-      .catch((e) => setError((e as Error).message));
     listModels({ model_type: "llm", enabled_only: true })
       .then((models) => {
         const usable = models.filter(isChatModel);
@@ -507,24 +496,6 @@ export function AssetPage({ active }: { active: boolean }) {
         <aside className="novel-sidebar">
           <div className="sidebar-block">
             <div className="sidebar-head">
-              <h3>项目</h3>
-            </div>
-            <select
-              className="project-select"
-              value={projectId}
-              onChange={(e) => setProjectId(e.target.value)}
-            >
-              <option value="">选择项目</option>
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="sidebar-block">
-            <div className="sidebar-head">
               <h3>资产分类</h3>
             </div>
             <div className="tabs">
@@ -543,7 +514,7 @@ export function AssetPage({ active }: { active: boolean }) {
               ))}
             </div>
             {!projectId ? (
-              <p className="muted">先选择项目。</p>
+              <p className="muted">先在「主页」打开项目。</p>
             ) : visibleAssets.length === 0 ? (
               <p className="muted">
                 还没有{ASSET_TYPE_LABELS[assetType]}资产。
@@ -893,7 +864,7 @@ export function AssetPage({ active }: { active: boolean }) {
             <div className="novel-empty">
               <p className="muted">
                 {!projectId
-                  ? "选择项目后查看项目视觉资产。"
+                  ? "在「主页」打开项目后查看项目视觉资产。"
                   : `从左侧选择${ASSET_TYPE_LABELS[assetType]}资产进行编辑。`}
               </p>
             </div>

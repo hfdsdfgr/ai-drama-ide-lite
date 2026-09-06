@@ -111,6 +111,7 @@ function App() {
             <div className={view === "novel" ? "view-pane active" : "view-pane"}>
               <NovelPage
                 active={view === "novel"}
+                projectId={activeProjectId}
                 jumpTo={
                   activeProjectId && novelJump
                     ? { projectId: activeProjectId, ...novelJump }
@@ -119,24 +120,35 @@ function App() {
               />
             </div>
             <div className={view === "bible" ? "view-pane active" : "view-pane"}>
-              <StoryBiblePage active={view === "bible"} />
+              <StoryBiblePage
+                active={view === "bible"}
+                projectId={activeProjectId}
+              />
             </div>
             <div className={view === "script" ? "view-pane active" : "view-pane"}>
-              <ScriptPage active={view === "script"} />
+              <ScriptPage
+                active={view === "script"}
+                projectId={activeProjectId}
+              />
             </div>
             <div className={view === "storyboard" ? "view-pane active" : "view-pane"}>
               <StoryboardPage
                 active={view === "storyboard"}
+                projectId={activeProjectId}
                 jumpToShotId={view === "storyboard" ? jumpToShotId : null}
                 onJumpConsumed={() => setJumpToShotId(null)}
               />
             </div>
             <div className={view === "assets" ? "view-pane active" : "view-pane"}>
-              <AssetPage active={view === "assets"} />
+              <AssetPage
+                active={view === "assets"}
+                projectId={activeProjectId}
+              />
             </div>
             <div className={view === "generation" ? "view-pane active" : "view-pane"}>
               <GenerationPage
                 active={view === "generation"}
+                projectId={activeProjectId}
                 onJumpToShot={handleJumpToShot}
               />
             </div>

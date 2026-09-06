@@ -18,10 +18,8 @@ import {
   type PipelinePlan,
   type PipelineStatus,
 } from "../api/pipeline";
-import { listProjects } from "../api/projects";
 import type { JobOut, JobStatus } from "../types/job";
 import type { ProjectOverview, StageStatus } from "../types/overview";
-import type { Project } from "../types/project";
 
 const STATUS_LABEL: Record<JobStatus, string> = {
   queued: "排队中",
@@ -109,13 +107,13 @@ function matchesFilter(job: JobOut, filter: Filter): boolean {
 
 export function GenerationPage({
   active,
+  projectId,
   onJumpToShot,
 }: {
   active: boolean;
+  projectId: string;
   onJumpToShot?: (shotId: string) => void;
 }) {
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [projectId, setProjectId] = useState("");
   const [overview, setOverview] = useState<ProjectOverview | null>(null);
   const [quality, setQuality] = useState<ProjectQuality | null>(null);
   const [pipelinePlan, setPipelinePlan] = useState<PipelinePlan | null>(null);
@@ -138,15 +136,15 @@ export function GenerationPage({
   const jobsRef = useRef<JobOut[]>([]);
 
   useEffect(() => {
-    listProjects()
-      .then((ps) => {
-        setProjects(ps);
-        setProjectId((prev) =>
-          prev && ps.some((p) => p.id === prev) ? prev : (ps[0]?.id ?? ""),
-        );
-      })
-      .catch((e) => setError((e as Error).message));
-  }, []);
+    setOverview(null);
+    setQuality(null);
+    setPipelinePlan(null);
+    setPipelineJob(null);
+    setPipelineStatus(null);
+    setJobs([]);
+    jobsRef.current = [];
+    setError("");
+  }, [projectId]);
 
   const refresh = useCallback(async () => {
     if (!projectId) return;
@@ -387,21 +385,6 @@ export function GenerationPage({
       </div>
 
       <div className="toolbar">
-        <label className="project-picker">
-          项目
-          <select
-            value={projectId}
-            onChange={(e) => setProjectId(e.target.value)}
-            disabled={projects.length === 0}
-          >
-            {projects.length === 0 && <option value="">暂无项目</option>}
-            {projects.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </label>
         <button type="button" onClick={() => void refresh()} disabled={loading || !projectId}>
           {loading ? "刷新中…" : "刷新"}
         </button>
@@ -431,9 +414,9 @@ export function GenerationPage({
 
       {error && <p className="error">{error}</p>}
 
-      {projects.length === 0 ? (
+      {!projectId ? (
         <div className="card">
-          <p className="muted">还没有项目，请先到主页创建一个项目。</p>
+          <p className="muted">先在「主页」打开项目，再查看生成进度。</p>
         </div>
       ) : (
         <div className="generation-layout">

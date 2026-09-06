@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { listNovels } from "../api/novels";
-import { listProjects } from "../api/projects";
 import { listModels } from "../api/providers";
 import {
   getStoryAnalysis,
@@ -10,7 +9,6 @@ import {
 } from "../api/story";
 import type { Model } from "../types/provider";
 import type { Novel } from "../types/novel";
-import type { Project } from "../types/project";
 import type {
   AnalysisJob,
   AnalysisMode,
@@ -38,9 +36,13 @@ function isChatModel(model: Model): boolean {
   return !NON_CHAT_LLM_FRAGMENTS.some((fragment) => id.includes(fragment));
 }
 
-export function StoryBiblePage({ active }: { active: boolean }) {
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [projectId, setProjectId] = useState("");
+export function StoryBiblePage({
+  active,
+  projectId,
+}: {
+  active: boolean;
+  projectId: string;
+}) {
   const [novels, setNovels] = useState<Novel[]>([]);
   const [novelId, setNovelId] = useState("");
   const [bible, setBible] = useState<StoryBible | null>(null);
@@ -51,13 +53,10 @@ export function StoryBiblePage({ active }: { active: boolean }) {
   const [error, setError] = useState("");
   const analysisPollRef = useRef<string | null>(null);
 
-  // 模型与项目是全局配置；页面常驻挂载，只有切到本页（active）才加载，
+  // 模型是全局配置；页面常驻挂载，只有切到本页（active）才加载，
   // 避免应用启动时后端尚未就绪导致请求失败后永不重试。
   useEffect(() => {
     if (!active) return;
-    listProjects()
-      .then(setProjects)
-      .catch((e) => setError((e as Error).message));
     listModels({ model_type: "llm", enabled_only: true })
       .then((models) => {
         const usable = models.filter(isChatModel);
@@ -131,17 +130,6 @@ export function StoryBiblePage({ active }: { active: boolean }) {
 
       <div className="toolbar">
         <label>
-          项目
-          <select value={projectId} onChange={(e) => setProjectId(e.target.value)}>
-            <option value="">选择项目</option>
-            {projects.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
           小说
           <select
             value={novelId}
@@ -200,7 +188,11 @@ export function StoryBiblePage({ active }: { active: boolean }) {
             </div>
             {analysisJob?.error && <p className="error">{analysisJob.error}</p>}
             {!novelId && (
-              <p className="muted">先选择项目和小说，再进行分析。</p>
+              <p className="muted">
+                {!projectId
+                  ? "先在「主页」打开项目，再选择小说进行分析。"
+                  : "选择小说后即可进行分析。"}
+              </p>
             )}
             {bible ? (
               <div className="bible">

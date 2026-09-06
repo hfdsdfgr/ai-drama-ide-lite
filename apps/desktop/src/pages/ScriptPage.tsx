@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { getNovel, listNovels } from "../api/novels";
-import { listProjects } from "../api/projects";
 import { listModels } from "../api/providers";
 import {
   generateEpisodeScript,
@@ -16,7 +15,6 @@ import {
 } from "../api/script";
 import type { Model } from "../types/provider";
 import type { Chapter, Novel } from "../types/novel";
-import type { Project } from "../types/project";
 import type {
   AiEpisodeScriptResult,
   AiShotsResult,
@@ -47,9 +45,13 @@ function isChatModel(model: Model): boolean {
   return !NON_CHAT_LLM_FRAGMENTS.some((fragment) => id.includes(fragment));
 }
 
-export function ScriptPage({ active }: { active: boolean }) {
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [projectId, setProjectId] = useState("");
+export function ScriptPage({
+  active,
+  projectId,
+}: {
+  active: boolean;
+  projectId: string;
+}) {
   const [novels, setNovels] = useState<Novel[]>([]);
   const [novelId, setNovelId] = useState("");
   const [chapters, setChapters] = useState<Chapter[]>([]);
@@ -91,9 +93,6 @@ export function ScriptPage({ active }: { active: boolean }) {
 
   useEffect(() => {
     if (!active) return;
-    listProjects()
-      .then(setProjects)
-      .catch((e) => setError((e as Error).message));
     listModels({ model_type: "llm", enabled_only: true })
       .then((models) => {
         const usable = models.filter(isChatModel);
@@ -339,24 +338,6 @@ export function ScriptPage({ active }: { active: boolean }) {
         <aside className="novel-sidebar">
           <div className="sidebar-block">
             <div className="sidebar-head">
-              <h3>项目</h3>
-            </div>
-            <select
-              className="project-select"
-              value={projectId}
-              onChange={(e) => setProjectId(e.target.value)}
-            >
-              <option value="">选择项目</option>
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="sidebar-block">
-            <div className="sidebar-head">
               <h3>小说</h3>
             </div>
             <select
@@ -379,7 +360,11 @@ export function ScriptPage({ active }: { active: boolean }) {
               <h3>分集</h3>
             </div>
             {!novelId ? (
-              <p className="muted">先选择项目和小说。</p>
+              <p className="muted">
+                {!projectId
+                  ? "先在「主页」打开项目，再选择小说。"
+                  : "选择小说后查看分集。"}
+              </p>
             ) : episodes.length === 0 ? (
               <p className="muted">还没有分集，用右侧「生成剧本」创建。</p>
             ) : (
@@ -667,7 +652,9 @@ export function ScriptPage({ active }: { active: boolean }) {
             <div className="novel-empty">
               <p className="muted">
                 {!novelId
-                  ? "先选择项目和小说，再用右侧「生成剧本」创建分集。"
+                  ? !projectId
+                    ? "先在「主页」打开项目，再用右侧「生成剧本」创建分集。"
+                    : "先选择小说，再用右侧「生成剧本」创建分集。"
                   : "从左侧选择分集，或用右侧「生成剧本」创建。"}
               </p>
             </div>

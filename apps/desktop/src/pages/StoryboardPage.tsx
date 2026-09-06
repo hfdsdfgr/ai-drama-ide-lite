@@ -65,7 +65,6 @@ import {
 } from "../api/videos";
 import { getJob } from "../api/jobs";
 import { listNovels } from "../api/novels";
-import { listProjects } from "../api/projects";
 import { listModels } from "../api/providers";
 import {
   deleteShot,
@@ -79,7 +78,6 @@ import type { AssetVersion } from "../types/asset_version";
 import type { GenerationJob } from "../types/generation";
 import type { JobOut } from "../types/job";
 import type { Novel } from "../types/novel";
-import type { Project } from "../types/project";
 import type { Model } from "../types/provider";
 import type { AssetCard, AssetType } from "../types/story";
 import type {
@@ -186,15 +184,15 @@ function SortableShotCard({
 
 export function StoryboardPage({
   active,
+  projectId,
   jumpToShotId = null,
   onJumpConsumed,
 }: {
   active: boolean;
+  projectId: string;
   jumpToShotId?: string | null;
   onJumpConsumed?: () => void;
 }) {
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [projectId, setProjectId] = useState("");
   const [novels, setNovels] = useState<Novel[]>([]);
   const [novelId, setNovelId] = useState("");
   const [episodes, setEpisodes] = useState<Episode[]>([]);
@@ -291,9 +289,6 @@ export function StoryboardPage({
 
   useEffect(() => {
     if (!active) return;
-    listProjects()
-      .then(setProjects)
-      .catch((e) => setError((e as Error).message));
     void getApiBase().then(setApiBase).catch(() => {});
     listModels({ model_type: "image", enabled_only: true })
       .then((models) => {
@@ -1143,24 +1138,6 @@ export function StoryboardPage({
         <aside className="novel-sidebar">
           <div className="sidebar-block">
             <div className="sidebar-head">
-              <h3>项目</h3>
-            </div>
-            <select
-              className="project-select"
-              value={projectId}
-              onChange={(e) => setProjectId(e.target.value)}
-            >
-              <option value="">选择项目</option>
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="sidebar-block">
-            <div className="sidebar-head">
               <h3>小说</h3>
             </div>
             <select
@@ -1183,7 +1160,11 @@ export function StoryboardPage({
               <h3>分集</h3>
             </div>
             {!novelId ? (
-              <p className="muted">先选择项目和小说。</p>
+              <p className="muted">
+                {!projectId
+                  ? "先在「主页」打开项目，再选择小说。"
+                  : "选择小说后查看分集。"}
+              </p>
             ) : episodes.length === 0 ? (
               <p className="muted">还没有分集，请在「剧本」页生成。</p>
             ) : (
@@ -1300,7 +1281,11 @@ export function StoryboardPage({
             </>
           ) : (
             <div className="novel-empty">
-              <p className="muted">从左侧选择项目和分集查看分镜板。</p>
+              <p className="muted">
+                {!projectId
+                  ? "先在「主页」打开项目，再选择分集查看分镜板。"
+                  : "从左侧选择小说和分集查看分镜板。"}
+              </p>
             </div>
           )}
         </section>

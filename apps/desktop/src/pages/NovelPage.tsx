@@ -14,7 +14,6 @@ import {
   updateChapter,
   updateNovel,
 } from "../api/novels";
-import { listProjects } from "../api/projects";
 import { listModels } from "../api/providers";
 import { getApiBase } from "../api/client";
 import {
@@ -23,7 +22,6 @@ import {
 } from "../api/story";
 import type { Model } from "../types/provider";
 import type { Chapter, Novel, NovelDetail } from "../types/novel";
-import type { Project } from "../types/project";
 import type {
   AiChapter,
   OutlineChapter,
@@ -107,6 +105,7 @@ async function consumeSse(
 
 interface NovelPageProps {
   active: boolean;
+  projectId: string;
   jumpTo?: {
     projectId: string;
     novelId: string;
@@ -114,9 +113,7 @@ interface NovelPageProps {
   } | null;
 }
 
-export function NovelPage({ active, jumpTo }: NovelPageProps) {
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [projectId, setProjectId] = useState("");
+export function NovelPage({ active, projectId, jumpTo }: NovelPageProps) {
   const [novels, setNovels] = useState<Novel[]>([]);
   const [searchInput, setSearchInput] = useState("");
   const [query, setQuery] = useState("");
@@ -139,21 +136,6 @@ export function NovelPage({ active, jumpTo }: NovelPageProps) {
   const [aiBusy, setAiBusy] = useState(false);
   const [aiAction, setAiAction] = useState<AiAction | null>(null);
   const [aiResult, setAiResult] = useState("");
-
-  useEffect(() => {
-    listProjects()
-      .then((data) => {
-        const sorted = [...data].sort((a, b) =>
-          b.created_at.localeCompare(a.created_at),
-        );
-        setProjects(sorted);
-        setProjectId((prev) => {
-          if (prev && sorted.some((p) => p.id === prev)) return prev;
-          return sorted[0]?.id ?? "";
-        });
-      })
-      .catch((e) => setError((e as Error).message));
-  }, []);
 
   const refreshNovels = useCallback(
     async (pid: string, q: string) => {
@@ -195,8 +177,17 @@ export function NovelPage({ active, jumpTo }: NovelPageProps) {
   useEffect(() => {
     if (!jumpTo) return;
     pendingJump.current = jumpTo;
-    setProjectId(jumpTo.projectId);
-  }, [jumpTo]);
+    if (jumpTo.projectId === projectId) {
+      pendingJump.current = null;
+      void refreshNovels(projectId, "");
+      void getNovel(projectId, jumpTo.novelId)
+        .then((loaded) => {
+          setDetail(loaded);
+          setChapterId(jumpTo.chapterId ?? loaded.chapters[0]?.id ?? null);
+        })
+        .catch((e) => setError((e as Error).message));
+    }
+  }, [jumpTo, projectId, refreshNovels]);
 
   useEffect(() => {
     if (!active) return;
@@ -790,8 +781,8 @@ export function NovelPage({ active, jumpTo }: NovelPageProps) {
   return (
     <div className="page novel-page">
       <div className="novel-topbar">
-        {projects.length === 0 && (
-          <p className="muted">还没有项目，请先在「主页」创建。</p>
+        {!projectId && (
+          <p className="muted">先在「主页」打开项目，再管理小说。</p>
         )}
         {error && <p className="error">{error}</p>}
         {projectId && (
@@ -806,31 +797,13 @@ export function NovelPage({ active, jumpTo }: NovelPageProps) {
         )}
       </div>
 
-      {projects.length > 0 && (
+      {projectId && (
         <div className="novel-workspace">
           <aside className="novel-sidebar">
             <div className="sidebar-block">
-              <div className="sidebar-head">
-                <h3>项目</h3>
-              </div>
-              <select
-                className="project-select"
-                value={projectId}
-                onChange={(e) => setProjectId(e.target.value)}
-              >
-                <option value="">选择项目</option>
-                {projects.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="sidebar-block">
               <h3>小说</h3>
             {!projectId ? (
-              <p className="muted">选择上方项目后查看小说。</p>
+              <p className="muted">先在「主页」打开项目。</p>
             ) : loading ? (
               <p>加载中…</p>
             ) : novels.length === 0 ? (
@@ -1097,7 +1070,7 @@ export function NovelPage({ active, jumpTo }: NovelPageProps) {
               <div className="novel-empty">
                 <p className="muted">
                   {!projectId
-                    ? "请先在上方选择项目，再打开一部小说。"
+                    ? "请先在「主页」打开项目，再打开一部小说。"
                     : "从左侧选择一部小说开始阅读与创作。"}
                 </p>
               </div>
