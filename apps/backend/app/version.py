@@ -1,3 +1,3 @@
 """应用版本常量（发布时与 tauri.conf.json 同步更新）。"""
 
-APP_VERSION = "0.2.0"
+APP_VERSION = "0.2.61"
