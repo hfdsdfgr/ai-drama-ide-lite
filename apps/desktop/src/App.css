@@ -179,9 +179,12 @@
 
 .module-nav button,
 .app-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding: 0.35rem 0.8rem 0.3rem;
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-xs);
   background: transparent;
   color: var(--text-secondary);
   cursor: pointer;
@@ -338,7 +341,7 @@
 
 .card {
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   background: var(--bg-panel);
   padding: 1rem 1.25rem;
   display: flex;
@@ -362,7 +365,7 @@ textarea,
 select {
   padding: 0.45rem 0.6rem;
   border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-xs);
   background: var(--bg-input);
   color: var(--text-h);
   font: inherit;
@@ -374,7 +377,7 @@ textarea {
 
 button {
   padding: 0.45rem 1rem;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-xs);
   border: 1px solid var(--border-strong);
   background: transparent;
   color: var(--text-h);
@@ -407,7 +410,7 @@ button:disabled {
 
 .button-like {
   padding: 0.45rem 1rem;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-xs);
   border: 1px solid var(--border-strong);
   background: transparent;
   color: var(--text-h);
@@ -566,7 +569,7 @@ button:disabled {
   align-items: center;
   gap: 0;
   border: 1px dashed var(--border-strong);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   padding: 0.45rem 0.55rem;
   margin-top: 0.2rem;
 }
@@ -759,7 +762,7 @@ button:disabled {
   flex-shrink: 0;
   padding: 0.5rem;
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   background: var(--bg-elevated);
   cursor: pointer;
   text-align: left;
@@ -1121,7 +1124,7 @@ button:disabled {
   border-bottom: none;
   background: transparent;
   color: inherit;
-  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  border-radius: var(--radius-xs) var(--radius-xs) 0 0;
   padding: 0.45rem 1rem;
   cursor: pointer;
 }
@@ -1599,7 +1602,7 @@ button:disabled {
   background: var(--bg-elevated);
   color: var(--text-h);
   border: 1px solid var(--border-strong);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   box-shadow: var(--shadow-md);
   font-size: 0.78rem;
   line-height: 1.5;
@@ -2184,14 +2187,14 @@ button:disabled {
   max-width: 100%;
   max-height: calc(88vh - 48px);
   object-fit: contain;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border-strong);
 }
 
 .video-lightbox-player {
   max-width: min(90vw, 1100px);
   max-height: calc(88vh - 48px);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border-strong);
   background: var(--media-stage);
 }

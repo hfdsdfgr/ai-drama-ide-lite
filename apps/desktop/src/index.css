@@ -241,7 +241,7 @@ select,
 textarea {
   background: var(--bg-input);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-xs);
   padding: 7px 10px;
   color: var(--text-h);
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
@@ -307,7 +307,7 @@ textarea {
 .card {
   background: var(--bg-panel);
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
 }
 
 hr {
