@@ -152,20 +152,42 @@ export function NovelPage({ active, projectId, jumpTo }: NovelPageProps) {
     [],
   );
 
+  /** 通知全局「小说结构」树刷新（增删改小说/章节后）。 */
+  function notifyNovelTreeChanged() {
+    window.dispatchEvent(new Event("novel-tree-changed"));
+  }
+
   const pendingJump = useRef<NovelPageProps["jumpTo"] | null>(null);
+
+  async function openNovelAt(
+    pid: string,
+    novelId: string,
+    chapterTarget: string | null | undefined,
+  ) {
+    setError("");
+    try {
+      const loaded = await getNovel(pid, novelId);
+      const first = loaded.chapters[0] ?? null;
+      const target =
+        loaded.chapters.find((c) => c.id === chapterTarget) ?? first;
+      setDetail(loaded);
+      setNovelTitle(loaded.novel.title);
+      setChapterId(target?.id ?? null);
+      setChapterTitle(target?.title ?? "");
+      setChapterContent(target?.content ?? "");
+      setChapterSave("idle");
+      setAiResult("");
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
 
   useEffect(() => {
     if (!projectId) return;
     const j = pendingJump.current;
     if (j && j.projectId === projectId) {
       pendingJump.current = null;
-      void refreshNovels(projectId, "");
-      void getNovel(projectId, j.novelId)
-        .then((loaded) => {
-          setDetail(loaded);
-          setChapterId(j.chapterId ?? loaded.chapters[0]?.id ?? null);
-        })
-        .catch((e) => setError((e as Error).message));
+      void openNovelAt(projectId, j.novelId, j.chapterId);
       return;
     }
     setDetail(null);
@@ -179,13 +201,7 @@ export function NovelPage({ active, projectId, jumpTo }: NovelPageProps) {
     pendingJump.current = jumpTo;
     if (jumpTo.projectId === projectId) {
       pendingJump.current = null;
-      void refreshNovels(projectId, "");
-      void getNovel(projectId, jumpTo.novelId)
-        .then((loaded) => {
-          setDetail(loaded);
-          setChapterId(jumpTo.chapterId ?? loaded.chapters[0]?.id ?? null);
-        })
-        .catch((e) => setError((e as Error).message));
+      void openNovelAt(projectId, jumpTo.novelId, jumpTo.chapterId);
     }
   }, [jumpTo, projectId, refreshNovels]);
 
@@ -241,6 +257,7 @@ export function NovelPage({ active, projectId, jumpTo }: NovelPageProps) {
       setNewNovelTitle("");
       await refreshNovels(projectId, query);
       await openNovel(novel.id);
+      notifyNovelTreeChanged();
     } catch (err) {
       setError((err as Error).message);
     }
@@ -255,6 +272,7 @@ export function NovelPage({ active, projectId, jumpTo }: NovelPageProps) {
       const novel = await importNovel(projectId, file);
       await refreshNovels(projectId, query);
       await openNovel(novel.id);
+      notifyNovelTreeChanged();
     } catch (err) {
       setError((err as Error).message);
     }
@@ -270,6 +288,7 @@ export function NovelPage({ active, projectId, jumpTo }: NovelPageProps) {
       const loaded = await getNovel(projectId, detail.novel.id);
       setDetail(loaded);
       selectChapter(chapter.id);
+      notifyNovelTreeChanged();
     } catch (err) {
       setError((err as Error).message);
     }
@@ -289,6 +308,7 @@ export function NovelPage({ active, projectId, jumpTo }: NovelPageProps) {
       setDetail(loaded);
       const first = loaded.chapters[0] ?? null;
       selectChapter(first ? first.id : null);
+      notifyNovelTreeChanged();
     } catch (err) {
       setError((err as Error).message);
     }
@@ -307,6 +327,7 @@ export function NovelPage({ active, projectId, jumpTo }: NovelPageProps) {
       setDetail(null);
       setChapterId(null);
       await refreshNovels(projectId, query);
+      notifyNovelTreeChanged();
     } catch (err) {
       setError((err as Error).message);
     }
@@ -362,6 +383,7 @@ export function NovelPage({ active, projectId, jumpTo }: NovelPageProps) {
           prev.map((n) => (n.id === updated.id ? updated : n)),
         );
         setNovelSave("saved");
+        notifyNovelTreeChanged();
       } catch (err) {
         setNovelSave("error");
         setError((err as Error).message);
@@ -395,6 +417,7 @@ export function NovelPage({ active, projectId, jumpTo }: NovelPageProps) {
             : prev,
         );
         setChapterSave("saved");
+        notifyNovelTreeChanged();
       } catch (err) {
         setChapterSave("error");
         setError((err as Error).message);
@@ -800,38 +823,38 @@ export function NovelPage({ active, projectId, jumpTo }: NovelPageProps) {
       {projectId && (
         <div className="novel-workspace">
           <aside className="novel-sidebar">
-            <div className="sidebar-block">
-              <h3>小说</h3>
-            {!projectId ? (
-              <p className="muted">先在「主页」打开项目。</p>
-            ) : loading ? (
-              <p>加载中…</p>
-            ) : novels.length === 0 ? (
-              <p className="muted">没有小说，新建或导入一个。</p>
-            ) : (
-              <ul className="novel-list">
-                {novels.map((novel) => (
-                  <li key={novel.id}>
-                    <button
-                      type="button"
-                      className={
-                        detail?.novel.id === novel.id
-                          ? "project-item active"
-                          : "project-item"
-                      }
-                      onClick={() => openNovel(novel.id)}
-                    >
-                      <span className="project-name">{novel.title}</span>
-                      <span className="muted">
-                        {novel.chapter_count} 章 ·{" "}
-                        {novel.source_type === "imported" ? "导入" : "原创"}
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
+            {query.trim() && (
+              <div className="sidebar-block">
+                <h3>搜索结果</h3>
+                {loading ? (
+                  <p>搜索中…</p>
+                ) : novels.length === 0 ? (
+                  <p className="muted">没有匹配的小说或章节内容。</p>
+                ) : (
+                  <ul className="novel-list">
+                    {novels.map((novel) => (
+                      <li key={novel.id}>
+                        <button
+                          type="button"
+                          className={
+                            detail?.novel.id === novel.id
+                              ? "project-item active"
+                              : "project-item"
+                          }
+                          onClick={() => openNovel(novel.id)}
+                        >
+                          <span className="project-name">{novel.title}</span>
+                          <span className="muted">
+                            {novel.chapter_count} 章 ·{" "}
+                            {novel.source_type === "imported" ? "导入" : "原创"}
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             )}
-            </div>
 
             {detail && (
               <div className="sidebar-block">
@@ -1071,7 +1094,7 @@ export function NovelPage({ active, projectId, jumpTo }: NovelPageProps) {
                 <p className="muted">
                   {!projectId
                     ? "请先在「主页」打开项目，再打开一部小说。"
-                    : "从左侧选择一部小说开始阅读与创作。"}
+                    : "在左侧「小说结构」选择或新建一部小说。"}
                 </p>
               </div>
             )}

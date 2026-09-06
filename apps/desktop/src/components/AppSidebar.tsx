@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { getNovel, listNovels } from "../api/novels";
 import type { Chapter, Novel } from "../types/novel";
@@ -22,7 +22,7 @@ export function AppSidebar({
   const [openNovelId, setOpenNovelId] = useState<string | null>(null);
   const [busyNovelId, setBusyNovelId] = useState<string | null>(null);
 
-  useEffect(() => {
+  const refreshNovels = useCallback(() => {
     if (!activeProjectId) {
       setNovels([]);
       setChapters({});
@@ -33,6 +33,30 @@ export function AppSidebar({
       .then(setNovels)
       .catch(() => setNovels([]));
   }, [activeProjectId]);
+
+  useEffect(() => {
+    refreshNovels();
+  }, [refreshNovels]);
+
+  // 小说/章节在模块内增删改后，侧栏树同步刷新
+  useEffect(() => {
+    function onNovelTreeChanged() {
+      refreshNovels();
+      if (!activeProjectId || !openNovelId) return;
+      setBusyNovelId(openNovelId);
+      getNovel(activeProjectId, openNovelId)
+        .then((detail) =>
+          setChapters((prev) => ({ ...prev, [openNovelId]: detail.chapters })),
+        )
+        .catch(() =>
+          setChapters((prev) => ({ ...prev, [openNovelId]: [] })),
+        )
+        .finally(() => setBusyNovelId(null));
+    }
+    window.addEventListener("novel-tree-changed", onNovelTreeChanged);
+    return () =>
+      window.removeEventListener("novel-tree-changed", onNovelTreeChanged);
+  }, [refreshNovels, activeProjectId, openNovelId]);
 
   async function toggleNovel(novelId: string) {
     if (openNovelId === novelId) {
