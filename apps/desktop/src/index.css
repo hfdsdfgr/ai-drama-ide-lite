@@ -49,6 +49,7 @@
   --border-strong: #343847;
 
   /* 圆角 */
+  --radius-xs: 4px;
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 14px;
@@ -107,10 +108,10 @@
     --bg-input: #f0f0f2;
     --bg-hover: rgba(0, 0, 0, 0.04);
     --bg-active: rgba(0, 0, 0, 0.07);
-    --text: #565b66;
+    --text: #515660;
     --text-h: #14161c;
-    --text-secondary: #767c88;
-    --text-faint: #a3a8b3;
+    --text-secondary: #6d7280;
+    --text-faint: #989eab;
     --text-on-accent: #ffffff;
     --accent: #5a66f0;
     --accent-hover: #4a55d8;

@@ -3,6 +3,7 @@
   flex-direction: column;
   height: 100svh;
   overflow: hidden;
+  width: 100%;
   max-width: 1680px;
   margin: 0 auto;
 }
@@ -214,7 +215,7 @@
   color: var(--text);
   opacity: 0.75;
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   padding: 0.02rem 0.3rem;
 }
 
@@ -232,28 +233,6 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
-}
-
-/* 窄窗口响应式：收窄固定列，避免中央工作区被异常压缩 */
-@media (max-width: 1440px) {
-  .app-main {
-    padding: 1rem;
-  }
-  .novel-workspace {
-    grid-template-columns: 220px minmax(0, 1fr) 330px;
-  }
-  .generation-layout {
-    grid-template-columns: 260px minmax(0, 1fr);
-  }
-}
-
-@media (max-width: 1240px) {
-  .novel-workspace {
-    grid-template-columns: 200px minmax(0, 1fr) 300px;
-  }
-  .shot-card {
-    width: 168px;
-  }
 }
 
 .view-pane {
@@ -492,7 +471,7 @@ button:disabled {
   flex-wrap: wrap;
   padding: 0.75rem 1rem;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: var(--bg-elevated);
 }
 
@@ -889,7 +868,7 @@ button:disabled {
   align-self: flex-start;
   font-size: 0.68rem;
   padding: 0.05rem 0.4rem;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border);
 }
 
@@ -945,7 +924,7 @@ button:disabled {
   width: 48px;
   height: 36px;
   object-fit: cover;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   border: 1px solid var(--border);
 }
 
@@ -1142,7 +1121,7 @@ button:disabled {
   border-bottom: none;
   background: transparent;
   color: inherit;
-  border-radius: 6px 6px 0 0;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
   padding: 0.45rem 1rem;
   cursor: pointer;
 }
@@ -1190,7 +1169,7 @@ button:disabled {
 
 .provider-card {
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   padding: 0.85rem 1rem;
   display: flex;
   flex-direction: column;
@@ -1228,7 +1207,7 @@ button:disabled {
 .badge {
   display: inline-block;
   padding: 0.1rem 0.5rem;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   font-size: 0.72rem;
   border: 1px solid var(--border);
   background: var(--bg-panel);
@@ -1304,7 +1283,7 @@ button:disabled {
 .cap-badge {
   font-size: 0.7rem;
   padding: 0.08rem 0.4rem;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   white-space: nowrap;
 }
@@ -1340,7 +1319,7 @@ button:disabled {
   align-items: flex-end;
   gap: 0.6rem;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   padding: 0.7rem 0.9rem;
   margin-bottom: 0.5rem;
   background: var(--bg-elevated);
@@ -1356,7 +1335,7 @@ button:disabled {
 .gen-media {
   max-width: 280px;
   max-height: 280px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border);
 }
 
@@ -1367,7 +1346,7 @@ button:disabled {
 
 .test-result {
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   padding: 0.6rem 0.8rem;
   display: flex;
   flex-direction: column;
@@ -2412,4 +2391,26 @@ button:disabled {
 .review-flagged {
   border-left: 2px solid var(--danger-border);
   background: var(--danger-bg);
+}
+
+/* 窄窗口响应式（置于末尾，确保覆盖上面的基础列宽） */
+@media (max-width: 1440px) {
+  .app-main {
+    padding: 1rem;
+  }
+  .novel-workspace {
+    grid-template-columns: 220px minmax(0, 1fr) 330px;
+  }
+  .generation-layout {
+    grid-template-columns: 260px minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 1240px) {
+  .novel-workspace {
+    grid-template-columns: 200px minmax(0, 1fr) 300px;
+  }
+  .shot-card {
+    width: 168px;
+  }
 }
