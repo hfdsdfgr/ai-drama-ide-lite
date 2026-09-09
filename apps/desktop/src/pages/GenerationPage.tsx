@@ -10,7 +10,11 @@ import {
   getJob,
   getProjectJobState,
 } from "../api/jobs";
-import { getProjectOverview } from "../api/overview";
+import {
+  getEpisodeWorkspace,
+  getProjectOverview,
+  prepareEpisode,
+} from "../api/overview";
 import { getProjectQuality, type ProjectQuality } from "../api/quality";
 import {
   getPipelinePlan,
@@ -20,7 +24,12 @@ import {
   type PipelineStatus,
 } from "../api/pipeline";
 import type { JobOut, JobStatus } from "../types/job";
-import type { ProjectOverview, StageStatus } from "../types/overview";
+import type {
+  EpisodeWorkspace as EpisodeWorkspaceData,
+  ProjectOverview,
+  StageStatus,
+} from "../types/overview";
+import { EpisodeWorkspace } from "../components/EpisodeWorkspace";
 
 const STATUS_LABEL: Record<JobStatus, string> = {
   queued: "排队中",
@@ -228,12 +237,19 @@ export function GenerationPage({
   active,
   projectId,
   onJumpToShot,
+  onOpenAssets,
 }: {
   active: boolean;
   projectId: string;
   onJumpToShot?: (shotId: string) => void;
+  onOpenAssets?: () => void;
 }) {
   const [overview, setOverview] = useState<ProjectOverview | null>(null);
+  const [episodeWorkspace, setEpisodeWorkspace] =
+    useState<EpisodeWorkspaceData | null>(null);
+  const [selectedEpisodeId, setSelectedEpisodeId] = useState("");
+  const [preparingEpisode, setPreparingEpisode] = useState(false);
+  const [prepareNotice, setPrepareNotice] = useState("");
   const [quality, setQuality] = useState<ProjectQuality | null>(null);
   const [pipelinePlan, setPipelinePlan] = useState<PipelinePlan | null>(null);
   const [planOpen, setPlanOpen] = useState(false);
@@ -258,6 +274,10 @@ export function GenerationPage({
 
   useEffect(() => {
     setOverview(null);
+    setEpisodeWorkspace(null);
+    setSelectedEpisodeId("");
+    setPreparingEpisode(false);
+    setPrepareNotice("");
     setQuality(null);
     setPipelinePlan(null);
     setPipelineJob(null);
@@ -273,13 +293,21 @@ export function GenerationPage({
     if (!projectId) return;
     setLoading(true);
     try {
-      const [nextOverview, nextJobs, nextQuality, nextProjectState] = await Promise.all([
+      const [
+        nextOverview,
+        nextEpisodeWorkspace,
+        nextJobs,
+        nextQuality,
+        nextProjectState,
+      ] = await Promise.all([
         getProjectOverview(projectId),
+        getEpisodeWorkspace(projectId),
         listJobs({ project_id: projectId, limit: 200 }),
         getProjectQuality(projectId),
         getProjectJobState(projectId),
       ]);
       setOverview(nextOverview);
+      setEpisodeWorkspace(nextEpisodeWorkspace);
       setJobs(nextJobs);
       jobsRef.current = nextJobs;
       setQuality(nextQuality);
@@ -537,6 +565,32 @@ export function GenerationPage({
     }
   }
 
+  async function handlePrepareEpisode(episodeId: string) {
+    if (!projectId) return;
+    setPreparingEpisode(true);
+    setPrepareNotice("");
+    try {
+      const result = await prepareEpisode(projectId, episodeId);
+      setEpisodeWorkspace((current) =>
+        current
+          ? {
+              ...current,
+              episodes: current.episodes.map((episode) =>
+                episode.episode_id === result.episode.episode_id
+                  ? result.episode
+                  : episode,
+              ),
+            }
+          : current,
+      );
+      setPrepareNotice(result.message);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setPreparingEpisode(false);
+    }
+  }
+
   return (
     <div className="page">
       <div className="page-head">
@@ -592,7 +646,21 @@ export function GenerationPage({
           <p className="muted">先在「主页」打开项目，再查看生成进度。</p>
         </div>
       ) : (
-        <div className="generation-layout">
+        <>
+          <EpisodeWorkspace
+            data={episodeWorkspace}
+            selectedEpisodeId={selectedEpisodeId}
+            preparing={preparingEpisode}
+            notice={prepareNotice}
+            onSelectEpisode={(episodeId) => {
+              setSelectedEpisodeId(episodeId);
+              setPrepareNotice("");
+            }}
+            onPrepare={(episodeId) => void handlePrepareEpisode(episodeId)}
+            onJumpToShot={onJumpToShot}
+            onOpenAssets={onOpenAssets}
+          />
+          <div className="generation-layout">
           <section className="card overview-panel">
             <h3>生产进度</h3>
             <ol className="overview-stepper">
@@ -1052,7 +1120,8 @@ export function GenerationPage({
               </>
             )}
           </section>
-        </div>
+          </div>
+        </>
       )}
     </div>
   );

@@ -27,3 +27,69 @@ class StageOut(BaseModel):
 class ProjectOverviewOut(BaseModel):
     project_id: str
     stages: list[StageOut]
+
+
+ProductionState = Literal[
+    "missing",
+    "ready",
+    "active",
+    "failed",
+    "pending",
+    "passed",
+    "flagged",
+    "not_started",
+    "not_referenced",
+]
+
+
+class EpisodeAssetOut(BaseModel):
+    asset_id: str
+    asset_type: Literal["character", "location", "prop"]
+    name: str
+    has_image: bool = False
+
+
+class EpisodeBlockerOut(BaseModel):
+    code: str
+    label: str
+    target: Literal["assets", "storyboard"]
+
+
+class EpisodeShotOut(BaseModel):
+    shot_id: str
+    scene_id: str
+    scene_title: str = ""
+    shot_number: int | None = None
+    order_index: int = 0
+    script_status: ProductionState
+    asset_status: ProductionState
+    prompt_status: ProductionState
+    image_status: ProductionState
+    video_status: ProductionState
+    review_status: ProductionState
+    assets: list[EpisodeAssetOut] = Field(default_factory=list)
+    blockers: list[EpisodeBlockerOut] = Field(default_factory=list)
+
+
+class EpisodeProductionOut(BaseModel):
+    episode_id: str
+    title: str = ""
+    order_index: int = 0
+    scene_count: int = 0
+    shot_count: int = 0
+    completed_shots: int = 0
+    attention_count: int = 0
+    active_count: int = 0
+    shots: list[EpisodeShotOut] = Field(default_factory=list)
+
+
+class EpisodeWorkspaceOut(BaseModel):
+    project_id: str
+    episodes: list[EpisodeProductionOut] = Field(default_factory=list)
+
+
+class EpisodePrepareOut(BaseModel):
+    episode: EpisodeProductionOut
+    message: str
+    created_jobs: int = 0
+    filled_prompts: int = 0

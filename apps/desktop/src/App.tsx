@@ -155,6 +155,7 @@ function App() {
                 active={view === "generation"}
                 projectId={activeProjectId}
                 onJumpToShot={handleJumpToShot}
+                onOpenAssets={() => setView("assets")}
               />
             </div>
             <div className={view === "settings" ? "view-pane active" : "view-pane"}>

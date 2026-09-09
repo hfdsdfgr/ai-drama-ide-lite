@@ -73,3 +73,10 @@
 - **现象**：`git clone https://github.com/...` 报 `RPC failed; curl 56 Recv failure: Connection was reset`；`open_page` 抓 GitHub 中文路径文件返回超时/BAD_CONTENT。
 - **解决**：改用 `Invoke-WebRequest` 下载 `https://codeload.github.com/{owner}/{repo}/zip/refs/heads/{branch}` 压缩包再解压，可稳定获取调研仓库内容。
 - **教训**：调研 GitHub 仓库时优先走 codeload zip，路径含中文时不要直接请求 raw 文件。
+
+## 2026-09-09 npm format 透传参数未缩小格式化范围
+
+- **现象**：执行 `npm run format -- --write <files>` 后，整个 `apps/desktop` 被 Prettier 重排，产生 44 个无关文件和一个 900 行级页面 diff。
+- **根因**：项目脚本固定为 `prettier --write .`；npm 追加的文件参数不会移除脚本中已有的 `.`，所以仍会扫描整个目录。
+- **解决**：逐项恢复无关文件，并恢复后以小范围补丁重新应用 `GenerationPage` 功能改动；最终只保留任务相关文件。
+- **教训**：需要局部格式化时直接执行 `npx prettier --write <explicit-files>`，先检查脚本内容，不能假设 npm 透传参数会覆盖原参数。

@@ -211,3 +211,107 @@ def test_overview_project_not_found(client):
     response = client.get("/api/projects/proj_missing/overview")
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "project_not_found"
+
+
+def test_episode_workspace_aggregates_assets_media_reviews_and_blockers(client):
+    pid = _create_project(client, "剧集制作台")
+    db_path = client.app.state.settings.db_path
+    with get_connection(db_path) as conn:
+        now = _now()
+        _insert(
+            conn,
+            "INSERT INTO episodes (id, project_id, title, summary, order_index, deleted_at, created_at, updated_at) VALUES (?, ?, '第一集', '', 0, NULL, ?, ?)",
+            ("ep1", pid, now, now),
+        )
+        _insert(
+            conn,
+            "INSERT INTO scenes (id, project_id, episode_id, title, order_index, slugline, action, dialogue, deleted_at, created_at, updated_at) VALUES (?, ?, ?, '山门', 0, '青云门·日', '林凡拔出古剑', '', NULL, ?, ?)",
+            ("sc1", pid, "ep1", now, now),
+        )
+        _insert(
+            conn,
+            "INSERT INTO shots (id, project_id, scene_id, shot_number, order_index, shot_type, camera, characters, action, lighting, dialogue, duration, prompt, deleted_at, created_at, updated_at) VALUES (?, ?, ?, 1, 0, '', '', '林凡', '拔出古剑', '', '', 3, 'hero draws sword', NULL, ?, ?)",
+            ("shot1", pid, "sc1", now, now),
+        )
+        for asset_id, asset_type, name in (
+            ("char1", "character", "林凡"),
+            ("loc1", "location", "青云门"),
+            ("prop1", "prop", "古剑"),
+        ):
+            _insert(
+                conn,
+                "INSERT INTO assets (id, project_id, asset_type, name, prompt, negative_prompt, model_id, version, created_at, updated_at) VALUES (?, ?, ?, ?, '', '', '', 1, ?, ?)",
+                (asset_id, pid, asset_type, name, now, now),
+            )
+        for version_id, entity_type, entity_id in (
+            ("v_char", "character", "char1"),
+            ("v_loc", "location", "loc1"),
+            ("v_image", "shot", "shot1"),
+        ):
+            _insert(
+                conn,
+                "INSERT INTO versions (id, project_id, entity_type, entity_id, version, payload, file_path, model_id, provider_id, job_id, is_current, created_at) VALUES (?, ?, ?, ?, 1, '{}', '', '', '', '', 1, ?)",
+                (version_id, pid, entity_type, entity_id, now),
+            )
+        _insert(
+            conn,
+            "INSERT INTO shot_visual_reviews (id, project_id, shot_id, image_version_id, review_type, mode, status, issue, decision, created_at, updated_at) VALUES ('review1', ?, 'shot1', 'v_image', 'character', 'manual', 'flagged', '服装不一致', '', ?, ?)",
+            (pid, now, now),
+        )
+
+    response = client.get(f"/api/projects/{pid}/overview/episodes")
+    assert response.status_code == 200
+    episode = response.json()["episodes"][0]
+    assert episode["scene_count"] == 1
+    assert episode["shot_count"] == 1
+    assert episode["attention_count"] == 1
+    shot = episode["shots"][0]
+    assert shot["script_status"] == "ready"
+    assert shot["prompt_status"] == "ready"
+    assert shot["asset_status"] == "missing"
+    assert {item["name"] for item in shot["assets"]} == {"林凡", "青云门", "古剑"}
+    assert shot["image_status"] == "ready"
+    assert shot["video_status"] == "missing"
+    assert shot["review_status"] == "flagged"
+    assert {item["code"] for item in shot["blockers"]} == {
+        "asset_missing:prop1",
+        "review_flagged",
+        "video_missing",
+    }
+
+
+def test_prepare_episode_is_preflight_only_and_creates_no_jobs(client):
+    pid = _create_project(client, "安全预检")
+    db_path = client.app.state.settings.db_path
+    with get_connection(db_path) as conn:
+        now = _now()
+        _insert(
+            conn,
+            "INSERT INTO episodes (id, project_id, title, summary, order_index, deleted_at, created_at, updated_at) VALUES (?, ?, '第一集', '', 0, NULL, ?, ?)",
+            ("ep1", pid, now, now),
+        )
+        _insert(
+            conn,
+            "INSERT INTO scenes (id, project_id, episode_id, title, order_index, slugline, action, dialogue, deleted_at, created_at, updated_at) VALUES (?, ?, 'ep1', '室内', 0, '工作室·夜', '', '', NULL, ?, ?)",
+            ("sc1", pid, now, now),
+        )
+        _insert(
+            conn,
+            "INSERT INTO shots (id, project_id, scene_id, shot_number, order_index, shot_type, camera, characters, action, lighting, dialogue, duration, prompt, deleted_at, created_at, updated_at) VALUES (?, ?, 'sc1', 1, 0, '近景', '', '', '主角抬头', '', '', 3, '', NULL, ?, ?)",
+            ("shot1", pid, now, now),
+        )
+
+    response = client.post(f"/api/projects/{pid}/overview/episodes/ep1/prepare")
+    assert response.status_code == 200
+    assert response.json()["created_jobs"] == 0
+    assert response.json()["filled_prompts"] == 1
+    assert "未创建生成任务" in response.json()["message"]
+    with get_connection(db_path) as conn:
+        count = conn.execute(
+            "SELECT COUNT(*) AS c FROM jobs WHERE project_id = ?", (pid,)
+        ).fetchone()["c"]
+        prompt = conn.execute(
+            "SELECT prompt FROM shots WHERE id = 'shot1'"
+        ).fetchone()["prompt"]
+    assert count == 0
+    assert "主角抬头" in prompt

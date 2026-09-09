@@ -20,3 +20,67 @@ export interface ProjectOverview {
   project_id: string;
   stages: StageOut[];
 }
+
+export type ProductionState =
+  | "missing"
+  | "ready"
+  | "active"
+  | "failed"
+  | "pending"
+  | "passed"
+  | "flagged"
+  | "not_started"
+  | "not_referenced";
+
+export interface EpisodeAsset {
+  asset_id: string;
+  asset_type: "character" | "location" | "prop";
+  name: string;
+  has_image: boolean;
+}
+
+export interface EpisodeBlocker {
+  code: string;
+  label: string;
+  target: "assets" | "storyboard";
+}
+
+export interface EpisodeShot {
+  shot_id: string;
+  scene_id: string;
+  scene_title: string;
+  shot_number: number | null;
+  order_index: number;
+  script_status: ProductionState;
+  asset_status: ProductionState;
+  prompt_status: ProductionState;
+  image_status: ProductionState;
+  video_status: ProductionState;
+  review_status: ProductionState;
+  assets: EpisodeAsset[];
+  blockers: EpisodeBlocker[];
+}
+
+export interface EpisodeProduction {
+  episode_id: string;
+  title: string;
+  order_index: number;
+  scene_count: number;
+  shot_count: number;
+  completed_shots: number;
+  attention_count: number;
+  active_count: number;
+  shots: EpisodeShot[];
+}
+
+export interface EpisodeWorkspace {
+  project_id: string;
+  episodes: EpisodeProduction[];
+}
+
+export interface EpisodePrepareResult {
+  episode: EpisodeProduction;
+  message: string;
+  created_jobs: number;
+  filled_prompts: number;
+}
