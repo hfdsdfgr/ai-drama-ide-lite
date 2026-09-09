@@ -111,6 +111,26 @@ class ModelOut(BaseModel):
     updated_at: datetime
 
 
+class ModelRecommendationRequest(BaseModel):
+    model_type: ModelType
+    required_capabilities: list[str] = Field(default_factory=list, max_length=20)
+    preference: Literal["balanced", "quality", "speed", "cost"] = "balanced"
+
+
+class ModelRecommendationCandidate(BaseModel):
+    model: ModelOut
+    score: int
+    reasons: list[str] = Field(default_factory=list)
+
+
+class ModelRecommendationOut(BaseModel):
+    preference: Literal["balanced", "quality", "speed", "cost"]
+    required_capabilities: list[str] = Field(default_factory=list)
+    recommended: ModelRecommendationCandidate | None = None
+    alternatives: list[ModelRecommendationCandidate] = Field(default_factory=list)
+    message: str = ""
+
+
 class ProviderCheckOut(BaseModel):
     label: str
     status: Literal["ok", "fail", "skipped"]

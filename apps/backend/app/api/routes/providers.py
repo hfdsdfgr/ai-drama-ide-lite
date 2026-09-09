@@ -10,6 +10,8 @@ from app.schemas.provider import (
     ModelCreate,
     ModelCapabilityUpdate,
     ModelOut,
+    ModelRecommendationOut,
+    ModelRecommendationRequest,
     ModelUpdate,
     PresetOut,
     ProviderCreate,
@@ -18,8 +20,10 @@ from app.schemas.provider import (
     ProviderUpdate,
 )
 from app.services.api_tester import run_provider_test
+from app.services.capability_registry import validate_capabilities
 from app.services.model_catalog import get_builtin_models
 from app.services.model_discovery import fetch_model_ids
+from app.services.model_router import recommend_models
 from app.services.provider_repo import ProviderRepository
 from app.services.vendor_presets import PRESETS, get_preset
 
@@ -188,6 +192,40 @@ def list_models(
 @models_router.post("", response_model=ModelOut, status_code=201)
 def create_model(payload: ModelCreate, request: Request) -> ModelOut:
     return _repo(request).create_model(payload)
+
+
+@models_router.post("/recommendation", response_model=ModelRecommendationOut)
+def recommend_model(
+    payload: ModelRecommendationRequest, request: Request
+) -> ModelRecommendationOut:
+    required_capabilities = validate_capabilities(
+        payload.model_type, payload.required_capabilities
+    )
+    candidates = recommend_models(
+        _repo(request).list_models(
+            model_type=payload.model_type,
+            enabled_only=True,
+        ),
+        model_type=payload.model_type,
+        required_capabilities=required_capabilities,
+        preference=payload.preference,
+    )
+    if not candidates:
+        return ModelRecommendationOut(
+            preference=payload.preference,
+            required_capabilities=required_capabilities,
+            message="没有已启用且满足所需能力的模型，请先到「设置」检查模型与 API Key。",
+        )
+    message = "推荐只基于已配置能力、默认模型和可见名称标识，你仍可手动选择。"
+    if payload.preference == "cost":
+        message += " 实际费用以厂商账单为准。"
+    return ModelRecommendationOut(
+        preference=payload.preference,
+        required_capabilities=required_capabilities,
+        recommended=candidates[0],
+        alternatives=candidates[1:],
+        message=message,
+    )
 
 
 @models_router.get("/{model_id}", response_model=ModelOut)

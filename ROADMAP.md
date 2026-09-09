@@ -3,6 +3,7 @@
 > 目标：构建一个可运行、可中断、可扩展的 AI 漫剧生产 IDE。
 >
 > 核心原则：
+>
 > 1. 先跑通，再扩展
 > 2. 先真实 API，再做复杂自动化
 > 3. 所有长任务必须 Job 化
@@ -53,7 +54,7 @@
 
 能够：
 
-```text
+````text
 启动应用
  ↓
 显示主界面
@@ -391,10 +392,10 @@ AI 生成结果不能覆盖用户作品。
 
 Tasks
 - [x] Asset Version
-- [ ] Prompt History
+- [x] Prompt History
 - [x] Model History
-- [ ] Reference History
-- [ ] Version Compare
+- [x] Reference History
+- [x] Version Compare
 - [x] Version Restore
 - [x] Current Version
 - [x] Delete Unused Version
@@ -405,7 +406,7 @@ Tasks
 - API：`/api/projects/{project_id}/assets/{asset_id}/versions` 提供列表、当前、文件查看、恢复、删除。
 - UI：资产页「图片版本」面板展示当前版本与历史缩略图，支持「设为当前」「删除（两步确认）」。
 - 测试：后端 `pytest -q` 171 passed；前端 `tsc` / `lint` / `vitest`（20 passed）通过。
-- 本轮边界：Prompt History / Reference History / Version Compare 待 Phase 13 生图接入后补全（生图才产生真实 prompt、参考图、对比场景）。
+- 本轮边界：提示词、参考来源和版本对比均基于已保存的版本 payload 展示；未记录的旧版本不会伪造历史数据。
 
 示例
 Lin Fan
@@ -473,14 +474,14 @@ Tasks
 - [x] Asset Dependency（边结构支持 asset → shot / image 依赖）
 - [x] Shot Dependency（边结构支持 shot → image / video 依赖）
 - [x] Affected Node Detection（BFS 下游传递闭包 + 去重）
-- [ ] Regeneration Planning（受影响节点结果结构已备，UI 动作待 Phase 12/13）
+- [x] Regeneration Planning（资产页可将受影响节点投影为镜头计划，并由用户选择创建关键帧任务）
 
 完成标准
 
 - 后端 `ProductionGraphService`：新增 / 列表 / 下游 / 受影响节点 / 删除生产边。
 - API：`/api/projects/{project_id}/graph/edges`（增删查）与 `/affected`（传递闭包查询）。
 - 测试：后端 `pytest -q` 185 passed（含生产图服务 8 个 + 接口 6 个）。
-- 本轮边界：不实现 UI；不自动重新生成；边写入由 Phase 13/14 生图、生视频时补齐。
+- 本轮边界：不自动重新生成视频；用户先确认重生成的关键帧版本，再在分镜页决定是否生成视频。
 
 示例
 Character v3
@@ -565,7 +566,7 @@ Tasks
 - [x] Image → Image
 - [x] Reference Image
 - [x] Character Reference
-- [ ] Batch Generation
+- [x] Batch Generation（分镜页按场 / 按集预检并创建独立关键帧 Job，已有版本和进行中任务自动跳过）
 - [x] Image Preview
 - [x] Image Version
 - [x] Retry
@@ -638,7 +639,7 @@ M2 — Audio / Voice（声音四阶段管线）
 
 ```text
 人声分离 → 配音 → 混音 → 合成
-```
+````
 
 当前已经跑通 MVP 的“台词归属 + TTS + FFmpeg 一次混音 + 写有声版本”。接下来的重点是解耦，不再继续让一个 `dubbing` Job 承担所有事情。
 
@@ -792,6 +793,15 @@ Phase 15 — Generation Center
 
 把整个生产过程可视化。
 
+当前进度（2026-09-08）：
+
+- [x] 批量关键帧任务持久化生产批次与镜头来源
+- [x] 生成中心按批次显示真实完成 / 进行中 / 失败计数
+- [x] 支持批次级暂停、恢复、停止与失败项重试
+- [x] 支持从批次任务返回对应分镜
+
+当前范围只覆盖关键帧批次；音频按当前产品决策暂不进入本阶段。
+
 UI
 Generation Center
 
@@ -801,7 +811,7 @@ Generation Center
 ✓ Characters
 
 ● Scenes
-  3 / 8
+3 / 8
 
 ○ Storyboard
 ○ Images
@@ -821,14 +831,24 @@ Phase 16 — Interrupt System
 
 用户随时可以叫停。
 
+完成记录（2026-09-08）：
+
+- [x] Stop Current Job / Cancel Stage / Stop All：沿用 Job 状态机，支持单任务、批次与项目级控制
+- [x] Pause Project / Resume Project：暂停状态持久化；暂停期间新建任务也保持暂停，避免后台继续产生费用
+- [x] Preserve Completed Assets：仅改变未完成任务状态，已完成资产和版本不回滚、不删除
+- [x] Recover Interrupted Jobs：应用异常退出后，运行中任务转为“待确认恢复”，不再启动时自动重跑
+- [x] 有远端 `task_id` 的任务恢复后只轮询原厂商任务；无 `task_id` 时明确提示可能重复计费，并要求二次确认后重新提交
+- [x] 生成中心展示项目暂停提示、批次待确认数量和逐任务恢复路径
+- [x] 验证：后端 365 tests passed；前端 25 tests passed，lint / build / Prettier 通过；完成浏览器视觉验收
+
 Tasks
- Stop Current Job
- Cancel Stage
- Pause Project
- Resume Project
- Stop All
- Preserve Completed Assets
- Recover Interrupted Jobs
+Stop Current Job
+Cancel Stage
+Pause Project
+Resume Project
+Stop All
+Preserve Completed Assets
+Recover Interrupted Jobs
 必须验证
 
 例如：
@@ -863,15 +883,28 @@ Phase 17 — Model Router
 
 > 自动 Model Router 属于 **P1（MVP 后）**。MVP 阶段不做自动路由：由用户在生成界面手动选择**单一**模型（默认或临时切换），本阶段保留该设计供后续实现。
 
+M1 — 可解释推荐（2026-09-09）
+
+- [x] 仅从已启用且满足任务能力要求的模型中推荐，Provider 不可用或缺少必需 Key 时自动排除。
+- [x] 支持「均衡 / 质量 / 速度 / 成本」四种偏好，以默认模型、能力声明和模型标识做确定性评分，不额外调用 AI。
+- [x] 分镜图片与视频模型选择器展示推荐项、候选项和推荐理由；用户可随时手动覆盖。
+- [x] 维持一次 Job 只使用一个 Model / Provider，不自动触发生成，也不在任务执行中静默换模。
+- [x] 修复自定义 Provider 的模型类型在应用重启后被重新识别为 LLM 的问题。
+- [x] 后端、前端自动化测试与真实页面交互验收通过。
+
+M2 — 数据驱动自动路由（待实施）
+
+- [ ] 从真实 Job 汇总各模型的成功率、失败原因和耗时；样本不足时明确显示“数据不足”。
+- [ ] 将图片 / 视频版本审核结果纳入质量信号，建立可回归的路由评测基线。
+- [ ] 在 Job 中保存路由决策快照，保证每次选择都可解释、可复现、可审计。
+- [ ] 先提供执行前预览与确认，再以显式开关逐步开放自动路由；始终保留手动选模和确定性回退。
+- [ ] 接入可信价格元数据后再计算真实成本；接入前不得把模型名称推断冒充厂商报价。
+
 Input
-Task
-+
-Required Capability
-+
-Quality
-+
-Speed
-+
+Task +
+Required Capability +
+Quality +
+Speed +
 Cost
 Output
 Recommended Model
@@ -902,17 +935,17 @@ Phase 18 — Director Agent
 “重新生成 Shot 08。”
 Pipeline
 User Command
- ↓
+↓
 Director Agent
- ↓
+↓
 Identify Target
- ↓
+↓
 Modify
- ↓
+↓
 Dependency Analysis
- ↓
+↓
 Ask User
- ↓
+↓
 Regenerate
 Phase 19 — Quality Agent
 
@@ -941,13 +974,14 @@ Shot Continuity
 [Ignore]
 
 Tasks
+
 - [x] 台词审核：语音转写（speech_to_text）+ LLM 比对；人工模式可标记并填写实际台词
 - [x] 视觉一致性检查：角色与角色卡 / 场景与设定 / 与前一镜头连续性（多模态 vision 模型或人工）
 - [x] 质量报告聚合：项目级汇总（生成中心展示异常 / 待审核 / 通过镜头，点击跳转分镜处理）
 - [x] 服装一致性专项（跨镜头细粒度：角色卡 + 前一镜头对比，专注服装颜色 / 款式 / 配饰）
 - [x] 剧情一致性（Story Consistency：目标镜头与前后镜头的动作 / 台词衔接，文本 LLM 审核）
 - [x] 质量报告聚合（项目级汇总异常镜头，覆盖台词 / 视觉 / 剧情三类审核）
-Phase 20 — End-to-End Pipeline
+      Phase 20 — End-to-End Pipeline
 
 这是第一个真正意义上的产品 Demo。
 
@@ -967,23 +1001,23 @@ Generate Drama
 系统：
 
 Novel Analysis
- ↓
+↓
 Story Bible
- ↓
+↓
 Script
- ↓
+↓
 Characters
- ↓
+↓
 Locations
- ↓
+↓
 Props
- ↓
+↓
 Storyboard
- ↓
+↓
 Images
- ↓
+↓
 Videos
- ↓
+↓
 Audio / Mix
 
 用户可以随时：
@@ -995,18 +1029,20 @@ Redo
 Resume
 
 Tasks
+
 - [x] Pipeline Orchestrator：`pipelines` 表 + `pipeline` Job，按阶段序列执行（小说分析 → 剧本 → 资产卡补全 → 分镜 → 分镜图 → 可选视频），已完成阶段自动跳过
 - [x] 一键入口：生成中心「生成漫剧」——开始前展示阶段清单、每阶段将使用的模型、预计内容，**缺失模型给出明确提示**并阻止开始
 - [x] 每步可干预：默认每阶段完成后暂停，等用户确认「继续下一阶段」；可勾选自动继续
 - [x] 费用安全：默认生成到分镜图为止，视频阶段需手动勾选「包含视频生成」
 - [x] 复用现有 Job 系统：可停止 / 恢复 / 重试，阶段状态持久化
-Phase 21 — Packaging
+      Phase 21 — Packaging
 
 目标：
 
 打包成真正可以安装的软件。
 
 Tasks
+
 - [x] Windows Build（PyInstaller 后端 onefile + Tauri release + NSIS，`scripts/tauri-build.ps1`）
 - [x] Installer（NSIS `-setup.exe`，perUser、中英双语、内嵌 WebView2 引导 + WebView2Loader.dll）
 - [x] 后端 sidecar 生命周期（启动拉起、退出杀进程树、动态端口）
@@ -1054,19 +1090,19 @@ Phase 23 — MVP Demo
 推荐：
 
 1 章小说
- ↓
-5~10 个 Scene
- ↓
-20~40 个 Shot
- ↓
+↓
+5~~10 个 Scene
+↓
+20~~40 个 Shot
+↓
 角色资产
- ↓
+↓
 场景资产
- ↓
+↓
 Storyboard
- ↓
+↓
 生成关键帧
- ↓
+↓
 生成部分视频
 
 重点展示：
@@ -1078,12 +1114,55 @@ Storyboard
 “AI 一次生成完整电影”
 
 > 验证记录（2026-08-29）：小规模端到端验证完成（1 场景 8 镜头）
+>
 > - 修复 38 个历史分镜时长非 5 倍数的问题（统一为 5 秒）；
 > - 分镜图 ×6、图生视频 ×6（含带台词声音）、场景合成 ×1 全部成功；
 > - 视觉一致性审核（角色）×4 与剧情一致性审核 ×4 全部通过（qwen-vl-plus / qwen3.8-max）；
 > - 台词审核未通过：百炼兼容模式 /audio/transcriptions 返回 404，需适配百炼原生 ASR API（录音文件识别）；
 > - 过程中修复：qwen-image 生图超时（90s→240s）、ASR 模型能力推断、LLM JSON 解析（extract_json）、智谱并发触发 429（改用百炼模型）。
-Development Priority
+
+Phase 24 — Episode Production Workspace（LibTV 路线对标优化）
+
+> 调研记录（2026-09-09）：[LibTV 漫剧生成路线与本项目优化方向](docs/investigations/libtv-production-route.md)。
+> 核心判断：借鉴其结构化脚本、资产复用、批量生成和可执行依赖图，但暂不复制高成本的无限画布。
+
+目标：
+
+把现有 Script、Asset、Storyboard、Job、Version 和 Production Graph 汇总成一条可查看、
+可预检、可复用的“按集生产线”，减少跨页面查漏和重复配置。
+
+M1 — 剧集制作台（P1，下一步推荐）
+
+- [ ] 按镜头汇总脚本、人物 / 场景 / 道具、提示词、关键帧、视频和审核状态。
+- [ ] 明确显示缺失项、阻塞原因、过期依赖，并可跳到对应编辑位置。
+- [ ] “准备本集”只补齐缺失结构和执行预检；付费图片 / 视频仍需用户确认。
+- [ ] 复用现有 Pipeline / Job / Overview 查询，不另建第二套状态机。
+
+M2 — 工作流模板与依赖可视化（P1）
+
+- [ ] 保存阶段开关、Capability、模型偏好和生成参数；禁止保存 API Key。
+- [ ] 模板应用前展示差异，模型不可用时按 Capability 重新推荐，不静默替换。
+- [ ] 首版提供当前镜头 / 场景的只读依赖图、版本与过期原因；暂不做自由拖拽画布。
+
+M3 — 结构化导演控制（P1 / P2）
+
+- [ ] 人物质感预设生成可查看、可修改、可版本化的 Prompt Patch。
+- [ ] 情绪控制先支持目标角色 + 情绪 + 强度，再依据模型能力评估连续坐标控制。
+- [ ] 站位与构图先支持 blocking / pose 参考图和角色映射，真实需求稳定后再评估 3D 导演台。
+
+M4 — Schema 驱动参数与 Agent 入口（P2）
+
+- [ ] Adapter 返回已验证的模型参数描述，UI 动态生成控件并在提交前校验。
+- [ ] 在现有 API 上提供薄 CLI / Agent 接口，不复制业务逻辑。
+- [ ] 仅在线性制作台无法覆盖真实案例时，再评估无限节点画布。
+
+完成标准：
+
+- 用户在一个界面即可判断一集是否具备生成条件，并定位所有缺失项。
+- 批量生成前有完整预检，付费操作可见且保留暂停 / 取消 / 重试。
+- 已调通的制作配置可安全复用于下一集，不携带密钥或失效模型绑定。
+- 所有自动决策可解释、可覆盖、可审计，不破坏现有黄金路径。
+>   Development Priority
 
 优先级必须遵循：
 
@@ -1105,7 +1184,7 @@ Video
 Interrupt
 
 > 单模型生成约束：一次 Generation Job 只绑定一个 Model / 一个 Provider，不实现多模型并行生成。
-P1 — MVP 后
+> P1 — MVP 后
 
 Model Router（自动路由，MVP 后；MVP 阶段由用户手动选择单一模型）
 Director Agent
@@ -1126,37 +1205,37 @@ Golden Path
 开发过程中始终维护一条“黄金路径”：
 
 Create Project
- ↓
+↓
 Input Novel
- ↓
+↓
 Analyze Novel
- ↓
+↓
 Generate Story Bible
- ↓
+↓
 Generate Script
- ↓
+↓
 Extract Character
- ↓
+↓
 Add Image API
- ↓
+↓
 Test API
- ↓
+↓
 Detect Capability
- ↓
+↓
 Generate Character Image
- ↓
+↓
 Generate Storyboard
- ↓
+↓
 Generate Shot Image
- ↓
+↓
 Add Video API
- ↓
+↓
 Test API
- ↓
+↓
 Detect image_to_video
- ↓
+↓
 Generate Video
- ↓
+↓
 Preview
 
 任何时候这条路径都必须保持可运行。
@@ -1165,18 +1244,18 @@ Definition of Done
 
 一个模块只有满足以下条件才算完成：
 
- 功能可运行
- 有错误处理
- 有 Loading / Progress
- 有 Cancel / Retry（适用时）
- 数据可以持久化
- 不会破坏已有项目
- 有基础测试
- 不存在 Fake API
- 不存在 Fake Progress
- 不存在未声明的 Mock
- UI 能明确告诉用户当前状态
- 失败时给出可理解的错误信息
+功能可运行
+有错误处理
+有 Loading / Progress
+有 Cancel / Retry（适用时）
+数据可以持久化
+不会破坏已有项目
+有基础测试
+不存在 Fake API
+不存在 Fake Progress
+不存在未声明的 Mock
+UI 能明确告诉用户当前状态
+失败时给出可理解的错误信息
 Core Architecture
 
 最终架构：
@@ -1235,31 +1314,31 @@ AI Drama IDE Lite
                 ↓
 
 分析故事
-                ↓
+↓
 建立 Story Bible
-                ↓
+↓
 生成剧本
-                ↓
+↓
 整理角色
-                ↓
+↓
 整理场景
-                ↓
+↓
 整理道具
-                ↓
+↓
 建立分镜
-                ↓
+↓
 选择用户自己的 AI 模型
-                ↓
+↓
 生成视觉资产
-                ↓
+↓
 生成关键帧
-                ↓
+↓
 图生视频
-                ↓
+↓
 用户实时监督
-                ↓
+↓
 随时停止 / 修改 / 重做
-                ↓
+↓
 得到漫剧素材
 
 产品的核心不是：

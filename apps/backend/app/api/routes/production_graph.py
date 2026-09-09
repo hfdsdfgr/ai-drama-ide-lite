@@ -7,6 +7,7 @@ from app.schemas.production_graph import (
     AffectedNodesOut,
     ProductionEdgeCreate,
     ProductionEdgeOut,
+    RegenerationPlanOut,
 )
 from app.services.production_graph import ProductionEdge
 
@@ -62,6 +63,13 @@ def affected_nodes(
         "changed_node": {"type": node_type, "id": node_id},
         "affected": affected,
     }
+
+
+@router.get("/regeneration-plan", response_model=RegenerationPlanOut)
+def regeneration_plan(
+    project_id: str, node_type: str, node_id: str, request: Request
+) -> dict:
+    return _service(request).regeneration_plan(project_id, node_type, node_id)
 
 
 @router.delete("/edges/{edge_id}", status_code=204)

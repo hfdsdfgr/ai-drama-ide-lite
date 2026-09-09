@@ -106,3 +106,48 @@ def test_image_generate_requires_valid_target_type(client):
     )
 
     assert response.status_code == 422
+
+
+def test_batch_image_plan_route(client, monkeypatch):
+    monkeypatch.setattr(
+        client.app.state.image_generation_service,
+        "plan_shots",
+        lambda project_id, model_id, shot_ids: {
+            "ready": [{"shot_id": "shot_01", "label": "场景 · 镜头 1"}],
+            "skipped": [],
+        },
+    )
+
+    response = client.post(
+        "/api/projects/proj_1/images/batch-plan",
+        json={"model_id": "model_img", "shot_ids": ["shot_01"]},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["ready"][0]["shot_id"] == "shot_01"
+
+
+def test_batch_image_generate_route(client, monkeypatch):
+    monkeypatch.setattr(
+        client.app.state.image_generation_service,
+        "start_shots",
+        lambda project_id, model_id, shot_ids, batch_label: {
+            "batch_id": "batch_1",
+            "jobs": [_job_out()],
+            "ready": [{"shot_id": "shot_01", "label": "场景 · 镜头 1"}],
+            "skipped": [],
+        },
+    )
+
+    response = client.post(
+        "/api/projects/proj_1/images/batch-generate",
+        json={
+            "model_id": "model_img",
+            "shot_ids": ["shot_01"],
+            "batch_label": "第 1 集 · 场景 1",
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json()["batch_id"] == "batch_1"
+    assert response.json()["jobs"][0]["job_id"] == "job_1"

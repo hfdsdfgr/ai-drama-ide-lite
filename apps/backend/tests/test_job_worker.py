@@ -11,6 +11,7 @@ from app.core.errors import AppError
 from app.db.database import get_connection, init_db
 from app.services.adapters.base import GenerationResult, JobStatus
 from app.services.job_store import (
+    CATEGORY_INTERRUPTED,
     CATEGORY_PERMANENT,
     CATEGORY_RETRYABLE,
     STATUS_CANCELLED,
@@ -282,12 +283,44 @@ def test_worker_start_recovers_stale(tmp_path):
     worker = _worker(store, manager, tmp_path, scan_interval=0.02, poll_interval=0.01)
     worker.start()
     try:
-        deadline = time.time() + 3
-        while store.get(job.id).status != STATUS_COMPLETED and time.time() < deadline:
-            time.sleep(0.02)
-        assert store.get(job.id).status == STATUS_COMPLETED
+        time.sleep(0.1)
+        recovered = store.get(job.id)
+        assert recovered.status == "paused"
+        assert recovered.error_category == CATEGORY_INTERRUPTED
+        assert manager.start_calls == []
     finally:
         worker.stop()
+
+
+def test_interrupted_remote_job_resumes_polling_without_resubmit(tmp_path):
+    store = _init(tmp_path)
+    adapter = _FakeAdapter(
+        poll_states=[
+            JobStatus(
+                job_id="task-existing",
+                status="completed",
+                result=GenerationResult(urls=["https://cdn/existing.mp4"]),
+            )
+        ]
+    )
+    manager = _FakeManager(mode="async", adapter=adapter)
+    worker = _worker(store, manager, tmp_path, poll_interval=0.01)
+    job = _make_job(store, capability="text_to_video")
+    store.mark_running(job.id)
+    store.set_task_id(job.id, "task-existing")
+    with get_connection(store.db_path) as conn:
+        conn.execute(
+            "UPDATE jobs SET heartbeat_at = '2020-01-01T00:00:00Z' WHERE id = ?",
+            (job.id,),
+        )
+
+    store.recover_stale(stale_after_s=60)
+    resumed = store.resume(job.id)
+    worker._execute(resumed)
+
+    assert store.get(job.id).status == STATUS_COMPLETED
+    assert manager.start_calls == []
+    assert adapter.poll_calls == 1
 
 
 def test_sync_image_job_calls_image_result_service(tmp_path):

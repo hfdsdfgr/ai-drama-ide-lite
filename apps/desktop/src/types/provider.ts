@@ -143,6 +143,22 @@ export interface Model {
   updated_at: string;
 }
 
+export type ModelRoutingPreference = "balanced" | "quality" | "speed" | "cost";
+
+export interface ModelRecommendationCandidate {
+  model: Model;
+  score: number;
+  reasons: string[];
+}
+
+export interface ModelRecommendation {
+  preference: ModelRoutingPreference;
+  required_capabilities: string[];
+  recommended: ModelRecommendationCandidate | null;
+  alternatives: ModelRecommendationCandidate[];
+  message: string;
+}
+
 export interface ModelInput {
   provider_id: string;
   model_id: string;

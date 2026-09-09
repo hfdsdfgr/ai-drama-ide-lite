@@ -117,7 +117,7 @@ class AssetGenerateRequest(BaseModel):
 
 class AssetGenerateJobOut(BaseModel):
     job_id: str
-    status: Literal["queued", "running", "completed", "failed", "cancelled"]
+    status: Literal["queued", "running", "paused", "completed", "failed", "cancelled"]
     progress: float | None = None
     detail: str = ""
     error: str | None = None
@@ -158,7 +158,7 @@ class AnalysisRequest(BaseModel):
 
 class AnalysisJobOut(BaseModel):
     job_id: str
-    status: Literal["queued", "running", "completed", "failed", "cancelled"]
+    status: Literal["queued", "running", "paused", "completed", "failed", "cancelled"]
     progress: float | None = None
     detail: str = ""
     error: str | None = None

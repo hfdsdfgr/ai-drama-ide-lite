@@ -8,6 +8,7 @@ import {
   resumeJob,
   batchJobs,
   getJob,
+  getProjectJobState,
 } from "../api/jobs";
 import { getProjectOverview } from "../api/overview";
 import { getProjectQuality, type ProjectQuality } from "../api/quality";
@@ -105,6 +106,124 @@ function matchesFilter(job: JobOut, filter: Filter): boolean {
   return job.status === filter;
 }
 
+function groupBatchJobs(jobs: JobOut[]) {
+  const groups = new Map<string, { id: string; label: string; jobs: JobOut[] }>();
+  for (const job of jobs) {
+    if (!job.batch_id) continue;
+    const group = groups.get(job.batch_id) ?? {
+      id: job.batch_id,
+      label: job.batch_label || "批量关键帧",
+      jobs: [],
+    };
+    group.jobs.push(job);
+    groups.set(job.batch_id, group);
+  }
+  return [...groups.values()];
+}
+
+function JobRow({
+  job,
+  cancelArmed,
+  resumeArmed,
+  onCancel,
+  onPause,
+  onResume,
+  onRetry,
+  onJumpToShot,
+}: {
+  job: JobOut;
+  cancelArmed: boolean;
+  resumeArmed: boolean;
+  onCancel: (job: JobOut) => void;
+  onPause: (job: JobOut) => void;
+  onResume: (job: JobOut) => void;
+  onRetry: (job: JobOut) => void;
+  onJumpToShot?: (shotId: string) => void;
+}) {
+  const interrupted = job.error_category === "interrupted";
+  return (
+    <div className="card job-row">
+      <div className="job-main">
+        <span className={`job-status job-status-${job.status}`}>
+          {STATUS_LABEL[job.status]}
+        </span>
+        <span className="job-title">
+          {job.target_label || CAPABILITY_LABEL[job.capability] || job.type}
+        </span>
+      </div>
+      {job.error && (
+        <p className={interrupted ? "job-recovery" : "job-error"}>
+          {job.error}
+          {job.error_category === "retryable" && "（可重试）"}
+          {interrupted &&
+            (job.has_remote_task
+              ? "。恢复后只会继续查询原厂商任务，不会重新提交"
+              : "。恢复会重新向模型提交，可能再次产生费用")}
+        </p>
+      )}
+      {job.status === "running" && (
+        <div className="progress-bar" aria-label="任务进度">
+          <div
+            className="progress-bar-fill"
+            style={{
+              width: job.progress > 0 ? `${Math.min(job.progress, 100)}%` : "8%",
+              opacity: job.progress > 0 ? 1 : 0.4,
+            }}
+          />
+        </div>
+      )}
+      <div className="job-meta">
+        <span className="muted">
+          创建于 {formatTime(job.created_at)}
+          {job.completed_at && ` · 结束于 ${formatTime(job.completed_at)}`}
+        </span>
+        {job.status === "running" && (
+          <span className="muted">
+            {job.progress > 0 ? `进度 ${job.progress}%` : "处理中…"}
+          </span>
+        )}
+      </div>
+      <div className="job-actions">
+        {job.target_id && onJumpToShot && (
+          <button type="button" onClick={() => onJumpToShot(job.target_id)}>
+            查看分镜
+          </button>
+        )}
+        {job.status === "running" && (
+          <button type="button" onClick={() => onPause(job)}>
+            暂停
+          </button>
+        )}
+        {job.status === "paused" && (
+          <button type="button" onClick={() => onResume(job)}>
+            {interrupted
+              ? job.has_remote_task
+                ? "继续跟踪原任务"
+                : resumeArmed
+                  ? "确认重新提交"
+                  : "重新提交（可能计费）"
+              : "恢复"}
+          </button>
+        )}
+        {(["queued", "running", "paused"] as JobStatus[]).includes(job.status) && (
+          <button
+            type="button"
+            className={cancelArmed ? "button-danger" : "button-ghost"}
+            onClick={() => onCancel(job)}
+          >
+            {cancelArmed ? "确认取消" : "取消"}
+          </button>
+        )}
+        {(job.status === "failed" || job.status === "cancelled") && (
+          <button type="button" onClick={() => onRetry(job)}>
+            重试
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function GenerationPage({
   active,
   projectId,
@@ -122,16 +241,18 @@ export function GenerationPage({
   const [autoContinue, setAutoContinue] = useState(false);
   const [qualityReview, setQualityReview] = useState(false);
   const [pipelineJob, setPipelineJob] = useState<JobOut | null>(null);
-  const [pipelineStatus, setPipelineStatus] = useState<PipelineStatus | null>(
-    null,
-  );
+  const [pipelineStatus, setPipelineStatus] = useState<PipelineStatus | null>(null);
   const pipelinePollRef = useRef<number | null>(null);
   const [jobs, setJobs] = useState<JobOut[]>([]);
+  const [projectPaused, setProjectPaused] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState<Filter>("all");
   const [cancelArmed, setCancelArmed] = useState<Record<string, boolean>>({});
+  const [resumeArmed, setResumeArmed] = useState<Record<string, boolean>>({});
   const [batchArmed, setBatchArmed] = useState(false);
+  const [batchActionArmed, setBatchActionArmed] = useState<Record<string, boolean>>({});
+  const [batchNotice, setBatchNotice] = useState("");
   const [stageArmed, setStageArmed] = useState<Record<string, boolean>>({});
   const jobsRef = useRef<JobOut[]>([]);
 
@@ -142,23 +263,27 @@ export function GenerationPage({
     setPipelineJob(null);
     setPipelineStatus(null);
     setJobs([]);
+    setProjectPaused(false);
     jobsRef.current = [];
     setError("");
+    setBatchNotice("");
   }, [projectId]);
 
   const refresh = useCallback(async () => {
     if (!projectId) return;
     setLoading(true);
     try {
-      const [nextOverview, nextJobs, nextQuality] = await Promise.all([
+      const [nextOverview, nextJobs, nextQuality, nextProjectState] = await Promise.all([
         getProjectOverview(projectId),
         listJobs({ project_id: projectId, limit: 200 }),
         getProjectQuality(projectId),
+        getProjectJobState(projectId),
       ]);
       setOverview(nextOverview);
       setJobs(nextJobs);
       jobsRef.current = nextJobs;
       setQuality(nextQuality);
+      setProjectPaused(nextProjectState.paused);
       setError("");
     } catch (e) {
       setError((e as Error).message);
@@ -177,10 +302,7 @@ export function GenerationPage({
       const hasActive = jobsRef.current.some((job) =>
         ["queued", "running", "paused"].includes(job.status),
       );
-      timeout = window.setTimeout(
-        () => void tick(),
-        hasActive ? 3000 : 15000,
-      );
+      timeout = window.setTimeout(() => void tick(), hasActive ? 3000 : 15000);
     };
     void tick();
     return () => {
@@ -190,12 +312,12 @@ export function GenerationPage({
   }, [active, projectId, refresh]);
 
   const visible = jobs.filter((job) => matchesFilter(job, filter));
-  const flaggedItems = (quality?.items ?? []).filter(
-    (item) => item.status === "flagged",
+  const batchGroups = groupBatchJobs(jobs).filter((group) =>
+    group.jobs.some((job) => matchesFilter(job, filter)),
   );
-  const pendingItems = (quality?.items ?? []).filter(
-    (item) => item.status === "pending",
-  );
+  const unbatchedVisible = visible.filter((job) => !job.batch_id);
+  const flaggedItems = (quality?.items ?? []).filter((item) => item.status === "flagged");
+  const pendingItems = (quality?.items ?? []).filter((item) => item.status === "pending");
 
   const currentPipelineStage = (pipelineStatus?.stages ?? []).find(
     (stage) => stage.status === "running" || stage.status === "failed",
@@ -227,8 +349,20 @@ export function GenerationPage({
   }
 
   async function handleResume(job: JobOut) {
+    if (
+      job.error_category === "interrupted" &&
+      !job.has_remote_task &&
+      !resumeArmed[job.job_id]
+    ) {
+      setResumeArmed((prev) => ({ ...prev, [job.job_id]: true }));
+      window.setTimeout(() => {
+        setResumeArmed((prev) => ({ ...prev, [job.job_id]: false }));
+      }, 4000);
+      return;
+    }
     try {
       await resumeJob(job.job_id);
+      setResumeArmed((prev) => ({ ...prev, [job.job_id]: false }));
       await refresh();
     } catch (e) {
       setError((e as Error).message);
@@ -254,6 +388,34 @@ export function GenerationPage({
     try {
       await batchJobs({ project_id: projectId, action });
       setBatchArmed(false);
+      await refresh();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  async function handleProductionBatch(
+    batchId: string,
+    action: "pause" | "resume" | "cancel" | "retry",
+  ) {
+    if (!projectId) return;
+    if (action === "cancel" && !batchActionArmed[batchId]) {
+      setBatchActionArmed((prev) => ({ ...prev, [batchId]: true }));
+      window.setTimeout(() => {
+        setBatchActionArmed((prev) => ({ ...prev, [batchId]: false }));
+      }, 3000);
+      return;
+    }
+    try {
+      const result = await batchJobs({
+        project_id: projectId,
+        batch_id: batchId,
+        action,
+      });
+      setBatchActionArmed((prev) => ({ ...prev, [batchId]: false }));
+      setBatchNotice(
+        `${action === "pause" ? "已暂停" : action === "resume" ? "已恢复" : action === "cancel" ? "已停止" : "已重新排队"} ${result.affected} 个任务。`,
+      );
       await refresh();
     } catch (e) {
       setError((e as Error).message);
@@ -380,25 +542,31 @@ export function GenerationPage({
       <div className="page-head">
         <div>
           <h2>生成中心</h2>
-          <p className="muted">查看当前项目从小说到成片的整体进度，以及正在执行的生成任务。</p>
+          <p className="muted">
+            查看当前项目从小说到成片的整体进度，以及正在执行的生成任务。
+          </p>
         </div>
       </div>
 
       <div className="toolbar">
-        <button type="button" onClick={() => void refresh()} disabled={loading || !projectId}>
+        <button
+          type="button"
+          onClick={() => void refresh()}
+          disabled={loading || !projectId}
+        >
           {loading ? "刷新中…" : "刷新"}
         </button>
         <button
           type="button"
           onClick={() => void handleBatch("pause")}
-          disabled={loading || !projectId}
+          disabled={loading || !projectId || projectPaused}
         >
           暂停全部
         </button>
         <button
           type="button"
           onClick={() => void handleBatch("resume")}
-          disabled={loading || !projectId}
+          disabled={loading || !projectId || !projectPaused}
         >
           恢复全部
         </button>
@@ -413,6 +581,11 @@ export function GenerationPage({
       </div>
 
       {error && <p className="error">{error}</p>}
+      {projectPaused && (
+        <p className="project-pause-notice" role="status">
+          项目已暂停。当前任务和之后新建的任务都会保持暂停，点击“恢复全部”后继续；意外中断任务仍需逐项确认。
+        </p>
+      )}
 
       {!projectId ? (
         <div className="card">
@@ -497,21 +670,15 @@ export function GenerationPage({
                       key={stage.key}
                       className={`pipeline-stage pipeline-stage-${stage.status}`}
                     >
-                      <span className="pipeline-stage-label">
-                        {stage.label}
-                      </span>
+                      <span className="pipeline-stage-label">{stage.label}</span>
                       {stage.status === "completed" && (
                         <span className="quality-good">已完成</span>
                       )}
                       {stage.status === "ready" && (
-                        <span className="quality-muted">
-                          将使用 {stage.model_id}
-                        </span>
+                        <span className="quality-muted">将使用 {stage.model_id}</span>
                       )}
                       {stage.status === "not_ready" && (
-                        <span className="pipeline-missing">
-                          ⚠ {stage.missing_reason}
-                        </span>
+                        <span className="pipeline-missing">⚠ {stage.missing_reason}</span>
                       )}
                     </div>
                   ))}
@@ -563,9 +730,7 @@ export function GenerationPage({
                     </button>
                   </div>
                   {!pipelinePlan.can_start && (
-                    <p className="muted">
-                      请先在「设置」配置缺失的模型后再开始。
-                    </p>
+                    <p className="muted">请先在「设置」配置缺失的模型后再开始。</p>
                   )}
                 </div>
               )}
@@ -608,9 +773,7 @@ export function GenerationPage({
                         继续下一阶段
                       </button>
                     )}
-                    {["queued", "running", "paused"].includes(
-                      pipelineJob.status,
-                    ) && (
+                    {["queued", "running", "paused"].includes(pipelineJob.status) && (
                       <button
                         type="button"
                         className="button-danger button-ghost"
@@ -710,82 +873,183 @@ export function GenerationPage({
               ))}
             </div>
 
+            {batchNotice && <p className="notice">{batchNotice}</p>}
+
             {visible.length === 0 ? (
               <div className="card">
                 <p className="muted">该分类下没有任务。</p>
               </div>
             ) : (
-              <div className="jobs-list">
-                {visible.map((job) => (
-                  <div className="card job-row" key={job.job_id}>
-                    <div className="job-main">
-                      <span className={`job-status job-status-${job.status}`}>
-                        {STATUS_LABEL[job.status]}
-                      </span>
-                      <span className="job-title">
-                        {CAPABILITY_LABEL[job.capability] ?? job.capability ?? job.type}
-                      </span>
-                    </div>
-                    {job.error && (
-                      <p className="job-error">
-                        {job.error}
-                        {job.error_category === "retryable" && "（可重试）"}
-                      </p>
-                    )}
-                    {job.status === "running" && (
-                      <div className="progress-bar">
-                        <div
-                          className="progress-bar-fill"
-                          style={{
-                            width:
-                              job.progress > 0
-                                ? `${Math.min(job.progress, 100)}%`
-                                : "8%",
-                            opacity: job.progress > 0 ? 1 : 0.4,
-                          }}
-                        />
+              <>
+                {batchGroups.length > 0 && (
+                  <section
+                    className="production-batches"
+                    aria-labelledby="production-batches-title"
+                  >
+                    <div className="section-heading">
+                      <div>
+                        <h3 id="production-batches-title">生产批次</h3>
+                        <p className="muted">
+                          按每次批量生成归组，展开即可查看镜头与处理失败项。
+                        </p>
                       </div>
-                    )}
-                    <div className="job-meta">
-                      <span className="muted">
-                        创建于 {formatTime(job.created_at)}
-                        {job.completed_at && ` · 结束于 ${formatTime(job.completed_at)}`}
-                      </span>
-                      {job.status === "running" && job.progress > 0 && (
-                        <span className="muted">进度 {job.progress}%</span>
-                      )}
                     </div>
-                    <div className="job-actions">
-                      {job.status === "running" && (
-                        <button type="button" onClick={() => void handlePause(job)}>
-                          暂停
-                        </button>
-                      )}
-                      {job.status === "paused" && (
-                        <button type="button" onClick={() => void handleResume(job)}>
-                          恢复
-                        </button>
-                      )}
-                      {(job.status === "queued" ||
-                        job.status === "running" ||
-                        job.status === "paused") && (
-                        <button
-                          type="button"
-                          className={cancelArmed[job.job_id] ? "button-danger" : "button-ghost"}
-                          onClick={() => void handleCancel(job)}
-                        >
-                          {cancelArmed[job.job_id] ? "确认取消" : "取消"}
-                        </button>
-                      )}
-                      {(job.status === "failed" || job.status === "cancelled") && (
-                        <button type="button" onClick={() => void handleRetry(job)}>
-                          重试
-                        </button>
-                      )}
+                    <div className="batch-groups">
+                      {batchGroups.map((group) => {
+                        const completed = group.jobs.filter(
+                          (job) => job.status === "completed",
+                        ).length;
+                        const failed = group.jobs.filter(
+                          (job) => job.status === "failed",
+                        ).length;
+                        const paused = group.jobs.filter(
+                          (job) => job.status === "paused",
+                        ).length;
+                        const interrupted = group.jobs.filter(
+                          (job) =>
+                            job.status === "paused" &&
+                            job.error_category === "interrupted",
+                        ).length;
+                        const activeJobs = group.jobs.filter((job) =>
+                          ["queued", "running", "paused"].includes(job.status),
+                        );
+                        const processed = group.jobs.filter((job) =>
+                          ["completed", "failed", "cancelled"].includes(job.status),
+                        ).length;
+                        return (
+                          <details className="batch-group" key={group.id}>
+                            <summary>
+                              <div className="batch-group-title">
+                                <strong>{group.label}</strong>
+                                <span className="muted">
+                                  创建于 {formatTime(group.jobs[0].created_at)}
+                                </span>
+                              </div>
+                              <div
+                                className="batch-group-summary"
+                                aria-label="批次状态汇总"
+                              >
+                                <span>{completed} 完成</span>
+                                {activeJobs.length > interrupted && (
+                                  <span className="quality-muted">
+                                    {activeJobs.length - interrupted} 进行中
+                                  </span>
+                                )}
+                                {interrupted > 0 && (
+                                  <span className="quality-muted">
+                                    {interrupted} 待确认恢复
+                                  </span>
+                                )}
+                                {failed > 0 && (
+                                  <span className="quality-bad">{failed} 失败</span>
+                                )}
+                              </div>
+                            </summary>
+                            <div className="batch-group-body">
+                              <div className="batch-progress-line">
+                                <progress value={processed} max={group.jobs.length} />
+                                <span className="muted">
+                                  已处理 {processed} / {group.jobs.length}
+                                </span>
+                              </div>
+                              <div className="batch-group-actions">
+                                {activeJobs.some(
+                                  (job) =>
+                                    job.status === "queued" || job.status === "running",
+                                ) && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      void handleProductionBatch(group.id, "pause")
+                                    }
+                                  >
+                                    暂停批次
+                                  </button>
+                                )}
+                                {paused > interrupted && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      void handleProductionBatch(group.id, "resume")
+                                    }
+                                  >
+                                    恢复批次
+                                  </button>
+                                )}
+                                {failed > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      void handleProductionBatch(group.id, "retry")
+                                    }
+                                  >
+                                    重试失败项
+                                  </button>
+                                )}
+                                {activeJobs.length > 0 && (
+                                  <button
+                                    type="button"
+                                    className={
+                                      batchActionArmed[group.id]
+                                        ? "button-danger"
+                                        : "button-ghost"
+                                    }
+                                    onClick={() =>
+                                      void handleProductionBatch(group.id, "cancel")
+                                    }
+                                  >
+                                    {batchActionArmed[group.id]
+                                      ? "确认停止批次"
+                                      : "停止批次"}
+                                  </button>
+                                )}
+                              </div>
+                              <div className="jobs-list batch-job-list">
+                                {group.jobs
+                                  .filter((job) => matchesFilter(job, filter))
+                                  .map((job) => (
+                                    <JobRow
+                                      key={job.job_id}
+                                      job={job}
+                                      cancelArmed={Boolean(cancelArmed[job.job_id])}
+                                      resumeArmed={Boolean(resumeArmed[job.job_id])}
+                                      onCancel={handleCancel}
+                                      onPause={handlePause}
+                                      onResume={handleResume}
+                                      onRetry={handleRetry}
+                                      onJumpToShot={onJumpToShot}
+                                    />
+                                  ))}
+                              </div>
+                            </div>
+                          </details>
+                        );
+                      })}
                     </div>
-                  </div>
-                ))}
-              </div>
+                  </section>
+                )}
+
+                {unbatchedVisible.length > 0 && (
+                  <section className="other-jobs" aria-labelledby="other-jobs-title">
+                    {batchGroups.length > 0 && <h3 id="other-jobs-title">其他任务</h3>}
+                    <div className="jobs-list">
+                      {unbatchedVisible.map((job) => (
+                        <JobRow
+                          key={job.job_id}
+                          job={job}
+                          cancelArmed={Boolean(cancelArmed[job.job_id])}
+                          resumeArmed={Boolean(resumeArmed[job.job_id])}
+                          onCancel={handleCancel}
+                          onPause={handlePause}
+                          onResume={handleResume}
+                          onRetry={handleRetry}
+                          onJumpToShot={onJumpToShot}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                )}
+              </>
             )}
           </section>
         </div>

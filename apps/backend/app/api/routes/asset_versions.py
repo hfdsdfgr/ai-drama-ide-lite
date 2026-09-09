@@ -1,6 +1,6 @@
 """Phase 9 — 资产版本接口：列表 / 当前 / 文件 / 恢复 / 删除。"""
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, File, Request, UploadFile
 from fastapi.responses import FileResponse
 from pathlib import Path
 
@@ -66,6 +66,19 @@ def get_current(
         project_id, _asset_type(request, project_id, asset_id), asset_id
     )
     return _out(project_id, asset_id, record) if record else None
+
+
+@router.post("/import", response_model=AssetVersionOut, status_code=201)
+async def import_version(
+    project_id: str,
+    asset_id: str,
+    request: Request,
+    file: UploadFile = File(...),
+) -> dict:
+    record = request.app.state.media_import_service.import_asset_image(
+        project_id, asset_id, file.filename or "", await file.read()
+    )
+    return _out(project_id, asset_id, record)
 
 
 @router.get("/{version_id}/file")

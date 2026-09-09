@@ -10,21 +10,22 @@ import {
 } from "../api/assets";
 import {
   deleteAssetVersion,
+  importAssetVersion,
   listAssetVersions,
   promoteAssetVersion,
 } from "../api/asset_versions";
 import { getApiBase } from "../api/client";
 import { generateImage, getImageJob } from "../api/images";
 import { listModels } from "../api/providers";
+import {
+  getAffectedNodes,
+  getRegenerationPlan,
+  type RegenerationPlanResponse,
+} from "../api/production_graph";
 import type { GenerationJob } from "../types/generation";
 import type { AssetVersion } from "../types/asset_version";
 import type { Model } from "../types/provider";
-import type {
-  AssetCard,
-  AssetGenerateJob,
-  AssetSpecs,
-  AssetType,
-} from "../types/story";
+import type { AssetCard, AssetGenerateJob, AssetSpecs, AssetType } from "../types/story";
 
 interface FieldDef {
   key: string;
@@ -167,12 +168,39 @@ function formatVersionTime(iso: string): string {
   return `${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
+function getVersionSource(version: AssetVersion): string {
+  if (version.payload.source === "imported") {
+    const filename = version.payload.original_filename;
+    return typeof filename === "string" ? `导入 · ${filename}` : "外部导入";
+  }
+  const capability = version.payload.capability;
+  return typeof capability === "string" ? `生成 · ${capability}` : "历史版本";
+}
+
+function getVersionReferences(version: AssetVersion): Record<string, unknown>[] {
+  const references = version.payload.source_refs;
+  if (!Array.isArray(references)) return [];
+  return references.filter(
+    (reference): reference is Record<string, unknown> =>
+      typeof reference === "object" && reference !== null,
+  );
+}
+
+function formatVersionReference(reference: Record<string, unknown>): string {
+  const type = typeof reference.type === "string" ? reference.type : "参考";
+  const id = typeof reference.id === "string" ? reference.id : "";
+  const relation = typeof reference.relation === "string" ? reference.relation : "";
+  return [type, id, relation].filter(Boolean).join(" · ");
+}
+
 export function AssetPage({
   active,
   projectId,
+  onOpenStoryboard,
 }: {
   active: boolean;
   projectId: string;
+  onOpenStoryboard?: () => void;
 }) {
   const [assets, setAssets] = useState<AssetCard[]>([]);
   const [assetType, setAssetType] = useState<AssetType>("character");
@@ -194,12 +222,21 @@ export function AssetPage({
   const [error, setError] = useState("");
   const [versions, setVersions] = useState<AssetVersion[]>([]);
   const [apiBase, setApiBase] = useState("");
-  const [confirmDeleteVersionId, setConfirmDeleteVersionId] = useState<
-    string | null
-  >(null);
+  const [confirmDeleteVersionId, setConfirmDeleteVersionId] = useState<string | null>(
+    null,
+  );
   const [versionBusy, setVersionBusy] = useState(false);
+  const [importBusy, setImportBusy] = useState(false);
   const [zoomImageUrl, setZoomImageUrl] = useState<string | null>(null);
   const [previewVersionId, setPreviewVersionId] = useState<string | null>(null);
+  const [compareVersionId, setCompareVersionId] = useState<string | null>(null);
+  const [affectedNodeCount, setAffectedNodeCount] = useState(0);
+  const [regenerationPlan, setRegenerationPlan] =
+    useState<RegenerationPlanResponse | null>(null);
+  const [planLoading, setPlanLoading] = useState(false);
+  const [planBusy, setPlanBusy] = useState(false);
+  const [selectedPlanShots, setSelectedPlanShots] = useState<string[]>([]);
+  const [planNotice, setPlanNotice] = useState("");
   const pollRef = useRef<string | null>(null);
   const imagePollRef = useRef<string | null>(null);
   const selectedAssetIdRef = useRef("");
@@ -218,7 +255,9 @@ export function AssetPage({
 
   useEffect(() => {
     if (!active) return;
-    void getApiBase().then(setApiBase).catch(() => {});
+    void getApiBase()
+      .then(setApiBase)
+      .catch(() => {});
     listModels({ model_type: "llm", enabled_only: true })
       .then((models) => {
         const usable = models.filter(isChatModel);
@@ -280,6 +319,9 @@ export function AssetPage({
     setDraft(buildDraft(asset));
     setConfirmDeleteName(null);
     setConfirmDeleteVersionId(null);
+    setAffectedNodeCount(0);
+    setRegenerationPlan(null);
+    setPlanNotice("");
   }
 
   function changeType(next: AssetType) {
@@ -288,6 +330,8 @@ export function AssetPage({
     setDraft(null);
     setConfirmDeleteName(null);
     setConfirmDeleteVersionId(null);
+    setRegenerationPlan(null);
+    setPlanNotice("");
   }
 
   const refreshVersions = useCallback(async () => {
@@ -299,6 +343,10 @@ export function AssetPage({
         if (prev && items.some((v) => v.id === prev)) return prev;
         return items.find((v) => v.is_current)?.id ?? items[0]?.id ?? null;
       });
+      setCompareVersionId((prev) => {
+        if (prev && items.some((v) => v.id === prev)) return prev;
+        return null;
+      });
     } catch (e) {
       setError((e as Error).message);
     }
@@ -307,11 +355,21 @@ export function AssetPage({
   useEffect(() => {
     if (!projectId || !selected?.asset_id) {
       setVersions([]);
+      setCompareVersionId(null);
       return;
     }
     void refreshVersions();
     setConfirmDeleteVersionId(null);
   }, [projectId, selected?.asset_id, refreshVersions]);
+
+  useEffect(() => {
+    if (!regenerationPlan) return;
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape" && !planBusy) setRegenerationPlan(null);
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [regenerationPlan, planBusy]);
 
   async function handlePromoteVersion(versionId: string) {
     if (!projectId || !selected?.asset_id) return;
@@ -320,6 +378,8 @@ export function AssetPage({
     try {
       await promoteAssetVersion(projectId, selected.asset_id, versionId);
       await refreshVersions();
+      const graph = await getAffectedNodes(projectId, "asset", selected.asset_id);
+      setAffectedNodeCount(graph.affected.length);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -346,10 +406,27 @@ export function AssetPage({
     }
   }
 
+  async function handleImportVersion(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !projectId || !selected?.asset_id) return;
+    setImportBusy(true);
+    setError("");
+    try {
+      await importAssetVersion(projectId, selected.asset_id, file);
+      await refreshVersions();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setImportBusy(false);
+    }
+  }
+
   async function saveAsset() {
     if (!projectId || !selected || !draft) return;
     setSaving(true);
     setError("");
+    setPlanNotice("");
     try {
       const updated = await updateAsset(projectId, {
         asset_type: selected.asset_type,
@@ -358,16 +435,64 @@ export function AssetPage({
       });
       setAssets((prev) =>
         prev.map((a) =>
-          a.asset_type === updated.asset_type && a.name === updated.name
-            ? updated
-            : a,
+          a.asset_type === updated.asset_type && a.name === updated.name ? updated : a,
         ),
       );
       setDraft(buildDraft(updated));
+      try {
+        const graph = await getAffectedNodes(projectId, "asset", updated.asset_id);
+        setAffectedNodeCount(graph.affected.length);
+      } catch {
+        // Dependency status is supplementary; a successful save must stay successful.
+        setAffectedNodeCount(0);
+      }
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function openRegenerationPlan() {
+    if (!projectId || !selected?.asset_id) return;
+    setPlanLoading(true);
+    setError("");
+    try {
+      const plan = await getRegenerationPlan(projectId, "asset", selected.asset_id);
+      setRegenerationPlan(plan);
+      setSelectedPlanShots(plan.image_shots.map((item) => item.shot_id));
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setPlanLoading(false);
+    }
+  }
+
+  async function runRegenerationPlan() {
+    if (!projectId || !imageModelId || selectedPlanShots.length === 0) return;
+    setPlanBusy(true);
+    setError("");
+    try {
+      const results = await Promise.allSettled(
+        selectedPlanShots.map((shotId) =>
+          generateImage(projectId, {
+            target_type: "shot",
+            target_id: shotId,
+            model_id: imageModelId,
+          }),
+        ),
+      );
+      const failed = results.filter((result) => result.status === "rejected").length;
+      if (failed) {
+        setError(`${failed} 个关键帧任务未能创建，请在生成中心查看后重试。`);
+      } else {
+        setRegenerationPlan(null);
+        setPlanNotice(
+          `已创建 ${selectedPlanShots.length} 个关键帧任务，可在生成中心查看进度。`,
+        );
+      }
+    } finally {
+      setPlanBusy(false);
     }
   }
 
@@ -413,8 +538,7 @@ export function AssetPage({
             setAssets(items);
             if (selectedName) {
               const refreshed = items.find(
-                (a) =>
-                  a.asset_type === assetType && a.name === selectedName,
+                (a) => a.asset_type === assetType && a.name === selectedName,
               );
               if (refreshed) setDraft(buildDraft(refreshed));
             }
@@ -457,10 +581,7 @@ export function AssetPage({
         if (["completed", "failed", "cancelled"].includes(updated.status)) {
           imagePollRef.current = null;
           if (updated.status === "completed") {
-            const refreshedVersions = await listAssetVersions(
-              projectId,
-              targetAssetId,
-            );
+            const refreshedVersions = await listAssetVersions(projectId, targetAssetId);
             if (selectedAssetIdRef.current === targetAssetId) {
               setVersions(refreshedVersions);
             }
@@ -476,8 +597,7 @@ export function AssetPage({
     }
   }
 
-  const previewVersion =
-    versions.find((v) => v.id === previewVersionId) ?? null;
+  const previewVersion = versions.find((v) => v.id === previewVersionId) ?? null;
   const spec = selected?.image_spec;
   const activeRatio = draft?.aspect_ratio || spec?.aspect_ratio || "2:3";
   const activeSpecOption =
@@ -565,24 +685,40 @@ export function AssetPage({
                       className="button-danger button-ghost"
                       onClick={handleDelete}
                     >
-                      {confirmDeleteName === selected.name
-                        ? "确认删除"
-                        : "删除资产"}
+                      {confirmDeleteName === selected.name ? "确认删除" : "删除资产"}
                     </button>
                     {confirmDeleteName === selected.name && (
-                      <button
-                        type="button"
-                        onClick={() => setConfirmDeleteName(null)}
-                      >
+                      <button type="button" onClick={() => setConfirmDeleteName(null)}>
                         取消
                       </button>
                     )}
                   </div>
                 </div>
                 <p className="muted">
-                  {ASSET_TYPE_LABELS[selected.asset_type]}视觉资产卡 ·
-                  图片规格固定为 {selected.image_spec.aspect_ratio}
+                  {ASSET_TYPE_LABELS[selected.asset_type]}视觉资产卡 · 图片规格固定为{" "}
+                  {selected.image_spec.aspect_ratio}
                 </p>
+                {affectedNodeCount > 0 && (
+                  <div className="inline-notice">
+                    <span>
+                      已保存。检测到 {affectedNodeCount}{" "}
+                      个下游内容可能受影响，系统不会自动重新生成。
+                    </span>
+                    <button
+                      type="button"
+                      className="button-ghost"
+                      onClick={() => void openRegenerationPlan()}
+                      disabled={planLoading}
+                    >
+                      {planLoading ? "正在分析…" : "查看再生成计划"}
+                    </button>
+                  </div>
+                )}
+                {planNotice && (
+                  <p className="muted" role="status">
+                    {planNotice}
+                  </p>
+                )}
               </div>
 
               {spec && (
@@ -614,15 +750,11 @@ export function AssetPage({
                         value={draft?.aspect_ratio ?? ""}
                         onChange={(e) =>
                           setDraft((prev) =>
-                            prev
-                              ? { ...prev, aspect_ratio: e.target.value }
-                              : prev,
+                            prev ? { ...prev, aspect_ratio: e.target.value } : prev,
                           )
                         }
                       >
-                        <option value="">
-                          默认（{spec.aspect_ratio}）
-                        </option>
+                        <option value="">默认（{spec.aspect_ratio}）</option>
                         {specs?.aspect_ratios.map((r) => (
                           <option key={r.value} value={r.value}>
                             {r.label}
@@ -636,9 +768,7 @@ export function AssetPage({
                         value={draft?.art_style ?? ""}
                         onChange={(e) =>
                           setDraft((prev) =>
-                            prev
-                              ? { ...prev, art_style: e.target.value }
-                              : prev,
+                            prev ? { ...prev, art_style: e.target.value } : prev,
                           )
                         }
                       >
@@ -713,9 +843,7 @@ export function AssetPage({
                       placeholder="例如：tongtong、chuichui、alloy；留空使用默认音色"
                     />
                   </label>
-                  <p className="muted">
-                    分镜配音时会按角色自动匹配这里的音色。
-                  </p>
+                  <p className="muted">分镜配音时会按角色自动匹配这里的音色。</p>
                 </div>
               )}
 
@@ -750,17 +878,27 @@ export function AssetPage({
                   >
                     {imageBusy ? "生成中…" : "生成图片"}
                   </button>
+                  <input
+                    id="asset-version-import"
+                    type="file"
+                    accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"
+                    hidden
+                    disabled={importBusy}
+                    onChange={handleImportVersion}
+                  />
+                  <label htmlFor="asset-version-import" className="button-like">
+                    {importBusy ? "导入中…" : "导入图片"}
+                  </label>
                 </div>
-                <p className="muted">
-                  生成结果会自动保存为新版本；调用图片 API 可能产生费用。
-                </p>
+                <p className="muted">导入或生成都会创建新版本；导入图片不会调用 API。</p>
                 {imageModels.length === 0 && (
                   <p className="muted">
                     还没有可用的图片模型，请先在「设置」启用一个支持文生图的模型。
                   </p>
                 )}
-                {imageJob && imageJob.status !== "completed" && (
-                  imageJobTargetId && imageJobTargetId !== selected.asset_id ? (
+                {imageJob &&
+                  imageJob.status !== "completed" &&
+                  (imageJobTargetId && imageJobTargetId !== selected.asset_id ? (
                     <p className="muted">
                       正在生成「{imageJobTargetName || "其他资产"}」的图片。
                       当前可继续查看其他资产，生成完成后返回该资产即可看到新版本。
@@ -777,86 +915,195 @@ export function AssetPage({
                             : "排队中"}
                       {imageJob.error ? ` · ${imageJob.error}` : ""}
                     </p>
-                  )
-                )}
+                  ))}
                 {versions.length === 0 ? (
                   <p className="muted">还没有图片版本。</p>
                 ) : (
-                  <ul className="version-list">
-                    {versions.map((v) => (
-                      <li
-                        key={v.id}
-                        className={[
-                          "version-item",
-                          v.is_current ? "version-item-current" : "",
-                          v.id === previewVersionId ? "version-item-selected" : "",
-                        ]
-                          .filter(Boolean)
-                          .join(" ")}
-                      >
-                        <div
-                          className="version-thumb-wrap"
-                          onClick={() => setPreviewVersionId(v.id)}
-                          role="button"
-                          tabIndex={0}
-                        >
-                          <img
-                            src={`${apiBase}${v.file_url}`}
-                            alt={`版本 v${v.version}`}
-                            className="version-thumb"
-                          />
-                          <button
-                            type="button"
-                            className="version-zoom"
-                            title="放大查看"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setZoomImageUrl(`${apiBase}${v.file_url}`);
-                            }}
+                  <>
+                    {versions.length > 1 && (
+                      <div className="version-compare">
+                        <div className="version-compare-toolbar">
+                          <span className="version-compare-title">版本对比</span>
+                          <select
+                            aria-label="选择要对比的版本"
+                            value={compareVersionId ?? ""}
+                            onChange={(e) => setCompareVersionId(e.target.value || null)}
                           >
-                            🔍
-                          </button>
+                            <option value="">选择另一个版本</option>
+                            {versions
+                              .filter((v) => v.id !== previewVersionId)
+                              .map((v) => (
+                                <option key={v.id} value={v.id}>
+                                  v{v.version}
+                                  {v.is_current ? " · 当前" : ""}
+                                </option>
+                              ))}
+                          </select>
                         </div>
-                        <div className="version-info">
-                          <span className="project-name">
-                            v{v.version}
-                            {v.is_current && " · 当前"}
-                          </span>
-                          <span className="muted">
-                            {formatVersionTime(v.created_at)}
-                            {v.model_id ? ` · ${v.model_id}` : ""}
-                          </span>
-                        </div>
-                        <div className="version-actions">
-                          {!v.is_current && (
+                        {compareVersionId &&
+                          (() => {
+                            const primary = versions.find(
+                              (v) => v.id === previewVersionId,
+                            );
+                            const compare = versions.find(
+                              (v) => v.id === compareVersionId,
+                            );
+                            if (!primary || !compare) return null;
+                            return (
+                              <div className="version-compare-grid">
+                                <figure>
+                                  <img
+                                    src={`${apiBase}${primary.file_url}`}
+                                    alt={`版本 v${primary.version}`}
+                                  />
+                                  <figcaption>v{primary.version}</figcaption>
+                                </figure>
+                                <figure>
+                                  <img
+                                    src={`${apiBase}${compare.file_url}`}
+                                    alt={`版本 v${compare.version}`}
+                                  />
+                                  <figcaption>v{compare.version}</figcaption>
+                                </figure>
+                              </div>
+                            );
+                          })()}
+                      </div>
+                    )}
+                    {(() => {
+                      const previewVersion = versions.find(
+                        (version) => version.id === previewVersionId,
+                      );
+                      if (!previewVersion) return null;
+                      const prompt = previewVersion.payload.prompt;
+                      const negativePrompt = previewVersion.payload.negative_prompt;
+                      const references = getVersionReferences(previewVersion);
+                      return (
+                        <details className="version-history">
+                          <summary>版本记录 · v{previewVersion.version}</summary>
+                          <dl className="version-history-meta">
+                            <div>
+                              <dt>来源</dt>
+                              <dd>{getVersionSource(previewVersion)}</dd>
+                            </div>
+                            {previewVersion.model_id && (
+                              <div>
+                                <dt>模型</dt>
+                                <dd>{previewVersion.model_id}</dd>
+                              </div>
+                            )}
+                          </dl>
+                          {typeof prompt === "string" && prompt.trim() && (
+                            <div className="version-history-content">
+                              <h4>提示词</h4>
+                              <p>{prompt}</p>
+                            </div>
+                          )}
+                          {typeof negativePrompt === "string" &&
+                            negativePrompt.trim() && (
+                              <div className="version-history-content">
+                                <h4>负向提示词</h4>
+                                <p>{negativePrompt}</p>
+                              </div>
+                            )}
+                          <div className="version-history-content">
+                            <h4>参考来源</h4>
+                            {references.length > 0 ? (
+                              <ul>
+                                {references.map((reference, index) => (
+                                  <li
+                                    key={`${formatVersionReference(reference)}-${index}`}
+                                  >
+                                    {formatVersionReference(reference)}
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <p className="muted">此版本未记录参考来源。</p>
+                            )}
+                          </div>
+                        </details>
+                      );
+                    })()}
+                    <ul className="version-list">
+                      {versions.map((v) => (
+                        <li
+                          key={v.id}
+                          className={[
+                            "version-item",
+                            v.is_current ? "version-item-current" : "",
+                            v.id === previewVersionId ? "version-item-selected" : "",
+                          ]
+                            .filter(Boolean)
+                            .join(" ")}
+                        >
+                          <div
+                            className="version-thumb-wrap"
+                            onClick={() => {
+                              setPreviewVersionId(v.id);
+                              setCompareVersionId((prev) =>
+                                prev === v.id ? null : prev,
+                              );
+                            }}
+                            role="button"
+                            tabIndex={0}
+                          >
+                            <img
+                              src={`${apiBase}${v.file_url}`}
+                              alt={`版本 v${v.version}`}
+                              className="version-thumb"
+                            />
                             <button
                               type="button"
-                              onClick={() => void handlePromoteVersion(v.id)}
-                              disabled={versionBusy}
+                              className="version-zoom"
+                              title="放大查看"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setZoomImageUrl(`${apiBase}${v.file_url}`);
+                              }}
                             >
-                              设为当前
+                              🔍
                             </button>
-                          )}
-                          {!v.is_current && (
-                            <button
-                              type="button"
-                              className={
-                                confirmDeleteVersionId === v.id
-                                  ? "button-danger"
-                                  : "button-ghost"
-                              }
-                              onClick={() => void handleDeleteVersion(v.id)}
-                              disabled={versionBusy}
-                            >
-                              {confirmDeleteVersionId === v.id
-                                ? "确认删除"
-                                : "删除"}
-                            </button>
-                          )}
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
+                          </div>
+                          <div className="version-info">
+                            <span className="project-name">
+                              v{v.version}
+                              {v.is_current && " · 当前"}
+                            </span>
+                            <span className="muted">
+                              {formatVersionTime(v.created_at)}
+                              {v.model_id ? ` · ${v.model_id}` : ""}
+                            </span>
+                          </div>
+                          <div className="version-actions">
+                            {!v.is_current && (
+                              <button
+                                type="button"
+                                onClick={() => void handlePromoteVersion(v.id)}
+                                disabled={versionBusy}
+                              >
+                                设为当前
+                              </button>
+                            )}
+                            {!v.is_current && (
+                              <button
+                                type="button"
+                                className={
+                                  confirmDeleteVersionId === v.id
+                                    ? "button-danger"
+                                    : "button-ghost"
+                                }
+                                onClick={() => void handleDeleteVersion(v.id)}
+                                disabled={versionBusy}
+                              >
+                                {confirmDeleteVersionId === v.id ? "确认删除" : "删除"}
+                              </button>
+                            )}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </>
                 )}
               </div>
             </>
@@ -880,8 +1127,8 @@ export function AssetPage({
             <h3>生成资产卡</h3>
             {llmModels.length === 0 && (
               <p className="muted">
-                没有可用的文本模型。请在「设置」中启用至少一个文本模型，
-                并确认其 Provider 已启用（Provider 和模型需要同时启用）。
+                没有可用的文本模型。请在「设置」中启用至少一个文本模型， 并确认其 Provider
+                已启用（Provider 和模型需要同时启用）。
               </p>
             )}
             <label>
@@ -909,33 +1156,24 @@ export function AssetPage({
             {genJob && (
               <p className="muted">
                 {genJob.detail}
-                {genJob.progress != null &&
-                  `（${Math.round(genJob.progress * 100)}%）`}
+                {genJob.progress != null && `（${Math.round(genJob.progress * 100)}%）`}
               </p>
             )}
             {genJob?.error && <p className="error">{genJob.error}</p>}
             <div className="context-card">
               <h4>规则</h4>
+              <p className="muted">只补充空白字段，不会覆盖你已经填写的内容。</p>
               <p className="muted">
-                只补充空白字段，不会覆盖你已经填写的内容。
-              </p>
-              <p className="muted">
-                图片规格固定：角色 2:3（1024×1536）、场景 16:9（1280×720）、
-                道具 1:1（1024×1024）。
+                图片规格固定：角色 2:3（1024×1536）、场景 16:9（1280×720）、 道具
+                1:1（1024×1024）。
               </p>
             </div>
           </div>
         </aside>
       </div>
       {zoomImageUrl && (
-        <div
-          className="image-lightbox"
-          onClick={() => setZoomImageUrl(null)}
-        >
-          <div
-            className="image-lightbox-inner"
-            onClick={(e) => e.stopPropagation()}
-          >
+        <div className="image-lightbox" onClick={() => setZoomImageUrl(null)}>
+          <div className="image-lightbox-inner" onClick={(e) => e.stopPropagation()}>
             <img src={zoomImageUrl} alt="图片放大预览" />
             <button
               type="button"
@@ -945,6 +1183,120 @@ export function AssetPage({
               关闭
             </button>
           </div>
+        </div>
+      )}
+      {regenerationPlan && (
+        <div
+          className="regeneration-plan-overlay"
+          onClick={() => !planBusy && setRegenerationPlan(null)}
+        >
+          <section
+            className="regeneration-plan"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="regeneration-plan-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="regeneration-plan-head">
+              <div>
+                <h2 id="regeneration-plan-title">再生成计划</h2>
+                <p className="muted">
+                  先确认关键帧，再决定是否重做依赖它的视频。系统不会自动生成视频。
+                </p>
+              </div>
+              <button
+                type="button"
+                className="button-ghost"
+                onClick={() => setRegenerationPlan(null)}
+                disabled={planBusy}
+                autoFocus
+              >
+                关闭
+              </button>
+            </div>
+
+            <div className="regeneration-plan-summary">
+              <span>{regenerationPlan.image_shots.length} 个关键帧待确认</span>
+              <span>{regenerationPlan.video_shots.length} 个视频将等待关键帧确认</span>
+            </div>
+
+            <section className="regeneration-plan-section">
+              <h3>关键帧</h3>
+              {regenerationPlan.image_shots.length > 0 ? (
+                <ul className="regeneration-plan-list">
+                  {regenerationPlan.image_shots.map((item) => (
+                    <li key={item.shot_id}>
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={selectedPlanShots.includes(item.shot_id)}
+                          onChange={(event) =>
+                            setSelectedPlanShots((current) =>
+                              event.target.checked
+                                ? [...current, item.shot_id]
+                                : current.filter((shotId) => shotId !== item.shot_id),
+                            )
+                          }
+                        />
+                        <span>
+                          {item.label}
+                          <small>{item.reason}</small>
+                        </span>
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="muted">没有可重新生成的关键帧。</p>
+              )}
+            </section>
+
+            <section className="regeneration-plan-section">
+              <h3>视频</h3>
+              {regenerationPlan.video_shots.length > 0 ? (
+                <ul className="regeneration-plan-list regeneration-plan-list-muted">
+                  {regenerationPlan.video_shots.map((item) => (
+                    <li key={item.shot_id}>
+                      {item.label}
+                      <small>{item.reason}</small>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="muted">没有依赖旧关键帧的视频。</p>
+              )}
+              <p className="muted">
+                关键帧生成完成并设为当前版本后，请在分镜页决定是否生成视频。
+              </p>
+            </section>
+
+            <div className="regeneration-plan-actions">
+              {onOpenStoryboard && (
+                <button
+                  type="button"
+                  className="button-ghost"
+                  onClick={() => {
+                    setRegenerationPlan(null);
+                    onOpenStoryboard();
+                  }}
+                  disabled={planBusy}
+                >
+                  前往分镜
+                </button>
+              )}
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={!imageModelId || selectedPlanShots.length === 0 || planBusy}
+                onClick={() => void runRegenerationPlan()}
+              >
+                {planBusy
+                  ? "正在创建任务…"
+                  : `创建 ${selectedPlanShots.length} 个关键帧任务`}
+              </button>
+            </div>
+            {!imageModelId && <p className="error">请先在资产页选择可用的图片模型。</p>}
+          </section>
         </div>
       )}
     </div>

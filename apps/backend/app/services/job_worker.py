@@ -98,7 +98,7 @@ class JobWorker:
             return
         recovered = self.store.recover_stale()
         if recovered:
-            logger.info("Recovered %d stale job(s) to queued", recovered)
+            logger.info("Recovered %d stale job(s) to paused", recovered)
         self._thread = threading.Thread(
             target=self._run, name="job-worker", daemon=True
         )
@@ -166,6 +166,9 @@ class JobWorker:
     # ---------- 任务执行器 ----------
 
     def _run_generation(self, job) -> None:
+        if job.task_id:
+            self._poll_until_done(job.id)
+            return
         payload = job.input_payload or {}
         request_extra = dict(payload.get("extra") or {})
         request_extra["output_dir"] = str(self.output_dir)

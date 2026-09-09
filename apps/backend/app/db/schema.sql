@@ -12,6 +12,11 @@ CREATE TABLE IF NOT EXISTS projects (
     deleted_at  TEXT
 );
 
+CREATE TABLE IF NOT EXISTS project_runtime_state (
+    project_id TEXT PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,
+    paused_at  TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS novels (
     id          TEXT PRIMARY KEY,
     project_id  TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -231,6 +236,13 @@ CREATE TABLE IF NOT EXISTS production_edges (
     created_at       TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS reference_media (
+    id          TEXT PRIMARY KEY,
+    project_id  TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    name        TEXT NOT NULL DEFAULT '',
+    created_at  TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS providers (
     id            TEXT PRIMARY KEY,
     name          TEXT NOT NULL,
@@ -338,6 +350,7 @@ CREATE INDEX IF NOT EXISTS idx_audio_mix_sessions_shot ON audio_mix_sessions(sho
 CREATE INDEX IF NOT EXISTS idx_production_edges_project ON production_edges(project_id);
 CREATE INDEX IF NOT EXISTS idx_production_edges_upstream ON production_edges(upstream_type, upstream_id);
 CREATE INDEX IF NOT EXISTS idx_production_edges_downstream ON production_edges(downstream_type, downstream_id);
+CREATE INDEX IF NOT EXISTS idx_reference_media_project ON reference_media(project_id);
 CREATE INDEX IF NOT EXISTS idx_models_provider ON models(provider_id);
 CREATE INDEX IF NOT EXISTS idx_models_type ON models(model_type);
 CREATE INDEX IF NOT EXISTS idx_dialogue_reviews_shot ON shot_dialogue_reviews(project_id, shot_id);

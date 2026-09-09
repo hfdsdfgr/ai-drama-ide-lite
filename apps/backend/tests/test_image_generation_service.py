@@ -32,6 +32,14 @@ class _FakeStore:
     def get(self, job_id):
         return _FakeRecord(self.project_id)
 
+    def list_jobs(self, project_id, limit=50):
+        return []
+
+
+class _FakeProviderManager:
+    def adapter_for(self, model_id, capability):
+        return object()
+
 
 class _FakeRecord:
     def __init__(self, project_id):
@@ -93,7 +101,7 @@ def _scene(**overrides) -> Scene:
 def _service(fake):
     return ImageGenerationService(
         fake,
-        object(),
+        _FakeProviderManager(),
         "unused.db",
         _FakeAssetVersionService(),
     )
@@ -240,3 +248,60 @@ def test_get_job_checks_project_ownership():
     with pytest.raises(AppError) as exc:
         service.get_job("proj_1", "job_1")
     assert exc.value.code == "image_job_not_found"
+
+
+def test_plan_shots_skips_existing_versions_and_keeps_ready_shots(monkeypatch):
+    service = _service(_FakeGenerationService())
+    monkeypatch.setattr(
+        ScriptRepository,
+        "get_shot_with_scene",
+        lambda self, project_id, shot_id: (_shot(id=shot_id), _scene()),
+    )
+    monkeypatch.setattr(StoryRepository, "list_assets", lambda self, project_id: [])
+    monkeypatch.setattr(
+        service.asset_version_service,
+        "get_current",
+        lambda project_id, entity_type, entity_id: _FakeVersion("old.png")
+        if entity_id == "shot_existing"
+        else None,
+    )
+
+    plan = service.plan_shots(
+        "proj_1", "model_img", ["shot_ready", "shot_existing", "shot_ready"]
+    )
+
+    assert [item["shot_id"] for item in plan["ready"]] == ["shot_ready"]
+    assert plan["skipped"][0]["reason"] == "已有当前关键帧版本"
+
+
+def test_start_shots_adds_shared_batch_metadata(monkeypatch):
+    fake = _FakeGenerationService()
+    service = _service(fake)
+    monkeypatch.setattr(
+        ScriptRepository,
+        "get_shot_with_scene",
+        lambda self, project_id, shot_id: (
+            _shot(id=shot_id, shot_number=1 if shot_id == "shot_01" else 2),
+            _scene(),
+        ),
+    )
+    monkeypatch.setattr(StoryRepository, "list_assets", lambda self, project_id: [])
+    monkeypatch.setattr(
+        service.asset_version_service,
+        "get_current",
+        lambda project_id, entity_type, entity_id: None,
+    )
+
+    result = service.start_shots(
+        "proj_1", "model_img", ["shot_01", "shot_02"], "第 1 集 · 青云镇"
+    )
+
+    assert result["batch_id"].startswith("batch_")
+    assert len(fake.calls) == 2
+    extras = [kwargs["extra"] for _, kwargs in fake.calls]
+    assert {extra["batch_id"] for extra in extras} == {result["batch_id"]}
+    assert {extra["batch_label"] for extra in extras} == {"第 1 集 · 青云镇"}
+    assert [extra["target_label"] for extra in extras] == [
+        "青云镇 · 镜头 1",
+        "青云镇 · 镜头 2",
+    ]

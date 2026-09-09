@@ -1,13 +1,24 @@
 import type { AssetVersion } from "../types/asset_version";
 import { request } from "./client";
 
+export function importAssetVersion(
+  projectId: string,
+  assetId: string,
+  file: File,
+): Promise<AssetVersion> {
+  const form = new FormData();
+  form.append("file", file);
+  return request<AssetVersion>(
+    `/projects/${projectId}/assets/${assetId}/versions/import`,
+    { method: "POST", headers: {}, body: form },
+  );
+}
+
 export function listAssetVersions(
   projectId: string,
   assetId: string,
 ): Promise<AssetVersion[]> {
-  return request<AssetVersion[]>(
-    `/projects/${projectId}/assets/${assetId}/versions`,
-  );
+  return request<AssetVersion[]>(`/projects/${projectId}/assets/${assetId}/versions`);
 }
 
 export function getCurrentAssetVersion(
@@ -35,8 +46,7 @@ export function deleteAssetVersion(
   assetId: string,
   versionId: string,
 ): Promise<void> {
-  return request<void>(
-    `/projects/${projectId}/assets/${assetId}/versions/${versionId}`,
-    { method: "DELETE" },
-  );
+  return request<void>(`/projects/${projectId}/assets/${assetId}/versions/${versionId}`, {
+    method: "DELETE",
+  });
 }

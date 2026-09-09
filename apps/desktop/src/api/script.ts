@@ -9,10 +9,22 @@ import type {
 } from "../types/script";
 import { request } from "./client";
 
-export function listEpisodes(
+export function importScript(
   projectId: string,
+  file: File,
   novelId?: string,
-): Promise<Episode[]> {
+): Promise<{ episode_ids: string[] }> {
+  const form = new FormData();
+  form.append("file", file);
+  if (novelId) form.append("novel_id", novelId);
+  return request<{ episode_ids: string[] }>(`/projects/${projectId}/script/import`, {
+    method: "POST",
+    headers: {},
+    body: form,
+  });
+}
+
+export function listEpisodes(projectId: string, novelId?: string): Promise<Episode[]> {
   const suffix = novelId ? `?novel_id=${encodeURIComponent(novelId)}` : "";
   return request<Episode[]>(`/projects/${projectId}/script/episodes${suffix}`);
 }
@@ -21,18 +33,11 @@ export function getEpisodeDetail(
   projectId: string,
   episodeId: string,
 ): Promise<EpisodeDetail> {
-  return request<EpisodeDetail>(
-    `/projects/${projectId}/script/episodes/${episodeId}`,
-  );
+  return request<EpisodeDetail>(`/projects/${projectId}/script/episodes/${episodeId}`);
 }
 
-export function getSceneDetail(
-  projectId: string,
-  sceneId: string,
-): Promise<SceneDetail> {
-  return request<SceneDetail>(
-    `/projects/${projectId}/script/scenes/${sceneId}`,
-  );
+export function getSceneDetail(projectId: string, sceneId: string): Promise<SceneDetail> {
+  return request<SceneDetail>(`/projects/${projectId}/script/scenes/${sceneId}`);
 }
 
 export function generateEpisodeScript(
@@ -67,13 +72,10 @@ export function saveEpisodeScript(
     }[];
   },
 ): Promise<EpisodeDetail> {
-  return request<EpisodeDetail>(
-    `/projects/${projectId}/script/save-episode-script`,
-    {
-      method: "POST",
-      body: JSON.stringify(payload),
-    },
-  );
+  return request<EpisodeDetail>(`/projects/${projectId}/script/save-episode-script`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 export function generateShots(
@@ -114,13 +116,10 @@ export function updateScene(
     dialogue?: string;
   },
 ): Promise<Scene> {
-  return request<Scene>(
-    `/projects/${projectId}/script/scenes/${sceneId}`,
-    {
-      method: "PUT",
-      body: JSON.stringify(input),
-    },
-  );
+  return request<Scene>(`/projects/${projectId}/script/scenes/${sceneId}`, {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
 }
 
 export function updateShot(
@@ -172,12 +171,8 @@ export function reorderShots(
   );
 }
 
-export function deleteEpisode(
-  projectId: string,
-  episodeId: string,
-): Promise<void> {
-  return request<void>(
-    `/projects/${projectId}/script/episodes/${episodeId}`,
-    { method: "DELETE" },
-  );
+export function deleteEpisode(projectId: string, episodeId: string): Promise<void> {
+  return request<void>(`/projects/${projectId}/script/episodes/${episodeId}`, {
+    method: "DELETE",
+  });
 }

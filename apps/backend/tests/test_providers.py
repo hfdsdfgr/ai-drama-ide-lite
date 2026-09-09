@@ -213,6 +213,70 @@ def test_aggregation_filters(client):
     assert ids == ["gpt-image-1"]
 
 
+def test_model_recommendation_is_explainable_and_respects_preference(client):
+    provider = client.post(
+        "/api/providers",
+        json={
+            "name": "路由测试",
+            "api_base_url": "http://127.0.0.1:1/v1",
+            "needs_key": False,
+        },
+    ).json()
+    pro = client.post(
+        "/api/models",
+        json={
+            "provider_id": provider["id"],
+            "model_id": "cinema-pro",
+            "model_type": "image",
+            "is_default_image": True,
+        },
+    ).json()
+    flash = client.post(
+        "/api/models",
+        json={
+            "provider_id": provider["id"],
+            "model_id": "cinema-flash",
+            "model_type": "image",
+        },
+    ).json()
+
+    balanced = client.post(
+        "/api/models/recommendation",
+        json={
+            "model_type": "image",
+            "required_capabilities": ["text_to_image"],
+            "preference": "balanced",
+        },
+    )
+    assert balanced.status_code == 200
+    assert balanced.json()["recommended"]["model"]["id"] == pro["id"]
+    assert "默认模型" in "".join(balanced.json()["recommended"]["reasons"])
+
+    speed = client.post(
+        "/api/models/recommendation",
+        json={
+            "model_type": "image",
+            "required_capabilities": ["text_to_image"],
+            "preference": "speed",
+        },
+    ).json()
+    assert speed["recommended"]["model"]["id"] == flash["id"]
+    assert "flash" in "".join(speed["recommended"]["reasons"])
+    assert speed["alternatives"][0]["model"]["id"] == pro["id"]
+
+
+def test_model_recommendation_rejects_mismatched_capability(client):
+    response = client.post(
+        "/api/models/recommendation",
+        json={
+            "model_type": "image",
+            "required_capabilities": ["image_to_video"],
+        },
+    )
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "capability_type_mismatch"
+
+
 def test_enabled_only_excludes_disabled_provider_and_keyless(client):
     # Provider 未配 Key（needs_key=True）→ 模型即使启用也不该出现在 enabled_only
     keyless = client.post(
@@ -387,6 +451,33 @@ def test_persistence_across_restart(tmp_path):
     models = client2.get("/api/models", params={"provider_id": provider["id"]}).json()
     assert [m["model_id"] for m in models] == ["gpt-4o"]
     client2.close()
+
+
+def test_custom_provider_model_type_survives_restart(tmp_path):
+    store = MemorySecretStore()
+    settings = Settings(data_dir=tmp_path, log_level="ERROR")
+    with TestClient(create_app(settings=settings, secret_store=store)) as client1:
+        provider = client1.post(
+            "/api/providers",
+            json={
+                "name": "自定义",
+                "api_base_url": "http://127.0.0.1:1/v1",
+                "needs_key": False,
+            },
+        ).json()
+        model = client1.post(
+            "/api/models",
+            json={
+                "provider_id": provider["id"],
+                "model_id": "cinema-pro",
+                "model_type": "image",
+            },
+        ).json()
+
+    with TestClient(create_app(settings=settings, secret_store=store)) as client2:
+        restored = client2.get(f"/api/models/{model['id']}").json()
+        assert restored["model_type"] == "image"
+        assert restored["capabilities"] == ["text_to_image"]
 
 
 def test_classify_rules():

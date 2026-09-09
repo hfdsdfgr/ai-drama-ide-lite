@@ -34,3 +34,15 @@ class AffectedNodeOut(BaseModel):
 class AffectedNodesOut(BaseModel):
     changed_node: dict = Field(default_factory=dict)
     affected: list[AffectedNodeOut] = Field(default_factory=list)
+
+
+class RegenerationPlanItemOut(BaseModel):
+    shot_id: str
+    label: str
+    reason: str = ""
+
+
+class RegenerationPlanOut(BaseModel):
+    changed_node: dict = Field(default_factory=dict)
+    image_shots: list[RegenerationPlanItemOut] = Field(default_factory=list)
+    video_shots: list[RegenerationPlanItemOut] = Field(default_factory=list)

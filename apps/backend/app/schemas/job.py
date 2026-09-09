@@ -24,6 +24,11 @@ class JobOut(BaseModel):
     error_category: str = ""
     attempts: int = 0
     result: dict | None = None
+    batch_id: str = ""
+    batch_label: str = ""
+    target_id: str = ""
+    target_label: str = ""
+    has_remote_task: bool = False
     created_at: datetime
     started_at: datetime | None = None
     completed_at: datetime | None = None
@@ -33,10 +38,17 @@ class JobOut(BaseModel):
 
 class BatchJobsRequest(BaseModel):
     project_id: str = Field(min_length=1, max_length=100)
-    action: Literal["cancel", "pause", "resume"]
+    action: Literal["cancel", "pause", "resume", "retry"]
     stage: str | None = Field(default=None, max_length=50)
+    batch_id: str | None = Field(default=None, max_length=100)
 
 
 class BatchJobsResult(BaseModel):
     affected: int = 0
     jobs: list[JobOut] = Field(default_factory=list)
+    project_paused: bool = False
+
+
+class ProjectJobStateOut(BaseModel):
+    project_id: str
+    paused: bool = False

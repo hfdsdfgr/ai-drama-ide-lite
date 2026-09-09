@@ -5,7 +5,12 @@ from typing import Literal
 from fastapi import APIRouter, Request
 
 from app.core.errors import AppError
-from app.schemas.job import BatchJobsRequest, BatchJobsResult, JobOut
+from app.schemas.job import (
+    BatchJobsRequest,
+    BatchJobsResult,
+    JobOut,
+    ProjectJobStateOut,
+)
 from app.services.project_overview import stage_active_job_ids
 from app.services.job_store import JobRecord
 
@@ -13,6 +18,7 @@ router = APIRouter(prefix="/api/jobs", tags=["jobs"])
 
 
 def _job_out(record: JobRecord) -> dict:
+    extra = (record.input_payload or {}).get("extra") or {}
     return {
         "job_id": record.id,
         "project_id": record.project_id,
@@ -26,6 +32,11 @@ def _job_out(record: JobRecord) -> dict:
         "error_category": record.error_category,
         "attempts": record.attempts,
         "result": record.result_payload if record.result_payload else None,
+        "batch_id": extra.get("batch_id") or "",
+        "batch_label": extra.get("batch_label") or "",
+        "target_id": extra.get("target_id") or "",
+        "target_label": extra.get("target_label") or "",
+        "has_remote_task": bool(record.task_id),
         "created_at": record.created_at,
         "started_at": record.started_at,
         "completed_at": record.completed_at,
@@ -56,20 +67,46 @@ def list_jobs(
     ]
 
 
+@router.get("/project-state", response_model=ProjectJobStateOut)
+def get_project_job_state(project_id: str, request: Request) -> dict:
+    return {
+        "project_id": project_id,
+        "paused": _store(request).is_project_paused(project_id),
+    }
+
+
 @router.post("/batch", response_model=BatchJobsResult)
 def batch_jobs(request: Request, body: BatchJobsRequest) -> dict:
     """项目级 / 阶段级批量操作：取消、暂停、恢复。
     只影响非终态任务；已完成资产与版本不受影响。
     """
     store = _store(request)
+    project_scope = not body.stage and not body.batch_id
+    if body.stage and body.batch_id:
+        raise AppError(422, "ambiguous_job_scope", "阶段和生产批次不能同时指定")
+    if body.action == "retry" and not body.batch_id:
+        raise AppError(422, "batch_required", "批量重试必须指定生产批次")
+
+    if project_scope and body.action == "pause":
+        store.pause_project(body.project_id)
+    elif project_scope and body.action == "resume":
+        store.resume_project(body.project_id)
+
     if body.stage:
         job_ids = stage_active_job_ids(
             request.app.state.settings.db_path, body.project_id, body.stage
         )
+    elif body.batch_id:
+        job_ids = [
+            job.id
+            for job in store.list_jobs(project_id=body.project_id, limit=None)
+            if ((job.input_payload or {}).get("extra") or {}).get("batch_id")
+            == body.batch_id
+        ]
     else:
         job_ids = [
             job.id
-            for job in store.list_jobs(project_id=body.project_id, limit=200)
+            for job in store.list_jobs(project_id=body.project_id, limit=None)
             if job.status in ("queued", "running", "paused")
         ]
 
@@ -77,12 +114,15 @@ def batch_jobs(request: Request, body: BatchJobsRequest) -> dict:
         affected = store.cancel_many(job_ids)
     elif body.action == "pause":
         affected = store.pause_many(job_ids)
-    else:
+    elif body.action == "resume":
         affected = store.resume_many(job_ids)
+    else:
+        affected = store.retry_many(job_ids)
 
     return {
         "affected": affected,
         "jobs": [_job_out(store.get(job_id)) for job_id in job_ids],
+        "project_paused": store.is_project_paused(body.project_id),
     }
 
 

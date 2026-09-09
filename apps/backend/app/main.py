@@ -18,6 +18,7 @@ from app.api.routes import (
     overview,
     pipeline,
     production_graph,
+    references,
     projects,
     quality,
     providers,
@@ -43,6 +44,7 @@ from app.services.asset_version_service import AssetVersionService
 from app.services.generation_service import GenerationService
 from app.services.image_generation_service import ImageGenerationService
 from app.services.image_result_service import ImageResultService
+from app.services.media_import import MediaImportService
 from app.services.job_store import JobStore
 from app.services.job_worker import JobWorker
 from app.services.lip_sync_service import LipSyncService
@@ -90,6 +92,9 @@ def create_app(
     )
     app.state.job_store = JobStore(config.db_path)
     app.state.asset_version_service = AssetVersionService(
+        config.db_path, config.projects_dir
+    )
+    app.state.media_import_service = MediaImportService(
         config.db_path, config.projects_dir
     )
     app.state.image_result_service = ImageResultService(
@@ -204,6 +209,7 @@ def create_app(
     app.include_router(asset_versions.router)
     app.include_router(overview.router)
     app.include_router(production_graph.router)
+    app.include_router(references.router)
     app.include_router(videos.router)
     app.include_router(dialogue_reviews.router)
     app.include_router(visual_reviews.router)

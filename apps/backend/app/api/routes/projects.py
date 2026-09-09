@@ -57,7 +57,9 @@ def export_project(project_id: str, request: Request) -> Response:
     repo = _repo(request)
     project = repo.get(project_id)
     novel_repo = NovelRepository(request.app.state.settings.db_path)
-    content = export_project_zip(project, repo.projects_dir / project.id, novel_repo)
+    content = export_project_zip(
+        project, repo.projects_dir / project.id, novel_repo, repo.db_path
+    )
     return Response(
         content=content,
         media_type="application/zip",

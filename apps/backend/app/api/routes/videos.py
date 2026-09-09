@@ -104,6 +104,19 @@ def get_current_video_version(
     return _version_out(project_id, record) if record else None
 
 
+@router.post("/{shot_id}/import", response_model=AssetVersionOut, status_code=201)
+async def import_shot_video(
+    project_id: str,
+    shot_id: str,
+    request: Request,
+    file: UploadFile = File(...),
+) -> dict:
+    record = request.app.state.media_import_service.import_shot_video(
+        project_id, shot_id, file.filename or "", await file.read()
+    )
+    return _version_out(project_id, record)
+
+
 @router.post("/{shot_id}/dub", response_model=JobOut, status_code=201)
 def dub_shot(
     project_id: str,

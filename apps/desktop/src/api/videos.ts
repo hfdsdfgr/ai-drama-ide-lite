@@ -17,22 +17,14 @@ export function generateVideo(
   projectId: string,
   input: VideoGenerateInput,
 ): Promise<GenerationJob> {
-  return request<GenerationJob>(
-    `/projects/${projectId}/videos/generate`,
-    {
-      method: "POST",
-      body: JSON.stringify(input),
-    },
-  );
+  return request<GenerationJob>(`/projects/${projectId}/videos/generate`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 }
 
-export function getVideoJob(
-  projectId: string,
-  jobId: string,
-): Promise<GenerationJob> {
-  return request<GenerationJob>(
-    `/projects/${projectId}/videos/jobs/${jobId}`,
-  );
+export function getVideoJob(projectId: string, jobId: string): Promise<GenerationJob> {
+  return request<GenerationJob>(`/projects/${projectId}/videos/jobs/${jobId}`);
 }
 
 export function getCurrentVideoVersion(
@@ -42,6 +34,20 @@ export function getCurrentVideoVersion(
   return request<AssetVersion | null>(
     `/projects/${projectId}/videos/current?shot_id=${shotId}`,
   );
+}
+
+export function importShotVideo(
+  projectId: string,
+  shotId: string,
+  file: File,
+): Promise<AssetVersion> {
+  const form = new FormData();
+  form.append("file", file);
+  return request<AssetVersion>(`/projects/${projectId}/videos/${shotId}/import`, {
+    method: "POST",
+    headers: {},
+    body: form,
+  });
 }
 
 export interface VideoComposeInput {
@@ -59,13 +65,8 @@ export function composeVideos(
   });
 }
 
-export function getComposeJob(
-  projectId: string,
-  jobId: string,
-): Promise<JobOut> {
-  return request<JobOut>(
-    `/projects/${projectId}/videos/compose/jobs/${jobId}`,
-  );
+export function getComposeJob(projectId: string, jobId: string): Promise<JobOut> {
+  return request<JobOut>(`/projects/${projectId}/videos/compose/jobs/${jobId}`);
 }
 
 export function getComposedVideoVersion(

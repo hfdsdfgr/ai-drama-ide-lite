@@ -99,6 +99,32 @@ def test_affected_nodes_deduplicates(service):
     assert {n["id"] for n in affected} == {"s1", "v_img"}
 
 
+def test_regeneration_plan_groups_shot_results(service):
+    now = _now()
+    with get_connection(service.db_path) as conn:
+        conn.execute(
+            "INSERT INTO shots (id, project_id, shot_number, created_at, updated_at) VALUES ('s1', 'proj_1', 3, ?, ?)",
+            (now, now),
+        )
+        conn.execute(
+            "INSERT INTO versions (id, project_id, entity_type, entity_id, version, created_at) VALUES ('v_img', 'proj_1', 'shot', 's1', 1, ?)",
+            (now,),
+        )
+        conn.execute(
+            "INSERT INTO versions (id, project_id, entity_type, entity_id, version, created_at) VALUES ('v_vid', 'proj_1', 'shot', 's1', 2, ?)",
+            (now,),
+        )
+    service.add_edge("proj_1", "asset", "a1", "shot", "s1", relation="shot_references_asset")
+    service.add_edge("proj_1", "shot", "s1", "image_version", "v_img")
+    service.add_edge("proj_1", "image_version", "v_img", "video_version", "v_vid")
+
+    plan = service.regeneration_plan("proj_1", "asset", "a1")
+
+    assert [item["shot_id"] for item in plan["image_shots"]] == ["s1"]
+    assert [item["shot_id"] for item in plan["video_shots"]] == ["s1"]
+    assert plan["image_shots"][0]["reason"] == "使用了已变更的视觉资产"
+
+
 def test_remove_edge(service):
     edge = service.add_edge("proj_1", "asset", "a1", "shot", "s1")
     service.remove_edge(edge.id)

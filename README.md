@@ -6,7 +6,7 @@
 
 ## 下载与安装
 
-**最新版本：v0.2.61**（Windows x64 + macOS Apple Silicon）
+**最新版本：v0.2.7**（Windows x64 + macOS Apple Silicon）
 
 下载地址：[GitHub Releases](https://github.com/hfdsdfgr/ai-drama-ide-lite/releases)
 
@@ -256,7 +256,7 @@ Create Project
 
 ## 当前状态
 
-**当前进度：MVP 功能已完成并发布 v0.2.61（Windows + macOS 双平台）**，完整计划见 [ROADMAP.md](ROADMAP.md)。
+**当前进度：MVP 功能已完成并发布 v0.2.7（Windows + macOS 双平台）**，完整计划见 [ROADMAP.md](ROADMAP.md)。
 
 已完成的核心能力：
 
@@ -274,6 +274,7 @@ Create Project
 
 已发布版本：
 
+- **v0.2.7**：整体 UI 简约化与信息层级优化；支持外部资产 / 参考图导入、生成链路依赖增强和可解释模型推荐
 - **v0.2.61**：故事圣经页切到页面时重新加载文本模型（修复）
 - **v0.2.6**：全项目提示词按电影分镜规范统一加固；分镜运镜专业化 + 时长按内容规则分配；剧本 / 生成中心 / 资产 / 故事圣经与主页 UI 质感统一
 - **v0.2.5**：后端未启动时前端明确报错；macOS 冒烟测试收集后端日志

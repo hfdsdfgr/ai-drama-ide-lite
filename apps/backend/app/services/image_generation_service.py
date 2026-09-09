@@ -5,16 +5,20 @@
 一次请求只绑定一个模型 / 一个 Provider，不实现多模型并行。
 """
 
+import uuid
+
 from app.core.errors import AppError
 from app.schemas.script import Scene, Shot
 from app.services.adapters.manager import ProviderManager
 from app.services.asset_version_service import AssetVersionService
+from app.services.reference_media import ReferenceMediaRepository
 from app.services.capability_registry import IMAGE_CAPABILITIES
 from app.services.generation_service import GenerationService
 from app.services.image_prompt_builder import (
     build_asset_image_prompt,
     build_shot_image_prompt,
 )
+from app.services.job_store import TERMINAL_STATUSES
 from app.services.script_repo import ScriptRepository
 from app.services.story_repo import StoryRepository
 
@@ -80,6 +84,9 @@ class ImageGenerationService:
         art_style: str | None = None,
         negative_prompt: str = "",
         reference_asset_ids: list[str] | None = None,
+        batch_id: str = "",
+        batch_label: str = "",
+        target_label: str = "",
     ) -> dict:
         reference_asset_ids = reference_asset_ids or []
         if reference_asset_ids and capability == "text_to_image":
@@ -122,6 +129,9 @@ class ImageGenerationService:
             negative_prompt=negative_prompt,
             target_type="shot",
             target_id=shot_id,
+            batch_id=batch_id,
+            batch_label=batch_label,
+            target_label=target_label,
             images=self._reference_image_paths(
                 project_id, asset_references
             ),
@@ -132,6 +142,68 @@ class ImageGenerationService:
         if record.project_id != project_id:
             raise AppError(404, "image_job_not_found", f"图片生成任务不存在: {job_id}")
         return self.generation_service.get_job(job_id)
+
+    def plan_shots(self, project_id: str, model_id: str, shot_ids: list[str]) -> dict:
+        """预检批量关键帧：不创建 Job，也不调用外部模型。"""
+        self.provider_manager.adapter_for(model_id, "text_to_image")
+        active = self._active_shot_ids(project_id)
+        ready: list[dict] = []
+        skipped: list[dict] = []
+        seen: set[str] = set()
+        repo = ScriptRepository(self.db_path)
+
+        for shot_id in shot_ids:
+            if shot_id in seen:
+                continue
+            seen.add(shot_id)
+            try:
+                shot, scene = repo.get_shot_with_scene(project_id, shot_id)
+                label = f"{scene.title or scene.slugline or '场景'} · 镜头 {shot.shot_number or '-'}"
+                if shot_id in active:
+                    skipped.append({"shot_id": shot_id, "label": label, "reason": "已有进行中的图片任务"})
+                    continue
+                if self.asset_version_service.get_current(project_id, "shot", shot_id):
+                    skipped.append({"shot_id": shot_id, "label": label, "reason": "已有当前关键帧版本"})
+                    continue
+                references = self._resolve_shot_asset_references(project_id, shot, scene)
+                self._reference_image_paths(project_id, references)
+                ready.append({"shot_id": shot_id, "label": label})
+            except AppError as exc:
+                skipped.append({"shot_id": shot_id, "label": f"镜头 {shot_id}", "reason": exc.message})
+        return {"ready": ready, "skipped": skipped}
+
+    def start_shots(
+        self,
+        project_id: str,
+        model_id: str,
+        shot_ids: list[str],
+        batch_label: str = "批量关键帧",
+    ) -> dict:
+        """为预检通过的镜头逐个创建独立 Job，失败项不影响其余镜头。"""
+        plan = self.plan_shots(project_id, model_id, shot_ids)
+        batch_id = f"batch_{uuid.uuid4().hex[:12]}"
+        jobs: list[dict] = []
+        skipped = list(plan["skipped"])
+        for item in plan["ready"]:
+            try:
+                jobs.append(
+                    self.start_shot(
+                        project_id,
+                        item["shot_id"],
+                        model_id,
+                        batch_id=batch_id,
+                        batch_label=batch_label,
+                        target_label=item["label"],
+                    )
+                )
+            except AppError as exc:
+                skipped.append({**item, "reason": exc.message})
+        return {
+            "batch_id": batch_id,
+            "jobs": jobs,
+            "ready": plan["ready"],
+            "skipped": skipped,
+        }
 
     def resolve_entity_type(
         self, project_id: str, target_type: str, target_id: str
@@ -152,6 +224,9 @@ class ImageGenerationService:
         negative_prompt: str,
         target_type: str,
         target_id: str,
+        batch_id: str = "",
+        batch_label: str = "",
+        target_label: str = "",
         images: list[str] | None = None,
     ) -> dict:
         # Adapter 使用像素串作为尺寸，例如 OpenAI 兼容接口要求 1024x1536。
@@ -167,6 +242,9 @@ class ImageGenerationService:
             extra={
                 "target_type": target_type,
                 "target_id": target_id,
+                "batch_id": batch_id,
+                "batch_label": batch_label,
+                "target_label": target_label,
                 "width": plan.width,
                 "height": plan.height,
                 "source_refs": plan.source_refs,
@@ -181,10 +259,28 @@ class ImageGenerationService:
                 f"未知图片能力: {capability}",
             )
 
+    def _active_shot_ids(self, project_id: str) -> set[str]:
+        active: set[str] = set()
+        for job in self.generation_service.store.list_jobs(project_id, limit=500):
+            if job.status in TERMINAL_STATUSES or job.capability not in IMAGE_CAPABILITIES:
+                continue
+            extra = (job.input_payload or {}).get("extra") or {}
+            if extra.get("target_type") == "shot" and extra.get("target_id"):
+                active.add(extra["target_id"])
+        return active
+
     def _find_asset(self, project_id: str, asset_id: str) -> dict:
         for asset in StoryRepository(self.db_path).list_assets(project_id):
             if asset.get("asset_id") == asset_id:
                 return asset
+        reference = ReferenceMediaRepository(self.db_path).get(project_id, asset_id)
+        if reference:
+            return {
+                "asset_id": reference["id"],
+                "asset_type": "reference_image",
+                "name": reference["name"],
+                "reference_prompt": "",
+            }
         raise AppError(404, "asset_not_found", f"资产不存在: {asset_id}")
 
     def _reference_capability(self, model_id: str) -> str:
@@ -229,11 +325,21 @@ class ImageGenerationService:
         当用户明确选择参考资产时，优先使用这些资产；否则按文本做轻量匹配。
         """
         assets = StoryRepository(self.db_path).list_assets(project_id)
+        references = [
+            {
+                "asset_id": item["id"],
+                "asset_type": "reference_image",
+                "name": item["name"],
+                "reference_prompt": "",
+            }
+            for item in ReferenceMediaRepository(self.db_path).list(project_id)
+        ]
+        selectable = [*assets, *references]
         if reference_asset_ids:
             selected_ids = set(reference_asset_ids)
             selected = [
                 asset
-                for asset in assets
+                for asset in selectable
                 if asset["asset_id"] in selected_ids
             ]
             if len(selected) != len(selected_ids):

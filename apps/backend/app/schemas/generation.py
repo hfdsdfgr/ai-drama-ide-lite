@@ -25,7 +25,7 @@ class GenerationJobOut(BaseModel):
     job_id: str
     model_id: str
     capability: str
-    status: Literal["queued", "running", "completed", "failed", "cancelled"]
+    status: Literal["queued", "running", "paused", "completed", "failed", "cancelled"]
     error: str | None = None
     result: GenerationResultOut | None = None
     created_at: datetime

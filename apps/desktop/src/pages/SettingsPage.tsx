@@ -520,7 +520,7 @@ export function SettingsPage() {
       {notice && <p className="muted">{notice}</p>}
 
       {showForm && (
-        <form className="card" onSubmit={handleSubmit}>
+        <form className="card provider-form" onSubmit={handleSubmit}>
           <h3>{editing ? `编辑：${editing.name}` : "添加 Provider"}</h3>
           {!editing && (
             <label>
@@ -661,7 +661,7 @@ export function SettingsPage() {
         </form>
       )}
 
-      <div className="card">
+      <div className="card provider-settings">
         <h3>AI Provider</h3>
         <div className="tabs">
           {(["all", "llm", "image", "video", "audio"] as const).map((filter) => (

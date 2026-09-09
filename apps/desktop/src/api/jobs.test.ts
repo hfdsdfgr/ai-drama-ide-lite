@@ -1,15 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { cancelJob, listJobs, retryJob } from "./jobs";
+import { batchJobs, cancelJob, getProjectJobState, listJobs, retryJob } from "./jobs";
 
 afterEach(() => {
   vi.unstubAllGlobals();
 });
 
 function stubFetch(responseBody: unknown, status = 200) {
-  const mock = vi.fn(
-    async () => new Response(JSON.stringify(responseBody), { status }),
-  );
+  const mock = vi.fn(async () => new Response(JSON.stringify(responseBody), { status }));
   vi.stubGlobal("fetch", mock);
   return mock;
 }
@@ -39,11 +37,36 @@ describe("jobs api", () => {
     expect(init.method).toBe("POST");
   });
 
+  it("reads the persistent project pause state", async () => {
+    const mock = stubFetch({ project_id: "proj_1", paused: true });
+    const state = await getProjectJobState("proj_1");
+    expect(state.paused).toBe(true);
+    const [url] = mock.mock.calls[0] as unknown as [string];
+    expect(url).toBe("/api/jobs/project-state?project_id=proj_1");
+  });
+
   it("retryJob posts to retry endpoint", async () => {
     const mock = stubFetch({ job_id: "job_1", status: "queued" });
     await retryJob("job_1");
     const [url, init] = mock.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe("/api/jobs/job_1/retry");
     expect(init.method).toBe("POST");
+  });
+
+  it("scopes a batch action to one production batch", async () => {
+    const mock = stubFetch({ affected: 2, jobs: [] });
+    await batchJobs({
+      project_id: "proj_1",
+      batch_id: "batch_1",
+      action: "retry",
+    });
+
+    const [url, init] = mock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("/api/jobs/batch");
+    expect(JSON.parse(String(init.body))).toEqual({
+      project_id: "proj_1",
+      batch_id: "batch_1",
+      action: "retry",
+    });
   });
 });

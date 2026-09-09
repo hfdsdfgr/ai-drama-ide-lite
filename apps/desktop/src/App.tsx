@@ -64,10 +64,7 @@ function App() {
   return (
     <div className="app">
       <div className="app-shell">
-        <AppSidebar
-          activeProjectId={activeProjectId}
-          onJump={handleNovelJump}
-        />
+        <AppSidebar activeProjectId={activeProjectId} onJump={handleNovelJump} />
         <div className="app-content">
           <header className="app-header">
             <nav className="module-nav" aria-label="主导航">
@@ -76,6 +73,7 @@ function App() {
                   key={m.key}
                   type="button"
                   className={view === m.key ? "nav-active" : ""}
+                  aria-current={view === m.key ? "page" : undefined}
                   disabled={!m.ready}
                   title={m.ready ? "" : "该模块将在后续阶段开放"}
                   onClick={() => {
@@ -93,6 +91,7 @@ function App() {
                 aria-label="设置"
                 title="设置"
                 className={view === "settings" ? "nav-active" : ""}
+                aria-current={view === "settings" ? "page" : undefined}
                 onClick={() => setView("settings")}
               >
                 <svg
@@ -131,16 +130,10 @@ function App() {
               />
             </div>
             <div className={view === "bible" ? "view-pane active" : "view-pane"}>
-              <StoryBiblePage
-                active={view === "bible"}
-                projectId={activeProjectId}
-              />
+              <StoryBiblePage active={view === "bible"} projectId={activeProjectId} />
             </div>
             <div className={view === "script" ? "view-pane active" : "view-pane"}>
-              <ScriptPage
-                active={view === "script"}
-                projectId={activeProjectId}
-              />
+              <ScriptPage active={view === "script"} projectId={activeProjectId} />
             </div>
             <div className={view === "storyboard" ? "view-pane active" : "view-pane"}>
               <StoryboardPage
@@ -154,6 +147,7 @@ function App() {
               <AssetPage
                 active={view === "assets"}
                 projectId={activeProjectId}
+                onOpenStoryboard={() => setView("storyboard")}
               />
             </div>
             <div className={view === "generation" ? "view-pane active" : "view-pane"}>

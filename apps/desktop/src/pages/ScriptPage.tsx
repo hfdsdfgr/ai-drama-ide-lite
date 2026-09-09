@@ -7,6 +7,7 @@ import {
   generateShots,
   getEpisodeDetail,
   getSceneDetail,
+  importScript,
   listEpisodes,
   deleteEpisode,
   saveEpisodeScript,
@@ -73,8 +74,7 @@ export function ScriptPage({
 
   const [chapterIndex, setChapterIndex] = useState(0);
   const [scriptInstruction, setScriptInstruction] = useState("");
-  const [scriptPreview, setScriptPreview] =
-    useState<AiEpisodeScriptResult | null>(null);
+  const [scriptPreview, setScriptPreview] = useState<AiEpisodeScriptResult | null>(null);
   const [genBusy, setGenBusy] = useState(false);
 
   const [shotSceneId, setShotSceneId] = useState<string | null>(null);
@@ -87,9 +87,10 @@ export function ScriptPage({
     action: string;
     dialogue: string;
   } | null>(null);
-  const [confirmEpisodeDeleteId, setConfirmEpisodeDeleteId] = useState<
-    string | null
-  >(null);
+  const [confirmEpisodeDeleteId, setConfirmEpisodeDeleteId] = useState<string | null>(
+    null,
+  );
+  const [importingScript, setImportingScript] = useState(false);
 
   useEffect(() => {
     if (!active) return;
@@ -243,6 +244,25 @@ export function ScriptPage({
     }
   }
 
+  async function handleImportScript(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !projectId) return;
+    setImportingScript(true);
+    setError("");
+    try {
+      const result = await importScript(projectId, file, novelId);
+      const episodes = await listEpisodes(projectId, novelId || undefined);
+      setEpisodes(episodes);
+      setNotice(`已导入 ${result.episode_ids.length} 个分集。`);
+      if (result.episode_ids[0]) await selectEpisode(result.episode_ids[0]);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setImportingScript(false);
+    }
+  }
+
   async function generateAllShots() {
     if (!projectId || !episodeDetail || !shotModelId) return;
     const pendingScenes = episodeDetail.scenes.filter(
@@ -358,7 +378,19 @@ export function ScriptPage({
           <div className="sidebar-block">
             <div className="sidebar-head">
               <h3>分集</h3>
+              <input
+                id="script-import-input"
+                type="file"
+                accept="application/json,.json"
+                hidden
+                disabled={!projectId || importingScript}
+                onChange={handleImportScript}
+              />
+              <label htmlFor="script-import-input" className="button-like">
+                {importingScript ? "导入中…" : "导入 JSON"}
+              </label>
             </div>
+            <p className="muted">支持本项目 episodes / scenes / shots JSON 结构。</p>
             {!novelId ? (
               <p className="muted">
                 {!projectId
@@ -455,8 +487,8 @@ export function ScriptPage({
                 })()}
                 {allShotsProgress && (
                   <p className="muted">
-                    正在生成第 {allShotsProgress.current}/
-                    {allShotsProgress.total} 个场景的分镜：
+                    正在生成第 {allShotsProgress.current}/{allShotsProgress.total}{" "}
+                    个场景的分镜：
                     {allShotsProgress.sceneTitle}
                   </p>
                 )}
@@ -504,19 +536,14 @@ export function ScriptPage({
                               取消
                             </button>
                           ) : (
-                            <button
-                              type="button"
-                              onClick={() => startEditScene(scene)}
-                            >
+                            <button type="button" onClick={() => startEditScene(scene)}>
                               编辑
                             </button>
                           )}
                         </div>
                       </div>
                       {shotBusy && shotSceneId === scene.id && (
-                        <p className="muted">
-                          正在生成分镜，通常需要 1-3 分钟，请稍候…
-                        </p>
+                        <p className="muted">正在生成分镜，通常需要 1-3 分钟，请稍候…</p>
                       )}
                       {editingSceneId === scene.id && sceneDraft ? (
                         <div className="wizard-preview">
@@ -670,8 +697,8 @@ export function ScriptPage({
             <h3>生成剧本</h3>
             {llmModels.length === 0 && (
               <p className="muted">
-                没有可用的文本模型。请在「设置」中启用至少一个文本模型，
-                并确认其 Provider 已启用（Provider 和模型需要同时启用）。
+                没有可用的文本模型。请在「设置」中启用至少一个文本模型， 并确认其 Provider
+                已启用（Provider 和模型需要同时启用）。
               </p>
             )}
             <label>
@@ -714,8 +741,8 @@ export function ScriptPage({
             {scriptPreview ? (
               <div className="wizard-preview">
                 <p className="ok">
-                  剧本已生成：{scriptPreview.episode.title}（
-                  {scriptPreview.scenes.length} 个场景），完整预览已显示在中栏。
+                  剧本已生成：{scriptPreview.episode.title}（{scriptPreview.scenes.length}{" "}
+                  个场景），完整预览已显示在中栏。
                 </p>
                 <div className="toolbar">
                   <button
@@ -726,10 +753,7 @@ export function ScriptPage({
                   >
                     保存剧本
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setScriptPreview(null)}
-                  >
+                  <button type="button" onClick={() => setScriptPreview(null)}>
                     放弃
                   </button>
                 </div>
@@ -750,9 +774,7 @@ export function ScriptPage({
 
           <div className="card inspector-card">
             <h3>生成分镜</h3>
-            {llmModels.length === 0 && (
-              <p className="muted">没有可用的文本模型。</p>
-            )}
+            {llmModels.length === 0 && <p className="muted">没有可用的文本模型。</p>}
             <label>
               文本模型
               <select

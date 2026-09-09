@@ -1,7 +1,10 @@
 """剧本引擎接口（Phase 7 — Script Engine）。"""
 
-from fastapi import APIRouter, Query, Request
+import json
 
+from fastapi import APIRouter, File, Form, Query, Request, UploadFile
+
+from app.core.errors import AppError
 from app.schemas.script import (
     AiEpisodeScriptResult,
     AiShotsResult,
@@ -62,6 +65,47 @@ def save_episode_script(
         episode_summary=str(episode.get("summary", "")),
         scenes=[SceneCreate(**s) for s in scenes],
     )
+
+
+@router.post("/import", status_code=201)
+async def import_script(
+    project_id: str,
+    request: Request,
+    file: UploadFile = File(...),
+    novel_id: str | None = Form(default=None),
+) -> dict:
+    """导入本项目公开 JSON 格式的分集/场景/镜头，不猜测第三方格式。"""
+    if not (file.filename or "").lower().endswith(".json"):
+        raise AppError(422, "invalid_script_file", "请上传 JSON 剧本文件")
+    try:
+        payload = json.loads((await file.read()).decode("utf-8-sig"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise AppError(422, "script_json_invalid", "剧本 JSON 无法解析") from exc
+    episodes = payload.get("episodes") if isinstance(payload, dict) else None
+    if not isinstance(episodes, list) or not episodes:
+        raise AppError(422, "script_json_invalid", "剧本 JSON 需要包含非空 episodes 数组")
+    repo = _repo(request)
+    created: list[str] = []
+    for item in episodes:
+        if not isinstance(item, dict):
+            raise AppError(422, "script_json_invalid", "episodes 的每项必须是对象")
+        scenes = item.get("scenes") or []
+        detail = repo.save_episode_script(
+            project_id=project_id,
+            novel_id=item.get("novel_id") or novel_id,
+            source_chapter_index=item.get("source_chapter_index"),
+            episode_title=str(item.get("title", "")),
+            episode_summary=str(item.get("summary", "")),
+            scenes=[SceneCreate(**scene) for scene in scenes],
+        )
+        for scene, saved in zip(scenes, detail.scenes, strict=True):
+            shots = scene.get("shots") or []
+            if shots:
+                repo.save_scene_shots(
+                    project_id, saved.id, [ShotCreate(**shot) for shot in shots]
+                )
+        created.append(detail.episode.id)
+    return {"episode_ids": created}
 
 
 @router.get("/episodes/{episode_id}", response_model=EpisodeDetail)

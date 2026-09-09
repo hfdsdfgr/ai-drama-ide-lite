@@ -3,13 +3,18 @@
 from pathlib import Path
 from typing import Literal
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, File, Request, UploadFile
 from fastapi.responses import FileResponse
 
 from app.core.errors import AppError
 from app.schemas.asset_version import AssetVersionOut
 from app.schemas.generation import GenerationJobOut
-from app.schemas.image_generation import ImageGenerateRequest
+from app.schemas.image_generation import (
+    BatchImageCreateOut,
+    BatchImagePlanOut,
+    BatchImageRequest,
+    ImageGenerateRequest,
+)
 
 router = APIRouter(prefix="/api/projects/{project_id}/images", tags=["images"])
 
@@ -50,6 +55,37 @@ def get_image_job(
     request: Request,
 ) -> dict:
     return request.app.state.image_generation_service.get_job(project_id, job_id)
+
+
+@router.post("/shots/{shot_id}/import", response_model=AssetVersionOut, status_code=201)
+async def import_shot_image(
+    project_id: str,
+    shot_id: str,
+    request: Request,
+    file: UploadFile = File(...),
+) -> dict:
+    record = request.app.state.media_import_service.import_shot_image(
+        project_id, shot_id, file.filename or "", await file.read()
+    )
+    return _version_out(project_id, record)
+
+
+@router.post("/batch-plan", response_model=BatchImagePlanOut)
+def batch_image_plan(
+    project_id: str, payload: BatchImageRequest, request: Request
+) -> dict:
+    return request.app.state.image_generation_service.plan_shots(
+        project_id, payload.model_id, payload.shot_ids
+    )
+
+
+@router.post("/batch-generate", response_model=BatchImageCreateOut, status_code=201)
+def batch_generate_images(
+    project_id: str, payload: BatchImageRequest, request: Request
+) -> dict:
+    return request.app.state.image_generation_service.start_shots(
+        project_id, payload.model_id, payload.shot_ids, payload.batch_label
+    )
 
 
 @router.get("/versions", response_model=list[AssetVersionOut])

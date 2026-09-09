@@ -2,6 +2,7 @@
 
 from app.db.database import get_connection
 from app.services.job_store import (
+    CATEGORY_INTERRUPTED,
     STATUS_CANCELLED,
     STATUS_COMPLETED,
     STATUS_FAILED,
@@ -39,6 +40,8 @@ def test_list_and_get_job(client):
     assert listed[0]["model_id"] == "model_x"
     assert listed[0]["provider_id"] == "prov_1"
     assert listed[0]["capability"] == "text_to_image"
+    assert listed[0]["batch_id"] == ""
+    assert listed[0]["has_remote_task"] is False
 
     detail = client.get(f"/api/jobs/{job.id}").json()
     assert detail["job_id"] == job.id
@@ -198,18 +201,130 @@ def test_batch_pause_and_resume(client):
         "/api/jobs/batch",
         json={"project_id": project_id, "action": "pause"},
     ).json()
-    assert paused["affected"] == 1
+    assert paused["affected"] == 2
+    assert paused["project_paused"] is True
     statuses = {job["job_id"]: job["status"] for job in paused["jobs"]}
     assert statuses[running.id] == STATUS_PAUSED
-    assert statuses[queued.id] == STATUS_QUEUED
+    assert statuses[queued.id] == STATUS_PAUSED
 
     resumed = client.post(
         "/api/jobs/batch",
         json={"project_id": project_id, "action": "resume"},
     ).json()
-    assert resumed["affected"] == 1
+    assert resumed["affected"] == 2
+    assert resumed["project_paused"] is False
     statuses = {job["job_id"]: job["status"] for job in resumed["jobs"]}
     assert statuses[running.id] == STATUS_QUEUED
+    assert statuses[queued.id] == STATUS_QUEUED
+
+
+def test_project_pause_holds_new_jobs_and_state_is_queryable(client):
+    project_id = client.post("/api/projects", json={"name": "p"}).json()["id"]
+    store = client.app.state.job_store
+
+    before = client.get(
+        "/api/jobs/project-state", params={"project_id": project_id}
+    ).json()
+    assert before == {"project_id": project_id, "paused": False}
+
+    client.post(
+        "/api/jobs/batch",
+        json={"project_id": project_id, "action": "pause"},
+    )
+    held = _make_project_job(client, project_id)
+    assert held.status == STATUS_PAUSED
+
+    after = client.get(
+        "/api/jobs/project-state", params={"project_id": project_id}
+    ).json()
+    assert after["paused"] is True
+
+
+def test_project_resume_does_not_auto_resume_interrupted_job(client):
+    project_id = client.post("/api/projects", json={"name": "p"}).json()["id"]
+    store = client.app.state.job_store
+    job = _make_project_job(client, project_id)
+    store.mark_running(job.id)
+    with get_connection(store.db_path) as conn:
+        conn.execute(
+            "UPDATE jobs SET heartbeat_at = '2020-01-01T00:00:00Z' WHERE id = ?",
+            (job.id,),
+        )
+    store.recover_stale(stale_after_s=60)
+    assert store.get(job.id).error_category == CATEGORY_INTERRUPTED
+
+    store.pause_project(project_id)
+    response = client.post(
+        "/api/jobs/batch",
+        json={"project_id": project_id, "action": "resume"},
+    ).json()
+
+    assert response["affected"] == 0
+    assert response["project_paused"] is False
+    assert store.get(job.id).status == STATUS_PAUSED
+
+
+def test_batch_scope_exposes_metadata_and_only_controls_its_jobs(client):
+    project_id = client.post("/api/projects", json={"name": "p"}).json()["id"]
+    store = client.app.state.job_store
+    first = store.create(
+        "generation",
+        project_id,
+        capability="text_to_image",
+        input_payload={
+            "extra": {
+                "batch_id": "batch_1",
+                "batch_label": "第 1 集 · 场景 1",
+                "target_id": "shot_1",
+                "target_label": "场景 1 · 镜头 1",
+            }
+        },
+    )
+    other = store.create(
+        "generation",
+        project_id,
+        capability="text_to_image",
+        input_payload={"extra": {"batch_id": "batch_2"}},
+    )
+
+    listed = client.get("/api/jobs", params={"project_id": project_id}).json()
+    item = next(job for job in listed if job["job_id"] == first.id)
+    assert item["batch_label"] == "第 1 集 · 场景 1"
+    assert item["target_id"] == "shot_1"
+
+    response = client.post(
+        "/api/jobs/batch",
+        json={"project_id": project_id, "batch_id": "batch_1", "action": "cancel"},
+    )
+    assert response.json()["affected"] == 1
+    assert store.get(first.id).status == STATUS_CANCELLED
+    assert store.get(other.id).status == STATUS_QUEUED
+
+
+def test_batch_retry_only_requeues_failed_jobs(client):
+    project_id = client.post("/api/projects", json={"name": "p"}).json()["id"]
+    store = client.app.state.job_store
+    failed = store.create(
+        "generation",
+        project_id,
+        input_payload={"extra": {"batch_id": "batch_1"}},
+    )
+    store.mark_running(failed.id)
+    store.mark_failed(failed.id, "boom")
+    cancelled = store.create(
+        "generation",
+        project_id,
+        input_payload={"extra": {"batch_id": "batch_1"}},
+    )
+    store.cancel(cancelled.id)
+
+    response = client.post(
+        "/api/jobs/batch",
+        json={"project_id": project_id, "batch_id": "batch_1", "action": "retry"},
+    )
+    assert response.json()["affected"] == 1
+    assert store.get(failed.id).status == STATUS_QUEUED
+    assert store.get(cancelled.id).status == STATUS_CANCELLED
 
 
 def test_batch_unknown_stage_rejected(client):

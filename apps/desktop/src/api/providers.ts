@@ -3,6 +3,8 @@ import type {
   CapabilityKey,
   Model,
   ModelInput,
+  ModelRecommendation,
+  ModelRoutingPreference,
   ModelType,
   Preset,
   Provider,
@@ -26,10 +28,7 @@ export function createProvider(input: ProviderInput): Promise<Provider> {
   });
 }
 
-export function updateProvider(
-  id: string,
-  input: ProviderInput,
-): Promise<Provider> {
+export function updateProvider(id: string, input: ProviderInput): Promise<Provider> {
   return request<Provider>(`/providers/${id}`, {
     method: "PUT",
     body: JSON.stringify(input),
@@ -56,10 +55,7 @@ export function getPresetModels(presetKey: string): Promise<BuiltinModel[]> {
   return request<BuiltinModel[]>(`/providers/presets/${presetKey}/models`);
 }
 
-export function bulkAddModels(
-  providerId: string,
-  modelIds: string[],
-): Promise<Model[]> {
+export function bulkAddModels(providerId: string, modelIds: string[]): Promise<Model[]> {
   return request<Model[]>(`/providers/${providerId}/models/bulk`, {
     method: "POST",
     body: JSON.stringify({ model_ids: modelIds }),
@@ -79,6 +75,17 @@ export function listModels(params?: {
   if (params?.capability) query.set("capability", params.capability);
   const suffix = query.toString() ? `?${query.toString()}` : "";
   return request<Model[]>(`/models${suffix}`);
+}
+
+export function recommendModels(input: {
+  model_type: ModelType;
+  required_capabilities: CapabilityKey[];
+  preference?: ModelRoutingPreference;
+}): Promise<ModelRecommendation> {
+  return request<ModelRecommendation>("/models/recommendation", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 }
 
 export function createModel(input: ModelInput): Promise<Model> {

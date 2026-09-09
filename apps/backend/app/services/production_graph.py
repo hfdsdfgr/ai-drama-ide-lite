@@ -21,6 +21,7 @@ NODE_TYPES = (
     "location",
     "prop",
     "asset",
+    "reference",
     "episode",
     "scene",
     "shot",
@@ -199,6 +200,70 @@ class ProductionGraphService:
                         queue.append(downstream_key)
 
         return list(affected.values())
+
+    def regeneration_plan(
+        self, project_id: str, node_type: str, node_id: str
+    ) -> dict:
+        """把图谱节点投影为可由用户确认的分镜再生成清单。"""
+        affected = self.affected_nodes(project_id, node_type, node_id)
+        targets: dict[str, dict[str, str]] = {"image": {}, "video": {}}
+
+        with get_connection(self.db_path) as conn:
+            for node in affected:
+                target_kind = "image" if node["type"] == "shot" else ""
+                shot_id = node["id"] if target_kind else ""
+                if node["type"] in {"image_version", "video_version"}:
+                    row = conn.execute(
+                        "SELECT entity_type, entity_id FROM versions WHERE id = ? AND project_id = ?",
+                        (node["id"], project_id),
+                    ).fetchone()
+                    if row is None or row["entity_type"] != "shot":
+                        continue
+                    target_kind = "image" if node["type"] == "image_version" else "video"
+                    shot_id = row["entity_id"]
+                if not target_kind or not shot_id:
+                    continue
+                targets[target_kind].setdefault(shot_id, node["relation"])
+
+            def items(kind: str) -> list[dict]:
+                result = []
+                for shot_id, reason in targets[kind].items():
+                    row = conn.execute(
+                        """
+                        SELECT shots.shot_number, scenes.order_index AS scene_order,
+                               episodes.order_index AS episode_order
+                        FROM shots
+                        LEFT JOIN scenes ON scenes.id = shots.scene_id
+                        LEFT JOIN episodes ON episodes.id = scenes.episode_id
+                        WHERE shots.id = ? AND shots.project_id = ?
+                        """,
+                        (shot_id, project_id),
+                    ).fetchone()
+                    if row is None:
+                        label = f"镜头 {shot_id}"
+                    else:
+                        episode = int(row["episode_order"] or 0) + 1
+                        scene = int(row["scene_order"] or 0) + 1
+                        shot = row["shot_number"] or "-"
+                        label = f"第 {episode} 集 · 场 {scene} · 镜头 {shot}"
+                    result.append(
+                        {
+                            "shot_id": shot_id,
+                            "label": label,
+                            "reason": (
+                                "使用了已变更的视觉资产"
+                                if kind == "image"
+                                else "依赖受影响的关键帧"
+                            ),
+                        }
+                    )
+                return sorted(result, key=lambda item: item["label"])
+
+            return {
+                "changed_node": {"type": node_type, "id": node_id},
+                "image_shots": items("image"),
+                "video_shots": items("video"),
+            }
 
     def remove_edge(self, edge_id: str) -> None:
         self.get(edge_id)

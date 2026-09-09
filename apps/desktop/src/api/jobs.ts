@@ -1,4 +1,4 @@
-import type { JobOut, JobStatus } from "../types/job";
+import type { JobOut, JobStatus, ProjectJobState } from "../types/job";
 import { request } from "./client";
 
 export function listJobs(params?: {
@@ -16,6 +16,12 @@ export function listJobs(params?: {
 
 export function getJob(jobId: string): Promise<JobOut> {
   return request<JobOut>(`/jobs/${jobId}`);
+}
+
+export function getProjectJobState(projectId: string): Promise<ProjectJobState> {
+  return request<ProjectJobState>(
+    `/jobs/project-state?project_id=${encodeURIComponent(projectId)}`,
+  );
 }
 
 export function cancelJob(jobId: string): Promise<JobOut> {
@@ -37,12 +43,14 @@ export function retryJob(jobId: string): Promise<JobOut> {
 export interface BatchJobsResult {
   affected: number;
   jobs: JobOut[];
+  project_paused: boolean;
 }
 
 export function batchJobs(params: {
   project_id: string;
-  action: "cancel" | "pause" | "resume";
+  action: "cancel" | "pause" | "resume" | "retry";
   stage?: string;
+  batch_id?: string;
 }): Promise<BatchJobsResult> {
   return request<BatchJobsResult>(`/jobs/batch`, {
     method: "POST",

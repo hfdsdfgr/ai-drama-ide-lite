@@ -2,6 +2,7 @@
 
 from app.core.errors import AppError
 from app.services.asset_version_service import AssetVersionService
+from app.services.reference_media import ReferenceMediaRepository
 from app.services.generation_service import GenerationService
 from app.services.script_repo import ScriptRepository
 from app.services.story_repo import StoryRepository
@@ -105,6 +106,16 @@ class VideoGenerationService:
             asset["asset_id"]: asset
             for asset in StoryRepository(self.db_path).list_assets(project_id)
         }
+        assets.update(
+            {
+                item["id"]: {
+                    "asset_id": item["id"],
+                    "asset_type": "reference_image",
+                    "name": item["name"],
+                }
+                for item in ReferenceMediaRepository(self.db_path).list(project_id)
+            }
+        )
         paths: list[str] = []
         for asset_id in reference_asset_ids:
             asset = assets.get(asset_id)

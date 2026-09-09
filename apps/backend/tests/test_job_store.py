@@ -9,6 +9,7 @@ import pytest
 from app.core.errors import AppError
 from app.db.database import get_connection, init_db
 from app.services.job_store import (
+    CATEGORY_INTERRUPTED,
     CATEGORY_RETRYABLE,
     STATUS_CANCELLED,
     STATUS_COMPLETED,
@@ -186,10 +187,25 @@ def test_recover_stale(store):
     store.pause(job_paused.id)
 
     assert store.recover_stale(stale_after_s=60) == 1
-    assert store.get(job_stale.id).status == STATUS_QUEUED
-    assert store.get(job_stale.id).error_category == CATEGORY_RETRYABLE
+    assert store.get(job_stale.id).status == STATUS_PAUSED
+    assert store.get(job_stale.id).error_category == CATEGORY_INTERRUPTED
     assert store.get(job_fresh.id).status == STATUS_RUNNING
     assert store.get(job_paused.id).status == STATUS_PAUSED
+
+
+def test_project_pause_persists_and_holds_new_jobs(store):
+    first = _create_job(store)
+    store.pause_project("proj_1")
+    assert store.is_project_paused("proj_1") is True
+    assert store.mark_running(first.id) is False
+
+    second = _create_job(store)
+    assert second.status == STATUS_PAUSED
+
+    store.resume_project("proj_1")
+    assert store.is_project_paused("proj_1") is False
+    assert store.resume_many([second.id]) == 1
+    assert store.get(second.id).status == STATUS_QUEUED
 
 
 def test_persistence_across_instances(tmp_path: Path):

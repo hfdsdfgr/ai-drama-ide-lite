@@ -1,10 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type ChangeEvent,
-} from "react";
+import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
 
 import {
   DndContext,
@@ -26,10 +20,15 @@ import { listAssets } from "../api/assets";
 import { getCurrentAssetVersion } from "../api/asset_versions";
 import { getApiBase } from "../api/client";
 import {
+  createBatchImages,
   generateImage,
   getCurrentImageVersion,
   getImageJob,
+  importShotImage,
+  planBatchImages,
+  type BatchImagePlan,
 } from "../api/images";
+import { importReference, listReferences } from "../api/references";
 import {
   decideDialogueReview,
   listDialogueReviews,
@@ -61,11 +60,12 @@ import {
   getCurrentVoicedVersion,
   getCurrentVideoVersion,
   getVideoJob,
+  importShotVideo,
   uploadAudioFile,
 } from "../api/videos";
 import { getJob } from "../api/jobs";
 import { listNovels } from "../api/novels";
-import { listModels } from "../api/providers";
+import { listModels, recommendModels } from "../api/providers";
 import {
   deleteShot,
   getEpisodeDetail,
@@ -78,14 +78,13 @@ import type { AssetVersion } from "../types/asset_version";
 import type { GenerationJob } from "../types/generation";
 import type { JobOut } from "../types/job";
 import type { Novel } from "../types/novel";
-import type { Model } from "../types/provider";
-import type { AssetCard, AssetType } from "../types/story";
 import type {
-  Episode,
-  EpisodeDetail,
-  SceneDetail,
-  Shot,
-} from "../types/script";
+  Model,
+  ModelRecommendation,
+  ModelRoutingPreference,
+} from "../types/provider";
+import type { AssetType } from "../types/story";
+import type { Episode, EpisodeDetail, SceneDetail, Shot } from "../types/script";
 
 const ASSET_TYPE_LABELS: Record<AssetType, string> = {
   character: "角色",
@@ -94,8 +93,23 @@ const ASSET_TYPE_LABELS: Record<AssetType, string> = {
 };
 
 interface ReferenceAsset {
-  asset: AssetCard;
+  id: string;
+  name: string;
+  assetType?: AssetType;
+  label: string;
   version: AssetVersion;
+}
+
+function recommendationText(
+  recommendation: ModelRecommendation | null,
+  selectedModelId: string,
+): string {
+  const recommended = recommendation?.recommended;
+  if (!recommended) return recommendation?.message ?? "";
+  if (recommended.model.id !== selectedModelId) {
+    return `你已手动选择其他模型；系统建议 ${recommended.model.model_id}。`;
+  }
+  return `推荐理由：${recommended.reasons.join("；")}。${recommendation.message}`;
 }
 
 function SortableShotCard({
@@ -199,19 +213,21 @@ export function StoryboardPage({
   const [selectedEpisodeId, setSelectedEpisodeId] = useState<string | null>(null);
   const [episodeDetail, setEpisodeDetail] = useState<EpisodeDetail | null>(null);
   const [sceneDetails, setSceneDetails] = useState<Record<string, SceneDetail>>({});
-  const [selectedShotSceneId, setSelectedShotSceneId] = useState<string | null>(
-    null,
-  );
+  const [selectedShotSceneId, setSelectedShotSceneId] = useState<string | null>(null);
   const [selectedShotId, setSelectedShotId] = useState<string | null>(null);
   const [shotDetailDraft, setShotDetailDraft] = useState<Shot | null>(null);
-  const [confirmShotDeleteId, setConfirmShotDeleteId] = useState<string | null>(
-    null,
-  );
+  const [confirmShotDeleteId, setConfirmShotDeleteId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [imageModels, setImageModels] = useState<Model[]>([]);
   const [imageModelId, setImageModelId] = useState("");
   const [videoModels, setVideoModels] = useState<Model[]>([]);
   const [videoModelId, setVideoModelId] = useState("");
+  const [routingPreference, setRoutingPreference] =
+    useState<ModelRoutingPreference>("balanced");
+  const [imageRecommendation, setImageRecommendation] =
+    useState<ModelRecommendation | null>(null);
+  const [videoRecommendation, setVideoRecommendation] =
+    useState<ModelRecommendation | null>(null);
   const [videoPrompt, setVideoPrompt] = useState("");
   const [videoDuration, setVideoDuration] = useState(5);
   const [withAudio, setWithAudio] = useState(false);
@@ -226,61 +242,55 @@ export function StoryboardPage({
   const [reviewDeciding, setReviewDeciding] = useState(false);
   const [visionModels, setVisionModels] = useState<Model[]>([]);
   const [visualModelId, setVisualModelId] = useState("");
-  const [visualReviewType, setVisualReviewType] =
-    useState<VisualReviewType>("character");
+  const [visualReviewType, setVisualReviewType] = useState<VisualReviewType>("character");
   const [visualMode, setVisualMode] = useState<"model" | "manual">("model");
-  const [latestVisualReview, setLatestVisualReview] =
-    useState<VisualReview | null>(null);
-  const [visualReviewingJob, setVisualReviewingJob] = useState<JobOut | null>(
-    null,
-  );
+  const [latestVisualReview, setLatestVisualReview] = useState<VisualReview | null>(null);
+  const [visualReviewingJob, setVisualReviewingJob] = useState<JobOut | null>(null);
   const [visualManualIssue, setVisualManualIssue] = useState("");
   const [visualDeciding, setVisualDeciding] = useState(false);
-  const [storyReviewingJob, setStoryReviewingJob] = useState<JobOut | null>(
-    null,
-  );
-  const [latestStoryReview, setLatestStoryReview] =
-    useState<StoryReview | null>(null);
+  const [storyReviewingJob, setStoryReviewingJob] = useState<JobOut | null>(null);
+  const [latestStoryReview, setLatestStoryReview] = useState<StoryReview | null>(null);
   const [storyModelId, setStoryModelId] = useState("");
   const [storyManualIssue, setStoryManualIssue] = useState("");
   const [storyDeciding, setStoryDeciding] = useState(false);
   const [voiceModelId, setVoiceModelId] = useState("");
-  const [shotVersions, setShotVersions] = useState<Record<string, AssetVersion>>(
-    {},
-  );
+  const [shotVersions, setShotVersions] = useState<Record<string, AssetVersion>>({});
   const [shotVideoVersions, setShotVideoVersions] = useState<
     Record<string, AssetVersion>
   >({});
   const [shotVoicedVersions, setShotVoicedVersions] = useState<
     Record<string, AssetVersion>
   >({});
-  const [composedVersions, setComposedVersions] = useState<
-    Record<string, AssetVersion>
-  >({});
+  const [composedVersions, setComposedVersions] = useState<Record<string, AssetVersion>>(
+    {},
+  );
   const [composingSceneId, setComposingSceneId] = useState("");
-  const [shotVideoVersion, setShotVideoVersion] =
-    useState<AssetVersion | null>(null);
-  const [shotVoicedVersion, setShotVoicedVersion] =
-    useState<AssetVersion | null>(null);
+  const [shotVideoVersion, setShotVideoVersion] = useState<AssetVersion | null>(null);
+  const [shotVoicedVersion, setShotVoicedVersion] = useState<AssetVersion | null>(null);
   const [imageJob, setImageJob] = useState<GenerationJob | null>(null);
   const [videoJob, setVideoJob] = useState<GenerationJob | null>(null);
   const [dubJob, setDubJob] = useState<JobOut | null>(null);
   const [audioFilePath, setAudioFilePath] = useState("");
   const [audioFileName, setAudioFileName] = useState("");
   const [generatingShotId, setGeneratingShotId] = useState<string | null>(null);
-  const [generatingVideoShotId, setGeneratingVideoShotId] = useState<
-    string | null
-  >(null);
-  const [generatingDubShotId, setGeneratingDubShotId] = useState<string | null>(
-    null,
-  );
+  const [generatingVideoShotId, setGeneratingVideoShotId] = useState<string | null>(null);
+  const [generatingDubShotId, setGeneratingDubShotId] = useState<string | null>(null);
   const [apiBase, setApiBase] = useState("");
   const [referenceAssets, setReferenceAssets] = useState<ReferenceAsset[]>([]);
-  const [selectedReferenceAssetIds, setSelectedReferenceAssetIds] = useState<
-    string[]
-  >([]);
+  const [importingShotImage, setImportingShotImage] = useState(false);
+  const [importingShotVideo, setImportingShotVideo] = useState(false);
+  const [importingReference, setImportingReference] = useState(false);
+  const [selectedReferenceAssetIds, setSelectedReferenceAssetIds] = useState<string[]>(
+    [],
+  );
   const [zoomImageUrl, setZoomImageUrl] = useState<string | null>(null);
   const [zoomVideoUrl, setZoomVideoUrl] = useState<string | null>(null);
+  const [batchImagePlan, setBatchImagePlan] = useState<BatchImagePlan | null>(null);
+  const [batchScopeLabel, setBatchScopeLabel] = useState("");
+  const [selectedBatchShotIds, setSelectedBatchShotIds] = useState<string[]>([]);
+  const [batchPlanning, setBatchPlanning] = useState(false);
+  const [batchCreating, setBatchCreating] = useState(false);
+  const [batchNotice, setBatchNotice] = useState("");
   const autoMatchedShotIdRef = useRef<string | null>(null);
 
   const sensors = useSensors(
@@ -289,39 +299,12 @@ export function StoryboardPage({
 
   useEffect(() => {
     if (!active) return;
-    void getApiBase().then(setApiBase).catch(() => {});
-    listModels({ model_type: "image", enabled_only: true })
-      .then((models) => {
-        const usable = models
-          .filter(
-            (m) =>
-              m.capabilities.includes("text_to_image") ||
-              m.capabilities.includes("reference_image") ||
-              m.capabilities.includes("image_to_image"),
-          )
-          .sort((a, b) => Number(b.is_default_image) - Number(a.is_default_image));
-        setImageModels(usable);
-        setImageModelId((prev) =>
-          usable.some((m) => m.id === prev) ? prev : (usable[0]?.id ?? ""),
-        );
-      })
-      .catch((e) => setError((e as Error).message));
-    listModels({ model_type: "video", enabled_only: true })
-      .then((models) => {
-        const usable = models
-          .filter((m) => m.capabilities.includes("image_to_video"))
-          .sort((a, b) => Number(b.is_default_video) - Number(a.is_default_video));
-        setVideoModels(usable);
-        setVideoModelId((prev) =>
-          usable.some((m) => m.id === prev) ? prev : (usable[0]?.id ?? ""),
-        );
-      })
-      .catch((e) => setError((e as Error).message));
+    void getApiBase()
+      .then(setApiBase)
+      .catch(() => {});
     listModels({ model_type: "audio", enabled_only: true })
       .then((models) => {
-        const usable = models.filter((m) =>
-          m.capabilities.includes("text_to_speech"),
-        );
+        const usable = models.filter((m) => m.capabilities.includes("text_to_speech"));
         setAudioModels(usable);
         setVoiceModelId((prev) =>
           usable.some((m) => m.id === prev) ? prev : (usable[0]?.id ?? ""),
@@ -347,14 +330,52 @@ export function StoryboardPage({
   }, [active]);
 
   useEffect(() => {
+    if (!active) return;
+    let cancelled = false;
+    recommendModels({
+      model_type: "image",
+      required_capabilities: ["text_to_image"],
+      preference: routingPreference,
+    })
+      .then((result) => {
+        if (cancelled) return;
+        setImageRecommendation(result);
+        const models = [
+          ...(result.recommended ? [result.recommended.model] : []),
+          ...result.alternatives.map((item) => item.model),
+        ];
+        setImageModels(models);
+        setImageModelId(result.recommended?.model.id ?? "");
+      })
+      .catch((e) => setError((e as Error).message));
+    recommendModels({
+      model_type: "video",
+      required_capabilities: ["image_to_video"],
+      preference: routingPreference,
+    })
+      .then((result) => {
+        if (cancelled) return;
+        setVideoRecommendation(result);
+        const models = [
+          ...(result.recommended ? [result.recommended.model] : []),
+          ...result.alternatives.map((item) => item.model),
+        ];
+        setVideoModels(models);
+        setVideoModelId(result.recommended?.model.id ?? "");
+      })
+      .catch((e) => setError((e as Error).message));
+    return () => {
+      cancelled = true;
+    };
+  }, [active, routingPreference]);
+
+  useEffect(() => {
     if (!jumpToShotId || !projectId) return;
     let cancelled = false;
     (async () => {
       try {
         for (const sceneId of Object.keys(sceneDetails)) {
-          const shot = sceneDetails[sceneId]?.shots.find(
-            (s) => s.id === jumpToShotId,
-          );
+          const shot = sceneDetails[sceneId]?.shots.find((s) => s.id === jumpToShotId);
           if (shot) {
             openShotDetail(sceneId, shot);
             onJumpConsumed?.();
@@ -366,9 +387,7 @@ export function StoryboardPage({
           const detail = await getEpisodeDetail(projectId, episode.id);
           for (const scene of detail.scenes) {
             const sceneDetail = await getSceneDetail(projectId, scene.id);
-            const shot = sceneDetail.shots.find(
-              (s) => s.id === jumpToShotId,
-            );
+            const shot = sceneDetail.shots.find((s) => s.id === jumpToShotId);
             if (shot && !cancelled) {
               await selectEpisode(episode.id);
               openShotDetail(scene.id, shot);
@@ -418,27 +437,47 @@ export function StoryboardPage({
     setNovelId("");
     setEpisodes([]);
     setEpisodeDetail(null);
+    setBatchImagePlan(null);
+    setBatchNotice("");
     void refreshNovels(projectId);
   }, [projectId, refreshNovels]);
 
   useEffect(() => {
+    if (!batchImagePlan) return;
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape" && !batchCreating) setBatchImagePlan(null);
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [batchImagePlan, batchCreating]);
+
+  useEffect(() => {
     if (!active || !projectId) return;
     setError("");
-    listAssets(projectId)
-      .then(async (assets) => {
+    Promise.all([listAssets(projectId), listReferences(projectId)])
+      .then(async ([assets, importedReferences]) => {
         const references: ReferenceAsset[] = [];
         const results = await Promise.allSettled(
-          assets.map((asset) =>
-            getCurrentAssetVersion(projectId, asset.asset_id),
-          ),
+          assets.map((asset) => getCurrentAssetVersion(projectId, asset.asset_id)),
         );
         results.forEach((result, index) => {
           if (result.status === "fulfilled" && result.value) {
             references.push({
-              asset: assets[index],
+              id: assets[index].asset_id,
+              name: assets[index].name,
+              assetType: assets[index].asset_type,
+              label: ASSET_TYPE_LABELS[assets[index].asset_type],
               version: result.value,
             });
           }
+        });
+        importedReferences.forEach((reference) => {
+          references.push({
+            id: reference.id,
+            name: reference.name,
+            label: "参考图",
+            version: reference.version,
+          });
         });
         setReferenceAssets(references);
       })
@@ -473,9 +512,7 @@ export function StoryboardPage({
         const shots = Object.values(sceneMap).flatMap((scene) => scene.shots);
         const versionMap: Record<string, AssetVersion> = {};
         const results = await Promise.allSettled(
-          shots.map((shot) =>
-            getCurrentImageVersion(projectId, "shot", shot.id),
-          ),
+          shots.map((shot) => getCurrentImageVersion(projectId, "shot", shot.id)),
         );
         results.forEach((result, index) => {
           if (result.status === "fulfilled" && result.value) {
@@ -534,17 +571,17 @@ export function StoryboardPage({
       const sceneText = `${scene?.scene.slugline || ""} ${scene?.scene.action || ""}`;
       return referenceAssets
         .filter((ref) => {
-          const name = ref.asset.name;
+          const name = ref.name;
           if (!name) return false;
-          if (ref.asset.asset_type === "character") {
+          if (ref.assetType === "character") {
             return shotText.includes(name);
           }
-          if (ref.asset.asset_type === "location") {
+          if (ref.assetType === "location") {
             return sceneText.includes(name);
           }
           return false;
         })
-        .map((ref) => ref.asset.asset_id);
+        .map((ref) => ref.id);
     },
     [sceneDetails, referenceAssets],
   );
@@ -625,12 +662,7 @@ export function StoryboardPage({
   ]);
 
   async function saveShotDetail() {
-    if (
-      !projectId ||
-      !selectedShotSceneId ||
-      !selectedShotId ||
-      !shotDetailDraft
-    ) {
+    if (!projectId || !selectedShotSceneId || !selectedShotId || !shotDetailDraft) {
       return;
     }
     setError("");
@@ -691,9 +723,65 @@ export function StoryboardPage({
     } catch (e) {
       setError((e as Error).message);
     } finally {
-      setGeneratingShotId((prev) =>
-        prev === selectedShotId ? null : prev,
-      );
+      setGeneratingShotId((prev) => (prev === selectedShotId ? null : prev));
+    }
+  }
+
+  async function openBatchImagePlan(shotIds: string[], scopeLabel: string) {
+    if (!projectId || !imageModelId || shotIds.length === 0) return;
+    setBatchPlanning(true);
+    setBatchNotice("");
+    setError("");
+    try {
+      const plan = await planBatchImages(projectId, {
+        model_id: imageModelId,
+        shot_ids: shotIds,
+      });
+      setBatchImagePlan(plan);
+      setBatchScopeLabel(scopeLabel);
+      setSelectedBatchShotIds(plan.ready.map((item) => item.shot_id));
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBatchPlanning(false);
+    }
+  }
+
+  async function createBatchImageJobs() {
+    if (!projectId || !imageModelId || selectedBatchShotIds.length === 0) return;
+    setBatchCreating(true);
+    setError("");
+    try {
+      const result = await createBatchImages(projectId, {
+        model_id: imageModelId,
+        shot_ids: selectedBatchShotIds,
+        batch_label: batchScopeLabel,
+      });
+      setBatchImagePlan(null);
+      setBatchNotice(`已创建 ${result.jobs.length} 个关键帧任务，可在生成中心查看进度。`);
+      if (result.skipped.length > 0) {
+        setError(`${result.skipped.length} 个镜头未创建任务，请重新预检后查看原因。`);
+      }
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBatchCreating(false);
+    }
+  }
+
+  async function handleImportShotImage(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !projectId || !selectedShotId) return;
+    setImportingShotImage(true);
+    setError("");
+    try {
+      const version = await importShotImage(projectId, selectedShotId, file);
+      setShotVersions((prev) => ({ ...prev, [selectedShotId]: version }));
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setImportingShotImage(false);
     }
   }
 
@@ -709,8 +797,7 @@ export function StoryboardPage({
     setError("");
     try {
       const videoModel = videoModels.find((m) => m.id === videoModelId);
-      const supportsAudio =
-        videoModel?.capabilities.includes("video_audio") ?? false;
+      const supportsAudio = videoModel?.capabilities.includes("video_audio") ?? false;
       const supportsDialogue =
         videoModel?.capabilities.includes("video_dialogue") ?? false;
       const job = await generateVideo(projectId, {
@@ -728,10 +815,7 @@ export function StoryboardPage({
         setVideoJob(updated);
         if (["completed", "failed", "cancelled"].includes(updated.status)) {
           if (updated.status === "completed") {
-            const version = await getCurrentVideoVersion(
-              projectId,
-              selectedShotId,
-            );
+            const version = await getCurrentVideoVersion(projectId, selectedShotId);
             setShotVideoVersion(version);
           }
           break;
@@ -740,9 +824,48 @@ export function StoryboardPage({
     } catch (e) {
       setError((e as Error).message);
     } finally {
-      setGeneratingVideoShotId((prev) =>
-        prev === selectedShotId ? null : prev,
-      );
+      setGeneratingVideoShotId((prev) => (prev === selectedShotId ? null : prev));
+    }
+  }
+
+  async function handleImportShotVideo(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !projectId || !selectedShotId) return;
+    setImportingShotVideo(true);
+    setError("");
+    try {
+      const version = await importShotVideo(projectId, selectedShotId, file);
+      setShotVideoVersion(version);
+      setShotVideoVersions((prev) => ({ ...prev, [selectedShotId]: version }));
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setImportingShotVideo(false);
+    }
+  }
+
+  async function handleImportReference(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !projectId) return;
+    setImportingReference(true);
+    setError("");
+    try {
+      const reference = await importReference(projectId, file);
+      setReferenceAssets((prev) => [
+        {
+          id: reference.id,
+          name: reference.name,
+          label: "参考图",
+          version: reference.version,
+        },
+        ...prev,
+      ]);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setImportingReference(false);
     }
   }
 
@@ -788,9 +911,7 @@ export function StoryboardPage({
     }
   }
 
-  const asrModels = audioModels.filter((m) =>
-    m.capabilities.includes("speech_to_text"),
-  );
+  const asrModels = audioModels.filter((m) => m.capabilities.includes("speech_to_text"));
 
   async function handleRunModelReview() {
     if (!projectId || !selectedShotId || !asrModelId || !reviewScriptModelId) {
@@ -812,10 +933,7 @@ export function StoryboardPage({
         setReviewingJob(updated);
         if (["completed", "failed", "cancelled"].includes(updated.status)) {
           if (updated.status === "completed") {
-            const reviews = await listDialogueReviews(
-              projectId,
-              selectedShotId,
-            );
+            const reviews = await listDialogueReviews(projectId, selectedShotId);
             setLatestReview(reviews[0] ?? null);
           } else if (updated.error) {
             setError(updated.error);
@@ -845,18 +963,12 @@ export function StoryboardPage({
     }
   }
 
-  async function handleReviewDecision(
-    decision: "regenerate" | "delete_shot" | "keep",
-  ) {
+  async function handleReviewDecision(decision: "regenerate" | "delete_shot" | "keep") {
     if (!projectId || !latestReview) return;
     setReviewDeciding(true);
     setError("");
     try {
-      const updated = await decideDialogueReview(
-        projectId,
-        latestReview.id,
-        decision,
-      );
+      const updated = await decideDialogueReview(projectId, latestReview.id, decision);
       setLatestReview(updated);
       if (decision === "delete_shot") {
         handleDeleteSelectedShot();
@@ -888,10 +1000,7 @@ export function StoryboardPage({
         setVisualReviewingJob(updated);
         if (["completed", "failed", "cancelled"].includes(updated.status)) {
           if (updated.status === "completed") {
-            const reviews = await listVisualReviews(
-              projectId,
-              selectedShotId,
-            );
+            const reviews = await listVisualReviews(projectId, selectedShotId);
             setLatestVisualReview(reviews[0] ?? null);
           } else if (updated.error) {
             setError(updated.error);
@@ -922,9 +1031,7 @@ export function StoryboardPage({
     }
   }
 
-  async function handleVisualDecision(
-    decision: "regenerate" | "delete_shot" | "keep",
-  ) {
+  async function handleVisualDecision(decision: "regenerate" | "delete_shot" | "keep") {
     if (!projectId || !latestVisualReview) return;
     setVisualDeciding(true);
     setError("");
@@ -964,10 +1071,7 @@ export function StoryboardPage({
         setStoryReviewingJob(updated);
         if (["completed", "failed", "cancelled"].includes(updated.status)) {
           if (updated.status === "completed") {
-            const reviews = await listStoryReviews(
-              projectId,
-              selectedShotId,
-            );
+            const reviews = await listStoryReviews(projectId, selectedShotId);
             setLatestStoryReview(reviews[0] ?? null);
           } else if (updated.error) {
             setError(updated.error);
@@ -997,18 +1101,12 @@ export function StoryboardPage({
     }
   }
 
-  async function handleStoryDecision(
-    decision: "regenerate" | "delete_shot" | "keep",
-  ) {
+  async function handleStoryDecision(decision: "regenerate" | "delete_shot" | "keep") {
     if (!projectId || !latestStoryReview) return;
     setStoryDeciding(true);
     setError("");
     try {
-      const updated = await decideStoryReview(
-        projectId,
-        latestStoryReview.id,
-        decision,
-      );
+      const updated = await decideStoryReview(projectId, latestStoryReview.id, decision);
       setLatestStoryReview(updated);
       if (decision === "delete_shot") {
         handleDeleteSelectedShot();
@@ -1042,10 +1140,7 @@ export function StoryboardPage({
         setDubJob(updated);
         if (["completed", "failed", "cancelled"].includes(updated.status)) {
           if (updated.status === "completed") {
-            const version = await getCurrentVoicedVersion(
-              projectId,
-              selectedShotId,
-            );
+            const version = await getCurrentVoicedVersion(projectId, selectedShotId);
             setShotVoicedVersion(version);
             setShotVoicedVersions((prev) => {
               const next = { ...prev };
@@ -1060,9 +1155,7 @@ export function StoryboardPage({
     } catch (e) {
       setError((e as Error).message);
     } finally {
-      setGeneratingDubShotId((prev) =>
-        prev === selectedShotId ? null : prev,
-      );
+      setGeneratingDubShotId((prev) => (prev === selectedShotId ? null : prev));
     }
   }
 
@@ -1125,7 +1218,10 @@ export function StoryboardPage({
       ...prev,
       [sceneId]: { ...prev[sceneId], shots: reordered },
     }));
-    void persistReorder(sceneId, reordered.map((s) => s.id));
+    void persistReorder(
+      sceneId,
+      reordered.map((s) => s.id),
+    );
   }
 
   const hasDialogue = Boolean(shotDetailDraft?.dialogue?.trim());
@@ -1193,9 +1289,35 @@ export function StoryboardPage({
           {episodeDetail ? (
             <>
               <div className="panel-head">
-                <h3>{episodeDetail.episode.title}</h3>
-                <p className="muted">{episodeDetail.episode.summary}</p>
+                <div>
+                  <h3>{episodeDetail.episode.title}</h3>
+                  <p className="muted">{episodeDetail.episode.summary}</p>
+                </div>
+                <button
+                  type="button"
+                  className="button-ghost"
+                  disabled={
+                    !imageModelId ||
+                    batchPlanning ||
+                    Object.values(sceneDetails).every((scene) => scene.shots.length === 0)
+                  }
+                  onClick={() =>
+                    void openBatchImagePlan(
+                      Object.values(sceneDetails).flatMap((scene) =>
+                        scene.shots.map((shot) => shot.id),
+                      ),
+                      "本分集",
+                    )
+                  }
+                >
+                  {batchPlanning ? "正在预检…" : "批量生成关键帧"}
+                </button>
               </div>
+              {batchNotice && (
+                <p className="muted" role="status" aria-atomic="true">
+                  {batchNotice}
+                </p>
+              )}
               {episodeDetail.scenes.length === 0 ? (
                 <p className="muted">本分集还没有场景。</p>
               ) : (
@@ -1217,6 +1339,19 @@ export function StoryboardPage({
                             : composedVersions[scene.id]
                               ? "重新合成"
                               : "合成场景视频"}
+                        </button>
+                        <button
+                          type="button"
+                          className="button-ghost"
+                          disabled={!imageModelId || batchPlanning || shots.length === 0}
+                          onClick={() =>
+                            void openBatchImagePlan(
+                              shots.map((shot) => shot.id),
+                              scene.slugline || scene.title || "当前场景",
+                            )
+                          }
+                        >
+                          生成本场关键帧
                         </button>
                       </div>
                       {shots.length === 0 ? (
@@ -1255,9 +1390,7 @@ export function StoryboardPage({
                                     generating={generatingShotId === shot.id}
                                     videoUrl={videoUrl}
                                     onOpen={openShotDetail}
-                                    onPlayVideo={() =>
-                                      setZoomVideoUrl(videoUrl)
-                                    }
+                                    onPlayVideo={() => setZoomVideoUrl(videoUrl)}
                                   />
                                 );
                               })}
@@ -1407,6 +1540,24 @@ export function StoryboardPage({
                 <div className="sidebar-head">
                   <h3>分镜图片</h3>
                 </div>
+                <label>
+                  模型推荐偏好
+                  <select
+                    value={routingPreference}
+                    onChange={(e) =>
+                      setRoutingPreference(e.target.value as ModelRoutingPreference)
+                    }
+                    disabled={
+                      generatingShotId === selectedShotId ||
+                      generatingVideoShotId === selectedShotId
+                    }
+                  >
+                    <option value="balanced">均衡</option>
+                    <option value="quality">质量优先</option>
+                    <option value="speed">速度优先</option>
+                    <option value="cost">成本优先</option>
+                  </select>
+                </label>
                 {imageModels.length > 0 ? (
                   <label>
                     图片模型
@@ -1418,36 +1569,49 @@ export function StoryboardPage({
                       {imageModels.map((m) => (
                         <option key={m.id} value={m.id}>
                           {m.model_id}
+                          {imageRecommendation?.recommended?.model.id === m.id
+                            ? "（推荐）"
+                            : ""}
                         </option>
                       ))}
                     </select>
+                    <span className="field-help" role="status">
+                      {recommendationText(imageRecommendation, imageModelId)}
+                    </span>
                   </label>
                 ) : (
                   <p className="muted">
-                    还没有可用的图片模型，请先在「设置」启用一个支持文生图的模型。
+                    {imageRecommendation?.message ||
+                      "还没有可用的图片模型，请先在「设置」启用一个支持文生图的模型。"}
                   </p>
                 )}
                 <div className="reference-picker">
                   <div className="sidebar-head">
                     <h4>参考图</h4>
+                    <input
+                      id="reference-image-import"
+                      type="file"
+                      accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"
+                      hidden
+                      disabled={importingReference}
+                      onChange={handleImportReference}
+                    />
+                    <label htmlFor="reference-image-import" className="button-like">
+                      {importingReference ? "导入中…" : "导入参考图"}
+                    </label>
                   </div>
                   {referenceAssets.length === 0 ? (
                     <p className="muted">
-                      暂无可用的资产图片参考图。先在「资产」页生成角色或场景图片。
+                      暂无可用参考图。可导入风格/构图参考，或先在「资产」页生成图片。
                     </p>
                   ) : (
                     referenceAssets.map((ref) => (
-                      <label
-                        key={ref.asset.asset_id}
-                        className="reference-option"
-                      >
+                      <label key={ref.id} className="reference-option">
                         <input
                           type="checkbox"
-                          checked={selectedReferenceAssetIds.includes(
-                            ref.asset.asset_id,
-                          )}
+                          checked={selectedReferenceAssetIds.includes(ref.id)}
                           onChange={(e) => {
-                            const id = ref.asset.asset_id;
+                            const id = ref.id;
                             setSelectedReferenceAssetIds((prev) =>
                               e.target.checked
                                 ? [...prev, id]
@@ -1457,7 +1621,7 @@ export function StoryboardPage({
                         />
                         <img
                           src={`${apiBase}${ref.version.file_url}`}
-                          alt={ref.asset.name}
+                          alt={ref.name}
                           className="reference-thumb"
                           title="点击放大"
                           onClick={(e) => {
@@ -1467,8 +1631,7 @@ export function StoryboardPage({
                           }}
                         />
                         <span>
-                          {ASSET_TYPE_LABELS[ref.asset.asset_type]} ·{" "}
-                          {ref.asset.name}
+                          {ref.label} · {ref.name}
                         </span>
                       </label>
                     ))
@@ -1477,14 +1640,25 @@ export function StoryboardPage({
                 <button
                   type="button"
                   className="btn-primary"
-                  disabled={
-                    !imageModelId || generatingShotId === selectedShotId
-                  }
+                  disabled={!imageModelId || generatingShotId === selectedShotId}
                   onClick={runShotImageGeneration}
                 >
                   {generatingShotId === selectedShotId ? "生成中…" : "生成图片"}
                 </button>
-                <p className="muted">生成会调用 API，可能产生费用。</p>
+                <input
+                  id="shot-image-import"
+                  type="file"
+                  accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"
+                  hidden
+                  disabled={importingShotImage}
+                  onChange={handleImportShotImage}
+                />
+                <label htmlFor="shot-image-import" className="button-like">
+                  {importingShotImage ? "导入中…" : "导入关键帧"}
+                </label>
+                <p className="muted">
+                  导入会成为当前关键帧；生成会调用 API，可能产生费用。
+                </p>
                 {imageJob && imageJob.status !== "completed" && (
                   <p className="muted">
                     {imageJob.status === "running"
@@ -1514,13 +1688,20 @@ export function StoryboardPage({
                         {videoModels.map((m) => (
                           <option key={m.id} value={m.id}>
                             {m.model_id}
+                            {videoRecommendation?.recommended?.model.id === m.id
+                              ? "（推荐）"
+                              : ""}
                           </option>
                         ))}
                       </select>
+                      <span className="field-help" role="status">
+                        {recommendationText(videoRecommendation, videoModelId)}
+                      </span>
                     </label>
                     {videoModelId && (
                       <p className="muted">
-                        {videoModels.find((m) => m.id === videoModelId)
+                        {videoModels
+                          .find((m) => m.id === videoModelId)
                           ?.capabilities.includes("video_dialogue")
                           ? "该模型支持原生对白：开启后视频将直接带台词生成。"
                           : videoModels
@@ -1544,9 +1725,7 @@ export function StoryboardPage({
                       时长（秒）
                       <select
                         value={videoDuration}
-                        onChange={(e) =>
-                          setVideoDuration(Number(e.target.value))
-                        }
+                        onChange={(e) => setVideoDuration(Number(e.target.value))}
                         disabled={generatingVideoShotId === selectedShotId}
                       >
                         {[5, 10, 15].map((value) => (
@@ -1557,15 +1736,11 @@ export function StoryboardPage({
                       </select>
                     </label>
                     {(() => {
-                      const videoModel = videoModels.find(
-                        (m) => m.id === videoModelId,
-                      );
+                      const videoModel = videoModels.find((m) => m.id === videoModelId);
                       const supportsDialogue =
-                        videoModel?.capabilities.includes("video_dialogue") ??
-                        false;
+                        videoModel?.capabilities.includes("video_dialogue") ?? false;
                       const supportsAudio =
-                        videoModel?.capabilities.includes("video_audio") ??
-                        false;
+                        videoModel?.capabilities.includes("video_audio") ?? false;
                       if (!supportsDialogue && !supportsAudio) return null;
                       return (
                         <label>
@@ -1586,8 +1761,7 @@ export function StoryboardPage({
                         type="button"
                         className="btn-primary"
                         disabled={
-                          !videoModelId ||
-                          generatingVideoShotId === selectedShotId
+                          !videoModelId || generatingVideoShotId === selectedShotId
                         }
                         onClick={runShotVideoGeneration}
                       >
@@ -1596,10 +1770,19 @@ export function StoryboardPage({
                           : "生成视频"}
                       </button>
                     ) : (
-                      <p className="muted">
-                        请先生成该镜头的分镜图片，再进行图生视频。
-                      </p>
+                      <p className="muted">请先生成该镜头的分镜图片，再进行图生视频。</p>
                     )}
+                    <input
+                      id="shot-video-import"
+                      type="file"
+                      accept=".mp4,.webm,.mov,video/mp4,video/webm,video/quicktime"
+                      hidden
+                      disabled={importingShotVideo}
+                      onChange={handleImportShotVideo}
+                    />
+                    <label htmlFor="shot-video-import" className="button-like">
+                      {importingShotVideo ? "导入中…" : "导入视频片段"}
+                    </label>
                     {videoJob && videoJob.status !== "completed" && (
                       <p className="muted">
                         {videoJob.status === "running"
@@ -1622,7 +1805,8 @@ export function StoryboardPage({
                   </>
                 ) : (
                   <p className="muted">
-                    还没有可用的视频模型，请先在「设置」启用一个支持图生视频的模型。
+                    {videoRecommendation?.message ||
+                      "还没有可用的视频模型，请先在「设置」启用一个支持图生视频的模型。"}
                   </p>
                 )}
               </div>
@@ -1666,8 +1850,8 @@ export function StoryboardPage({
                             </label>
                           ) : (
                             <p className="muted">
-                              没有可用的语音转写模型，请先在「设置」启用（如
-                              whisper / qwen3-asr / GLM-ASR）。
+                              没有可用的语音转写模型，请先在「设置」启用（如 whisper /
+                              qwen3-asr / GLM-ASR）。
                             </p>
                           )}
                           {llmModels.length > 0 ? (
@@ -1675,9 +1859,7 @@ export function StoryboardPage({
                               文本比对模型
                               <select
                                 value={reviewScriptModelId}
-                                onChange={(e) =>
-                                  setReviewScriptModelId(e.target.value)
-                                }
+                                onChange={(e) => setReviewScriptModelId(e.target.value)}
                                 disabled={reviewingJob !== null}
                               >
                                 {llmModels.map((m) => (
@@ -1696,9 +1878,7 @@ export function StoryboardPage({
                             type="button"
                             className="btn-primary"
                             disabled={
-                              !asrModelId ||
-                              !reviewScriptModelId ||
-                              reviewingJob !== null
+                              !asrModelId || !reviewScriptModelId || reviewingJob !== null
                             }
                             onClick={() => void handleRunModelReview()}
                           >
@@ -1748,9 +1928,7 @@ export function StoryboardPage({
                         </>
                       )}
                       {latestReview && (
-                        <div
-                          className={`review-result review-${latestReview.status}`}
-                        >
+                        <div className={`review-result review-${latestReview.status}`}>
                           {latestReview.status === "flagged" ? (
                             <>
                               <p className="review-issue">
@@ -1768,27 +1946,21 @@ export function StoryboardPage({
                                 <button
                                   type="button"
                                   disabled={reviewDeciding}
-                                  onClick={() =>
-                                    void handleReviewDecision("regenerate")
-                                  }
+                                  onClick={() => void handleReviewDecision("regenerate")}
                                 >
                                   重新生成
                                 </button>
                                 <button
                                   type="button"
                                   disabled={reviewDeciding}
-                                  onClick={() =>
-                                    void handleReviewDecision("delete_shot")
-                                  }
+                                  onClick={() => void handleReviewDecision("delete_shot")}
                                 >
                                   删除分镜
                                 </button>
                                 <button
                                   type="button"
                                   disabled={reviewDeciding}
-                                  onClick={() =>
-                                    void handleReviewDecision("keep")
-                                  }
+                                  onClick={() => void handleReviewDecision("keep")}
                                 >
                                   继续沿用
                                 </button>
@@ -1807,10 +1979,7 @@ export function StoryboardPage({
                           ) : (
                             <p className="review-passed">
                               台词一致 ✓（
-                              {latestReview.mode === "model"
-                                ? "模型审核"
-                                : "人工审核"}
-                              ）
+                              {latestReview.mode === "model" ? "模型审核" : "人工审核"}）
                             </p>
                           )}
                         </div>
@@ -1820,9 +1989,7 @@ export function StoryboardPage({
                     <p className="muted">该镜头没有剧本台词，无需审核。</p>
                   )
                 ) : (
-                  <p className="muted">
-                    请先生成该镜头的视频，再进行台词审核。
-                  </p>
+                  <p className="muted">请先生成该镜头的视频，再进行台词审核。</p>
                 )}
               </div>
               <div className="card image-generate-card">
@@ -1836,9 +2003,7 @@ export function StoryboardPage({
                       <select
                         value={visualReviewType}
                         onChange={(e) =>
-                          setVisualReviewType(
-                            e.target.value as VisualReviewType,
-                          )
+                          setVisualReviewType(e.target.value as VisualReviewType)
                         }
                         disabled={visualReviewingJob !== null}
                       >
@@ -1868,9 +2033,7 @@ export function StoryboardPage({
                             视觉模型
                             <select
                               value={visualModelId}
-                              onChange={(e) =>
-                                setVisualModelId(e.target.value)
-                              }
+                              onChange={(e) => setVisualModelId(e.target.value)}
                               disabled={visualReviewingJob !== null}
                             >
                               {visionModels.map((m) => (
@@ -1882,16 +2045,14 @@ export function StoryboardPage({
                           </label>
                         ) : (
                           <p className="muted">
-                            没有可用的视觉模型，请先在「设置」启用（如
-                            qwen-vl-plus / glm-4v-plus / gpt-4o）。
+                            没有可用的视觉模型，请先在「设置」启用（如 qwen-vl-plus /
+                            glm-4v-plus / gpt-4o）。
                           </p>
                         )}
                         <button
                           type="button"
                           className="btn-primary"
-                          disabled={
-                            !visualModelId || visualReviewingJob !== null
-                          }
+                          disabled={!visualModelId || visualReviewingJob !== null}
                           onClick={() => void handleRunVisualReview()}
                         >
                           {visualReviewingJob ? "审核中…" : "开始审核"}
@@ -1899,9 +2060,7 @@ export function StoryboardPage({
                         {visualReviewingJob && (
                           <p className="muted">正在比对分镜图与参考图…</p>
                         )}
-                        <p className="muted">
-                          审核会调用视觉模型 API，可能产生费用。
-                        </p>
+                        <p className="muted">审核会调用视觉模型 API，可能产生费用。</p>
                       </>
                     ) : (
                       <>
@@ -1921,18 +2080,14 @@ export function StoryboardPage({
                           <button
                             type="button"
                             className="btn-primary"
-                            onClick={() =>
-                              void handleSubmitManualVisualReview(true)
-                            }
+                            onClick={() => void handleSubmitManualVisualReview(true)}
                           >
                             视觉一致
                           </button>
                           <button
                             type="button"
                             className="button-ghost"
-                            onClick={() =>
-                              void handleSubmitManualVisualReview(false)
-                            }
+                            onClick={() => void handleSubmitManualVisualReview(false)}
                           >
                             视觉不一致
                           </button>
@@ -1953,27 +2108,21 @@ export function StoryboardPage({
                               <button
                                 type="button"
                                 disabled={visualDeciding}
-                                onClick={() =>
-                                  void handleVisualDecision("regenerate")
-                                }
+                                onClick={() => void handleVisualDecision("regenerate")}
                               >
                                 重新生成
                               </button>
                               <button
                                 type="button"
                                 disabled={visualDeciding}
-                                onClick={() =>
-                                  void handleVisualDecision("delete_shot")
-                                }
+                                onClick={() => void handleVisualDecision("delete_shot")}
                               >
                                 删除分镜
                               </button>
                               <button
                                 type="button"
                                 disabled={visualDeciding}
-                                onClick={() =>
-                                  void handleVisualDecision("keep")
-                                }
+                                onClick={() => void handleVisualDecision("keep")}
                               >
                                 继续沿用
                               </button>
@@ -2002,9 +2151,7 @@ export function StoryboardPage({
                     )}
                   </>
                 ) : (
-                  <p className="muted">
-                    请先生成该镜头的分镜图，再进行视觉一致性检查。
-                  </p>
+                  <p className="muted">请先生成该镜头的分镜图，再进行视觉一致性检查。</p>
                 )}
               </div>
               <div className="card image-generate-card">
@@ -2035,15 +2182,14 @@ export function StoryboardPage({
                     >
                       {storyReviewingJob ? "审核中…" : "检查剧情衔接"}
                     </button>
-                    {storyReviewingJob && (
-                      <p className="muted">正在对比前后镜头剧情…</p>
-                    )}
+                    {storyReviewingJob && <p className="muted">正在对比前后镜头剧情…</p>}
                     <p className="muted">
                       检查该镜头与前后镜头的动作 / 台词衔接是否合理（会调用文本模型
                       API）。
                     </p>
                     <p className="muted">
-                      <strong>人工审核：</strong>播放视频或查看上下镜头，判断剧情是否连贯。
+                      <strong>人工审核：</strong>
+                      播放视频或查看上下镜头，判断剧情是否连贯。
                     </p>
                     <label>
                       问题说明（人工审核不一致时填写）
@@ -2058,26 +2204,20 @@ export function StoryboardPage({
                       <button
                         type="button"
                         className="btn-primary"
-                        onClick={() =>
-                          void handleSubmitManualStoryReview(true)
-                        }
+                        onClick={() => void handleSubmitManualStoryReview(true)}
                       >
                         剧情一致
                       </button>
                       <button
                         type="button"
                         className="button-ghost"
-                        onClick={() =>
-                          void handleSubmitManualStoryReview(false)
-                        }
+                        onClick={() => void handleSubmitManualStoryReview(false)}
                       >
                         剧情不一致
                       </button>
                     </div>
                     {latestStoryReview && (
-                      <div
-                        className={`review-result review-${latestStoryReview.status}`}
-                      >
+                      <div className={`review-result review-${latestStoryReview.status}`}>
                         {latestStoryReview.status === "flagged" ? (
                           <>
                             <p className="review-issue">
@@ -2088,27 +2228,21 @@ export function StoryboardPage({
                               <button
                                 type="button"
                                 disabled={storyDeciding}
-                                onClick={() =>
-                                  void handleStoryDecision("regenerate")
-                                }
+                                onClick={() => void handleStoryDecision("regenerate")}
                               >
                                 重新生成
                               </button>
                               <button
                                 type="button"
                                 disabled={storyDeciding}
-                                onClick={() =>
-                                  void handleStoryDecision("delete_shot")
-                                }
+                                onClick={() => void handleStoryDecision("delete_shot")}
                               >
                                 删除分镜
                               </button>
                               <button
                                 type="button"
                                 disabled={storyDeciding}
-                                onClick={() =>
-                                  void handleStoryDecision("keep")
-                                }
+                                onClick={() => void handleStoryDecision("keep")}
                               >
                                 继续沿用
                               </button>
@@ -2127,9 +2261,7 @@ export function StoryboardPage({
                         ) : (
                           <p className="review-passed">
                             剧情一致 ✓（
-                            {latestStoryReview.mode === "model"
-                              ? "模型审核"
-                              : "人工审核"}
+                            {latestStoryReview.mode === "model" ? "模型审核" : "人工审核"}
                             ）
                           </p>
                         )}
@@ -2137,15 +2269,15 @@ export function StoryboardPage({
                     )}
                   </>
                 ) : (
-                  <p className="muted">
-                    没有可用的文本模型，请先在「设置」启用。
-                  </p>
+                  <p className="muted">没有可用的文本模型，请先在「设置」启用。</p>
                 )}
               </div>
               <div className="card image-generate-card">
                 <div className="sidebar-head">
                   <h3>声音</h3>
-                  <p className="muted">对白自动配音；音效 / BGM 可导入本地音频统一混音。</p>
+                  <p className="muted">
+                    对白自动配音；音效 / BGM 可导入本地音频统一混音。
+                  </p>
                 </div>
                 {shotVideoVersion ? (
                   <>
@@ -2194,9 +2326,7 @@ export function StoryboardPage({
                       }
                       onClick={runDub}
                     >
-                      {generatingDubShotId === selectedShotId
-                        ? "合成中…"
-                        : "生成声音"}
+                      {generatingDubShotId === selectedShotId ? "合成中…" : "生成声音"}
                     </button>
                     {dubJob && dubJob.status !== "completed" && (
                       <p className="muted">
@@ -2222,17 +2352,11 @@ export function StoryboardPage({
                     </p>
                   </>
                 ) : (
-                  <p className="muted">
-                    请先生成该镜头的分镜视频，再进行声音合成。
-                  </p>
+                  <p className="muted">请先生成该镜头的分镜视频，再进行声音合成。</p>
                 )}
               </div>
               <div className="toolbar">
-                <button
-                  type="button"
-                  className="btn-primary"
-                  onClick={saveShotDetail}
-                >
+                <button type="button" className="btn-primary" onClick={saveShotDetail}>
                   保存
                 </button>
                 <button type="button" onClick={closeShotDetail}>
@@ -2247,10 +2371,7 @@ export function StoryboardPage({
                     >
                       确认删除
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => setConfirmShotDeleteId(null)}
-                    >
+                    <button type="button" onClick={() => setConfirmShotDeleteId(null)}>
                       取消
                     </button>
                   </>
@@ -2274,14 +2395,8 @@ export function StoryboardPage({
         </aside>
       </div>
       {zoomImageUrl && (
-        <div
-          className="image-lightbox"
-          onClick={() => setZoomImageUrl(null)}
-        >
-          <div
-            className="image-lightbox-inner"
-            onClick={(e) => e.stopPropagation()}
-          >
+        <div className="image-lightbox" onClick={() => setZoomImageUrl(null)}>
+          <div className="image-lightbox-inner" onClick={(e) => e.stopPropagation()}>
             <img src={zoomImageUrl} alt="参考图放大预览" />
             <button
               type="button"
@@ -2294,14 +2409,8 @@ export function StoryboardPage({
         </div>
       )}
       {zoomVideoUrl && (
-        <div
-          className="image-lightbox"
-          onClick={() => setZoomVideoUrl(null)}
-        >
-          <div
-            className="image-lightbox-inner"
-            onClick={(e) => e.stopPropagation()}
-          >
+        <div className="image-lightbox" onClick={() => setZoomVideoUrl(null)}>
+          <div className="image-lightbox-inner" onClick={(e) => e.stopPropagation()}>
             <video
               className="video-lightbox-player"
               controls
@@ -2316,6 +2425,91 @@ export function StoryboardPage({
               关闭
             </button>
           </div>
+        </div>
+      )}
+      {batchImagePlan && (
+        <div
+          className="batch-image-overlay"
+          onClick={() => !batchCreating && setBatchImagePlan(null)}
+        >
+          <section
+            className="batch-image-plan"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="batch-image-plan-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="batch-image-plan-head">
+              <div>
+                <h2 id="batch-image-plan-title">批量生成关键帧</h2>
+                <p className="muted">范围：{batchScopeLabel}</p>
+              </div>
+              <button
+                type="button"
+                className="button-ghost"
+                onClick={() => setBatchImagePlan(null)}
+                disabled={batchCreating}
+                autoFocus
+              >
+                关闭
+              </button>
+            </div>
+            <p className="batch-image-plan-summary">
+              将创建 {selectedBatchShotIds.length} 个独立图片任务；已有关键帧不会被覆盖。
+            </p>
+            <section className="batch-image-plan-section">
+              <h3>可创建</h3>
+              {batchImagePlan.ready.length > 0 ? (
+                <ul className="batch-image-plan-list">
+                  {batchImagePlan.ready.map((item) => (
+                    <li key={item.shot_id}>
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={selectedBatchShotIds.includes(item.shot_id)}
+                          onChange={(event) =>
+                            setSelectedBatchShotIds((current) =>
+                              event.target.checked
+                                ? [...current, item.shot_id]
+                                : current.filter((shotId) => shotId !== item.shot_id),
+                            )
+                          }
+                        />
+                        <span>{item.label}</span>
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="muted">没有可创建的关键帧任务。</p>
+              )}
+            </section>
+            {batchImagePlan.skipped.length > 0 && (
+              <section className="batch-image-plan-section">
+                <h3>本次跳过</h3>
+                <ul className="batch-image-plan-list batch-image-plan-skipped">
+                  {batchImagePlan.skipped.map((item) => (
+                    <li key={item.shot_id}>
+                      <span>{item.label}</span>
+                      <small>{item.reason}</small>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+            <div className="batch-image-plan-actions">
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={selectedBatchShotIds.length === 0 || batchCreating}
+                onClick={() => void createBatchImageJobs()}
+              >
+                {batchCreating
+                  ? "正在创建任务…"
+                  : `创建 ${selectedBatchShotIds.length} 个关键帧任务`}
+              </button>
+            </div>
+          </section>
         </div>
       )}
     </div>

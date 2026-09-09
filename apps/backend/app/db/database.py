@@ -287,7 +287,12 @@ def _backfill_model_capabilities(conn: sqlite3.Connection) -> None:
         """
     ).fetchall()
     for row in rows:
-        model_type = classify_model(row["preset_key"], row["model_id"])
+        # 自定义 Provider 没有厂商目录可供重新分类，应尊重用户保存的类型。
+        model_type = (
+            classify_model(row["preset_key"], row["model_id"])
+            if row["preset_key"]
+            else row["model_type"]
+        )
         caps = resolve_default_capabilities(
             row["preset_key"], row["model_id"], model_type
         )

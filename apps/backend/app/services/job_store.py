@@ -36,6 +36,7 @@ TERMINAL_STATUSES = {STATUS_COMPLETED, STATUS_FAILED, STATUS_CANCELLED}
 CATEGORY_NONE = ""
 CATEGORY_RETRYABLE = "retryable"
 CATEGORY_PERMANENT = "permanent"
+CATEGORY_INTERRUPTED = "interrupted"
 
 JOB_TYPE_GENERATION = "generation"
 JOB_TYPE_ASSET_COMPLETION = "asset_completion"
@@ -146,6 +147,13 @@ class JobStore:
         now = _now_iso()
         job_id = _new_id("job")
         with get_connection(self.db_path) as conn:
+            paused = bool(
+                project_id
+                and conn.execute(
+                    "SELECT 1 FROM project_runtime_state WHERE project_id = ?",
+                    (project_id,),
+                ).fetchone()
+            )
             conn.execute(
                 """
                 INSERT INTO jobs (
@@ -158,7 +166,7 @@ class JobStore:
                     job_id,
                     project_id,
                     job_type,
-                    STATUS_QUEUED,
+                    STATUS_PAUSED if paused else STATUS_QUEUED,
                     model_id,
                     provider_id,
                     capability,
@@ -182,7 +190,7 @@ class JobStore:
         self,
         project_id: str | None = None,
         status: str | None = None,
-        limit: int = 50,
+        limit: int | None = 50,
     ) -> list[JobRecord]:
         clauses: list[str] = []
         params: list = []
@@ -193,10 +201,13 @@ class JobStore:
             clauses.append("status = ?")
             params.append(status)
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
-        params.append(limit)
+        limit_sql = ""
+        if limit is not None:
+            limit_sql = "LIMIT ?"
+            params.append(limit)
         with get_connection(self.db_path) as conn:
             rows = conn.execute(
-                f"SELECT * FROM jobs {where} ORDER BY created_at DESC LIMIT ?",
+                f"SELECT * FROM jobs {where} ORDER BY created_at DESC {limit_sql}",
                 params,
             ).fetchall()
         return [_row_to_record(row) for row in rows]
@@ -212,6 +223,10 @@ class JobStore:
                 UPDATE jobs
                 SET status = ?, started_at = ?, heartbeat_at = ?, attempts = attempts + 1
                 WHERE id = ? AND status = ?
+                  AND NOT EXISTS (
+                      SELECT 1 FROM project_runtime_state
+                      WHERE project_id = jobs.project_id
+                  )
                 """,
                 (STATUS_RUNNING, now, now, job_id, STATUS_QUEUED),
             )
@@ -317,7 +332,7 @@ class JobStore:
         return self.get(job_id)
 
     def pause_many(self, job_ids: list[str]) -> int:
-        """批量暂停 running 任务，返回受影响数量。"""
+        """批量暂停 queued / running 任务，返回受影响数量。"""
         if not job_ids:
             return 0
         now = _now_iso()
@@ -326,9 +341,9 @@ class JobStore:
             cur = conn.execute(
                 f"""
                 UPDATE jobs SET status = ?, paused_at = ?
-                WHERE id IN ({placeholders}) AND status = ?
+                WHERE id IN ({placeholders}) AND status IN (?, ?)
                 """,
-                (STATUS_PAUSED, now, *job_ids, STATUS_RUNNING),
+                (STATUS_PAUSED, now, *job_ids, STATUS_QUEUED, STATUS_RUNNING),
             )
             return cur.rowcount
 
@@ -338,7 +353,8 @@ class JobStore:
             conn.execute(
                 """
                 UPDATE jobs
-                SET status = ?, paused_at = NULL, started_at = NULL, heartbeat_at = NULL
+                SET status = ?, paused_at = NULL, started_at = NULL, heartbeat_at = NULL,
+                    error = '', error_category = ''
                 WHERE id = ? AND status = ?
                 """,
                 (STATUS_QUEUED, job_id, STATUS_PAUSED),
@@ -346,7 +362,7 @@ class JobStore:
         return self.get(job_id)
 
     def resume_many(self, job_ids: list[str]) -> int:
-        """批量恢复 paused 任务为 queued，返回受影响数量。"""
+        """批量恢复普通 paused 任务；意外中断任务必须逐项确认。"""
         if not job_ids:
             return 0
         placeholders = ",".join("?" * len(job_ids))
@@ -355,9 +371,9 @@ class JobStore:
                 f"""
                 UPDATE jobs
                 SET status = ?, paused_at = NULL, started_at = NULL, heartbeat_at = NULL
-                WHERE id IN ({placeholders}) AND status = ?
+                WHERE id IN ({placeholders}) AND status = ? AND error_category != ?
                 """,
-                (STATUS_QUEUED, *job_ids, STATUS_PAUSED),
+                (STATUS_QUEUED, *job_ids, STATUS_PAUSED, CATEGORY_INTERRUPTED),
             )
             return cur.rowcount
 
@@ -380,6 +396,25 @@ class JobStore:
             )
         return self.get(job_id)
 
+    def retry_many(self, job_ids: list[str]) -> int:
+        """批量重试 failed 任务；取消任务仍由用户逐项确认。"""
+        if not job_ids:
+            return 0
+        placeholders = ",".join("?" * len(job_ids))
+        with get_connection(self.db_path) as conn:
+            cur = conn.execute(
+                f"""
+                UPDATE jobs
+                SET status = ?, attempts = 0, error = '', error_category = '',
+                    progress = 0, task_id = '', started_at = NULL,
+                    completed_at = NULL, heartbeat_at = NULL,
+                    paused_at = NULL, cancelled_at = NULL
+                WHERE id IN ({placeholders}) AND status = ?
+                """,
+                (STATUS_QUEUED, *job_ids, STATUS_FAILED),
+            )
+            return cur.rowcount
+
     def update_progress(self, job_id: str, progress: int) -> None:
         """更新进度并刷新心跳（running 状态才允许；静默忽略其他状态）。"""
         now = _now_iso()
@@ -400,8 +435,42 @@ class JobStore:
                 (task_id, job_id),
             )
 
+    def pause_project(self, project_id: str) -> None:
+        """持久化项目暂停闩锁；新任务会直接进入 paused。"""
+        with get_connection(self.db_path) as conn:
+            exists = conn.execute(
+                "SELECT 1 FROM projects WHERE id = ? AND deleted_at IS NULL",
+                (project_id,),
+            ).fetchone()
+            if not exists:
+                raise AppError(404, "project_not_found", f"项目不存在: {project_id}")
+            conn.execute(
+                """
+                INSERT INTO project_runtime_state (project_id, paused_at)
+                VALUES (?, ?)
+                ON CONFLICT(project_id) DO UPDATE SET paused_at = excluded.paused_at
+                """,
+                (project_id, _now_iso()),
+            )
+
+    def resume_project(self, project_id: str) -> None:
+        with get_connection(self.db_path) as conn:
+            conn.execute(
+                "DELETE FROM project_runtime_state WHERE project_id = ?",
+                (project_id,),
+            )
+
+    def is_project_paused(self, project_id: str) -> bool:
+        with get_connection(self.db_path) as conn:
+            return bool(
+                conn.execute(
+                    "SELECT 1 FROM project_runtime_state WHERE project_id = ?",
+                    (project_id,),
+                ).fetchone()
+            )
+
     def recover_stale(self, stale_after_s: int = 300) -> int:
-        """启动恢复：running 且心跳超时（进程崩溃残留）翻回 queued。
+        """启动恢复：running 且心跳超时转为 paused，等待用户确认。
 
         返回恢复数量。paused 任务保持暂停（用户意图保留，可手动 resume）。
         """
@@ -412,14 +481,15 @@ class JobStore:
             cur = conn.execute(
                 """
                 UPDATE jobs
-                SET status = ?, started_at = NULL, heartbeat_at = NULL,
+                SET status = ?, paused_at = ?, heartbeat_at = NULL,
                     error = ?, error_category = ?
                 WHERE status = ? AND (heartbeat_at IS NULL OR heartbeat_at < ?)
                 """,
                 (
-                    STATUS_QUEUED,
-                    "任务在运行中中断，已恢复为排队状态，可手动重试",
-                    CATEGORY_RETRYABLE,
+                    STATUS_PAUSED,
+                    _now_iso(),
+                    "应用上次在任务运行时中断，请确认后恢复",
+                    CATEGORY_INTERRUPTED,
                     STATUS_RUNNING,
                     cutoff,
                 ),

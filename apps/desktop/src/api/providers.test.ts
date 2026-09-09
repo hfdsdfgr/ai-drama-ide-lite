@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createProvider,
   listModels,
+  recommendModels,
   testProvider,
   updateModelCapabilities,
 } from "./providers";
@@ -12,10 +13,7 @@ afterEach(() => {
 });
 
 function stubFetch(responseBody: unknown, status = 200) {
-  const mock = vi.fn(
-    async () =>
-      new Response(JSON.stringify(responseBody), { status }),
-  );
+  const mock = vi.fn(async () => new Response(JSON.stringify(responseBody), { status }));
   vi.stubGlobal("fetch", mock);
   return mock;
 }
@@ -44,6 +42,23 @@ describe("providers api", () => {
     expect(url).toBe(
       "/api/models?model_type=image&enabled_only=true&capability=image_to_video",
     );
+  });
+
+  it("recommendModels posts capability and preference", async () => {
+    const mock = stubFetch({ recommended: null, alternatives: [] });
+    await recommendModels({
+      model_type: "video",
+      required_capabilities: ["image_to_video"],
+      preference: "quality",
+    });
+    const [url, init] = mock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("/api/models/recommendation");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(String(init.body))).toEqual({
+      model_type: "video",
+      required_capabilities: ["image_to_video"],
+      preference: "quality",
+    });
   });
 
   it("testProvider posts to provider test endpoint", async () => {
