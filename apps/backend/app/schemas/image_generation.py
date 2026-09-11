@@ -16,6 +16,11 @@ class ImageGenerateRequest(BaseModel):
     art_style: str | None = Field(default=None, max_length=50)
     negative_prompt: str = Field(default="", max_length=1000)
     reference_asset_ids: list[str] = Field(default_factory=list)
+    # 精确引用历史版本；与旧的 asset id 字段互斥，避免隐式回退到 current。
+    reference_version_ids: list[str] = Field(default_factory=list, max_length=16)
+    pinned_version_ids: list[str] = Field(default_factory=list, max_length=16)
+    prompt: str | None = Field(default=None, max_length=10000)
+    regenerated_from_version_id: str | None = Field(default=None, max_length=100)
 
 
 class BatchImageRequest(BaseModel):

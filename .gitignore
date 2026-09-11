@@ -5,6 +5,7 @@ __pycache__/
 .venv/
 .pytest_cache/
 .pytest_tmp/
+.pytest_tmp_*/
 .mypy_cache/
 .ruff_cache/
 
@@ -15,6 +16,9 @@ dist-ssr/
 *.local
 .vite/
 coverage/
+.dependency-ui-qa*/
+.workflow-ui-qa*/
+apps/.pytest_tmp_*/
 
 # ---- 环境变量（密钥）----
 .env

@@ -35,6 +35,7 @@ def _job_out(record: JobRecord) -> dict:
         "batch_id": extra.get("batch_id") or "",
         "batch_label": extra.get("batch_label") or "",
         "target_id": extra.get("target_id") or "",
+        "target_type": extra.get("target_type") or "",
         "target_label": extra.get("target_label") or "",
         "has_remote_task": bool(record.task_id),
         "created_at": record.created_at,

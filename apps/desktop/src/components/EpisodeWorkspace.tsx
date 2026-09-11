@@ -8,6 +8,7 @@ import type {
 const STATUS_LABEL: Record<ProductionState, string> = {
   missing: "缺失",
   ready: "就绪",
+  stale: "待确认",
   active: "进行中",
   failed: "失败",
   pending: "待审",
@@ -74,6 +75,7 @@ export function EpisodeWorkspace({
   onPrepare,
   onJumpToShot,
   onOpenAssets,
+  onOpenDependencies,
 }: {
   data: EpisodeWorkspaceData | null;
   selectedEpisodeId: string;
@@ -81,8 +83,9 @@ export function EpisodeWorkspace({
   notice: string;
   onSelectEpisode: (episodeId: string) => void;
   onPrepare: (episodeId: string) => void;
-  onJumpToShot?: (shotId: string) => void;
+  onJumpToShot?: (shotId: string, media?: "image" | "video") => void;
   onOpenAssets?: () => void;
+  onOpenDependencies?: (scope: { shotId: string } | { sceneId: string }) => void;
 }) {
   const episodes = data?.episodes ?? [];
   const selected =
@@ -95,7 +98,15 @@ export function EpisodeWorkspace({
   ) {
     onSelectEpisode(episode.episode_id);
     if (blocker.target === "assets") onOpenAssets?.();
-    else onJumpToShot?.(shotId);
+    else
+      onJumpToShot?.(
+        shotId,
+        blocker.code.startsWith("video_")
+          ? "video"
+          : blocker.code.startsWith("image_")
+            ? "image"
+            : undefined,
+      );
   }
 
   const progress = selected?.shot_count
@@ -106,7 +117,6 @@ export function EpisodeWorkspace({
     <section className="episode-workspace" aria-labelledby="episode-workspace-title">
       <div className="episode-workspace-head">
         <div>
-          <p className="section-kicker">EPISODE CONTROL</p>
           <h2 id="episode-workspace-title">剧集制作台</h2>
           <p className="muted">从剧本到视频，按镜头定位下一处需要处理的工作。</p>
         </div>
@@ -150,7 +160,11 @@ export function EpisodeWorkspace({
         </div>
       ) : (
         <>
-          <div className="episode-summary" role="status" aria-atomic="true">
+          <div
+            className="episode-summary"
+            role={notice ? undefined : "status"}
+            aria-atomic="true"
+          >
             <div className="episode-progress-copy">
               <strong>{progress}%</strong>
               <span>
@@ -169,6 +183,17 @@ export function EpisodeWorkspace({
                 {selected.attention_count} 个待处理
               </span>
               {selected.active_count > 0 && <span>{selected.active_count} 个生成中</span>}
+              {!!selected.stale_count && (
+                <span className="summary-attention">
+                  {selected.stale_count} 个镜头依赖待确认
+                </span>
+              )}
+              {!!selected.unknown_dependency_count && (
+                <span>{selected.unknown_dependency_count} 个来源待核实</span>
+              )}
+              {!!selected.pinned_dependency_count && (
+                <span>{selected.pinned_dependency_count} 个沿用指定版</span>
+              )}
             </div>
           </div>
 
@@ -208,6 +233,22 @@ export function EpisodeWorkspace({
                             <span>Shot {shot.shot_number ?? shot.order_index + 1}</span>
                             <small>{shot.scene_title}</small>
                           </button>
+                          <button
+                            type="button"
+                            className="production-dependency-link"
+                            onClick={() => onOpenDependencies?.({ shotId: shot.shot_id })}
+                          >
+                            镜头依赖
+                          </button>
+                          <button
+                            type="button"
+                            className="production-dependency-link"
+                            onClick={() =>
+                              onOpenDependencies?.({ sceneId: shot.scene_id })
+                            }
+                          >
+                            本场依赖
+                          </button>
                         </th>
                         <td data-label="剧本">
                           <StatusCell state={shot.script_status} />
@@ -220,9 +261,19 @@ export function EpisodeWorkspace({
                         </td>
                         <td data-label="关键帧">
                           <StatusCell state={shot.image_status} />
+                          <DependencyDetails
+                            issues={shot.dependency_issues ?? []}
+                            media="image"
+                            onOpen={() => onJumpToShot?.(shot.shot_id, "image")}
+                          />
                         </td>
                         <td data-label="视频">
                           <StatusCell state={shot.video_status} />
+                          <DependencyDetails
+                            issues={shot.dependency_issues ?? []}
+                            media="video"
+                            onOpen={() => onJumpToShot?.(shot.shot_id, "video")}
+                          />
                         </td>
                         <td data-label="审查">
                           <StatusCell state={shot.review_status} />
@@ -245,5 +296,36 @@ export function EpisodeWorkspace({
         </>
       )}
     </section>
+  );
+}
+
+function DependencyDetails({
+  issues,
+  media,
+  onOpen,
+}: {
+  issues: NonNullable<import("../types/overview").EpisodeShot["dependency_issues"]>;
+  media: "image" | "video";
+  onOpen: () => void;
+}) {
+  const relevant = issues.filter((issue) => issue.media === media);
+  if (!relevant.length) return null;
+  const label = relevant.some((issue) => ["stale", "broken"].includes(issue.state))
+    ? "查看原因"
+    : relevant.some((issue) => issue.state === "unknown")
+      ? "来源待核实"
+      : "沿用指定版";
+  return (
+    <details className="dependency-details">
+      <summary>{label}</summary>
+      <ul>
+        {relevant.map((issue, index) => (
+          <li key={`${issue.source_id}-${index}`}>{issue.label}</li>
+        ))}
+      </ul>
+      <button type="button" onClick={onOpen}>
+        配置{media === "image" ? "图片" : "视频"}重新生成
+      </button>
+    </details>
   );
 }

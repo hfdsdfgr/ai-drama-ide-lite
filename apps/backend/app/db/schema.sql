@@ -331,6 +331,38 @@ CREATE TABLE IF NOT EXISTS pipelines (
     PRIMARY KEY (project_id, stage_key)
 );
 
+CREATE TABLE IF NOT EXISTS workflow_templates (
+    id             TEXT PRIMARY KEY,
+    project_id     TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    name           TEXT NOT NULL,
+    description    TEXT NOT NULL DEFAULT '',
+    schema_version INTEGER NOT NULL DEFAULT 1,
+    revision       INTEGER NOT NULL DEFAULT 1,
+    config_json    TEXT NOT NULL,
+    created_at     TEXT NOT NULL,
+    updated_at     TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS episode_workflow_configs (
+    episode_id     TEXT PRIMARY KEY REFERENCES episodes(id) ON DELETE CASCADE,
+    project_id     TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    revision       INTEGER NOT NULL DEFAULT 1,
+    config_json    TEXT NOT NULL,
+    updated_at     TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS pipeline_run_stages (
+    job_id         TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    project_id     TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    episode_id     TEXT NOT NULL REFERENCES episodes(id) ON DELETE CASCADE,
+    stage_key      TEXT NOT NULL,
+    status         TEXT NOT NULL DEFAULT 'queued',
+    message        TEXT NOT NULL DEFAULT '',
+    child_job_id   TEXT NOT NULL DEFAULT '',
+    updated_at     TEXT NOT NULL,
+    PRIMARY KEY (job_id, stage_key)
+);
+
 CREATE INDEX IF NOT EXISTS idx_novels_project ON novels(project_id);
 CREATE INDEX IF NOT EXISTS idx_chapters_novel ON chapters(novel_id);
 CREATE INDEX IF NOT EXISTS idx_stories_project ON stories(project_id);
@@ -356,3 +388,6 @@ CREATE INDEX IF NOT EXISTS idx_models_type ON models(model_type);
 CREATE INDEX IF NOT EXISTS idx_dialogue_reviews_shot ON shot_dialogue_reviews(project_id, shot_id);
 CREATE INDEX IF NOT EXISTS idx_visual_reviews_shot ON shot_visual_reviews(project_id, shot_id);
 CREATE INDEX IF NOT EXISTS idx_story_reviews_shot ON story_consistency_reviews(project_id, shot_id);
+CREATE INDEX IF NOT EXISTS idx_workflow_templates_project ON workflow_templates(project_id);
+CREATE INDEX IF NOT EXISTS idx_episode_workflow_configs_project ON episode_workflow_configs(project_id);
+CREATE INDEX IF NOT EXISTS idx_pipeline_run_stages_episode ON pipeline_run_stages(project_id, episode_id);

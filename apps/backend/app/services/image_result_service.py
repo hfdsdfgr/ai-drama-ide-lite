@@ -82,6 +82,8 @@ class ImageResultService:
                     "target_type": target_type,
                     "target_id": target_id,
                     "source_refs": extra.get("source_refs", []),
+                    "user_prompt": extra.get("user_prompt", ""),
+                    "regenerated_from_version_id": extra.get("regenerated_from_version_id", ""),
                 },
             )
             records.append(record)
@@ -223,20 +225,26 @@ class ImageResultService:
         )
 
         for ref in extra.get("source_refs", []):
-            if ref.get("type") != "asset":
+            source_type = ref.get("type")
+            if source_type not in {"asset", "shot"}:
                 continue
             ref_id = ref.get("id")
             if not ref_id:
                 continue
+            if source_type == "shot" and ref.get("version_id") and is_video:
+                self.graph.add_edge(
+                    project_id, "image_version", ref["version_id"],
+                    version_type, record.id, relation="video_uses_keyframe",
+                    upstream_version=ref.get("version"),
+                )
+            if source_type == upstream_type and ref_id == target_id:
+                continue
             self.graph.add_edge(
                 project_id,
-                "asset",
+                source_type,
                 ref_id,
                 version_type,
                 record.id,
-                relation=(
-                    "video_generated_from_asset"
-                    if is_video
-                    else "image_generated_from_asset"
-                ),
+                relation=ref.get("relation") or ("video_generated_from_asset" if is_video else "image_generated_from_asset"),
+                upstream_version=ref.get("version"),
             )

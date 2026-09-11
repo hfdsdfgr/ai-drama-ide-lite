@@ -11,6 +11,10 @@ export interface VideoGenerateInput {
   aspect_ratio?: string;
   with_audio?: boolean;
   reference_asset_ids?: string[];
+  reference_version_ids?: string[];
+  pinned_version_ids?: string[];
+  source_image_version_id?: string;
+  regenerated_from_version_id?: string;
 }
 
 export function generateVideo(

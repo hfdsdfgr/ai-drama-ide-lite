@@ -27,6 +27,7 @@ class JobOut(BaseModel):
     batch_id: str = ""
     batch_label: str = ""
     target_id: str = ""
+    target_type: str = ""
     target_label: str = ""
     has_remote_task: bool = False
     created_at: datetime

@@ -25,15 +25,26 @@ def generate_video(
     payload: VideoGenerateRequest,
     request: Request,
 ) -> dict:
+    options = {
+        "duration": payload.duration,
+        "aspect_ratio": payload.aspect_ratio,
+        "with_audio": payload.with_audio,
+        "reference_asset_ids": payload.reference_asset_ids,
+    }
+    if "reference_version_ids" in payload.model_fields_set:
+        options["reference_version_ids"] = payload.reference_version_ids
+    if payload.pinned_version_ids:
+        options["pinned_version_ids"] = payload.pinned_version_ids
+    if payload.source_image_version_id:
+        options["source_image_version_id"] = payload.source_image_version_id
+    if payload.regenerated_from_version_id:
+        options["regenerated_from_version_id"] = payload.regenerated_from_version_id
     return request.app.state.video_generation_service.start_shot_video(
         project_id,
         payload.target_id,
         payload.model_id,
         payload.prompt,
-        duration=payload.duration,
-        aspect_ratio=payload.aspect_ratio,
-        with_audio=payload.with_audio,
-        reference_asset_ids=payload.reference_asset_ids,
+        **options,
     )
 
 

@@ -24,6 +24,7 @@ export interface ProjectOverview {
 export type ProductionState =
   | "missing"
   | "ready"
+  | "stale"
   | "active"
   | "failed"
   | "pending"
@@ -59,6 +60,23 @@ export interface EpisodeShot {
   review_status: ProductionState;
   assets: EpisodeAsset[];
   blockers: EpisodeBlocker[];
+  image_dependency_state?: DependencyState;
+  video_dependency_state?: DependencyState;
+  dependency_issues?: DependencyIssue[];
+}
+
+export type DependencyState =
+  "none" | "current" | "stale" | "pinned" | "unknown" | "broken";
+export interface DependencyIssue {
+  state: DependencyState;
+  label: string;
+  media: "image" | "video";
+  source_id: string;
+  source_name: string;
+  used_version_id: string;
+  used_version: number | null;
+  current_version_id: string;
+  current_version: number | null;
 }
 
 export interface EpisodeProduction {
@@ -70,6 +88,9 @@ export interface EpisodeProduction {
   completed_shots: number;
   attention_count: number;
   active_count: number;
+  stale_count?: number;
+  unknown_dependency_count?: number;
+  pinned_dependency_count?: number;
   shots: EpisodeShot[];
 }
 

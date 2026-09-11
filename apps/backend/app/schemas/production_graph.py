@@ -40,9 +40,42 @@ class RegenerationPlanItemOut(BaseModel):
     shot_id: str
     label: str
     reason: str = ""
+    dependency_state: str = "unknown"
 
 
 class RegenerationPlanOut(BaseModel):
     changed_node: dict = Field(default_factory=dict)
     image_shots: list[RegenerationPlanItemOut] = Field(default_factory=list)
     video_shots: list[RegenerationPlanItemOut] = Field(default_factory=list)
+
+
+class DependencyViewNodeOut(BaseModel):
+    id: str
+    entity_type: str
+    entity_id: str
+    label: str
+    version: int | None = None
+    current_version: int | None = None
+    state: str = "unknown"
+    target: dict = Field(default_factory=dict)
+
+
+class DependencyViewEdgeOut(BaseModel):
+    source: str
+    target: str
+    relation: str = ""
+
+
+class ShotDependencyViewOut(BaseModel):
+    shot_id: str
+    label: str
+    nodes: list[DependencyViewNodeOut] = Field(default_factory=list)
+    edges: list[DependencyViewEdgeOut] = Field(default_factory=list)
+    issues: list[dict] = Field(default_factory=list)
+
+
+class DependencyViewOut(BaseModel):
+    project_id: str
+    scope: dict = Field(default_factory=dict)
+    shots: list[ShotDependencyViewOut] = Field(default_factory=list)
+    total: int = 0

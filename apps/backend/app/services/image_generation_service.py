@@ -6,6 +6,7 @@
 """
 
 import uuid
+from pathlib import Path
 
 from app.core.errors import AppError
 from app.schemas.script import Scene, Shot
@@ -84,19 +85,39 @@ class ImageGenerationService:
         art_style: str | None = None,
         negative_prompt: str = "",
         reference_asset_ids: list[str] | None = None,
+        reference_version_ids: list[str] | None = None,
+        pinned_version_ids: list[str] | None = None,
+        prompt: str | None = None,
+        regenerated_from_version_id: str | None = None,
         batch_id: str = "",
         batch_label: str = "",
         target_label: str = "",
     ) -> dict:
+        explicit_versions = reference_version_ids is not None
         reference_asset_ids = reference_asset_ids or []
-        if reference_asset_ids and capability == "text_to_image":
+        reference_version_ids = reference_version_ids or []
+        pinned = set(pinned_version_ids or [])
+        if not pinned.issubset(reference_version_ids):
+            raise AppError(422, "invalid_pinned_reference", "固定版本必须是本次选择的参考版本")
+        if reference_asset_ids and reference_version_ids:
+            raise AppError(422, "ambiguous_reference_input", "参考资产与参考版本不能同时提交")
+        if (reference_asset_ids or reference_version_ids) and capability == "text_to_image":
             capability = self._reference_capability(model_id)
         self._validate_capability(capability)
         shot, scene = ScriptRepository(self.db_path).get_shot_with_scene(
             project_id, shot_id
         )
+        if regenerated_from_version_id:
+            original = self.asset_version_service.get(regenerated_from_version_id)
+            if (original.project_id, original.entity_type, original.entity_id) != (project_id, "shot", shot_id):
+                raise AppError(422, "invalid_regeneration_source", "重新生成的来源版本不属于当前镜头")
+        if prompt is not None:
+            shot = shot.model_copy(update={"prompt": prompt})
         asset_references = self._resolve_shot_asset_references(
             project_id, shot, scene, reference_asset_ids
+        ) if not explicit_versions else []
+        asset_references = self._attach_reference_versions(
+            project_id, asset_references, reference_version_ids
         )
         source_refs = [
             {
@@ -110,6 +131,10 @@ class ImageGenerationService:
                 "type": "asset",
                 "id": ref["id"],
                 "relation": "shot_references_asset",
+                "entity_type": ref["asset_type"],
+                "version_id": ref["version_id"],
+                "version": ref["version"],
+                "selection_mode": "historical" if ref["version_id"] in pinned else "current",
             }
             for ref in asset_references
         )
@@ -132,9 +157,9 @@ class ImageGenerationService:
             batch_id=batch_id,
             batch_label=batch_label,
             target_label=target_label,
-            images=self._reference_image_paths(
-                project_id, asset_references
-            ),
+            images=self._reference_image_paths(asset_references),
+            user_prompt=shot.prompt or shot.action or "",
+            regenerated_from_version_id=regenerated_from_version_id or "",
         )
 
     def get_job(self, project_id: str, job_id: str) -> dict:
@@ -166,7 +191,9 @@ class ImageGenerationService:
                     skipped.append({"shot_id": shot_id, "label": label, "reason": "已有当前关键帧版本"})
                     continue
                 references = self._resolve_shot_asset_references(project_id, shot, scene)
-                self._reference_image_paths(project_id, references)
+                self._reference_image_paths(
+                    self._attach_reference_versions(project_id, references, [])
+                )
                 ready.append({"shot_id": shot_id, "label": label})
             except AppError as exc:
                 skipped.append({"shot_id": shot_id, "label": f"镜头 {shot_id}", "reason": exc.message})
@@ -228,6 +255,8 @@ class ImageGenerationService:
         batch_label: str = "",
         target_label: str = "",
         images: list[str] | None = None,
+        user_prompt: str = "",
+        regenerated_from_version_id: str = "",
     ) -> dict:
         # Adapter 使用像素串作为尺寸，例如 OpenAI 兼容接口要求 1024x1536。
         size = f"{plan.width}x{plan.height}"
@@ -248,6 +277,8 @@ class ImageGenerationService:
                 "width": plan.width,
                 "height": plan.height,
                 "source_refs": plan.source_refs,
+                "user_prompt": user_prompt,
+                "regenerated_from_version_id": regenerated_from_version_id,
             },
         )
 
@@ -295,23 +326,54 @@ class ImageGenerationService:
             f"模型 {model.model_id} 不支持参考图生图，请选择支持 reference_image 或 image_to_image 的模型",
         )
 
-    def _reference_image_paths(
-        self, project_id: str, references: list[dict]
-    ) -> list[str]:
-        paths: list[str] = []
+    def _reference_image_paths(self, references: list[dict]) -> list[str]:
+        return [ref["file_path"] for ref in references]
+
+    def _attach_reference_versions(
+        self,
+        project_id: str,
+        references: list[dict],
+        reference_version_ids: list[str],
+    ) -> list[dict]:
+        """Turn selected assets into immutable image-version references."""
+        if reference_version_ids:
+            resolved: list[dict] = []
+            seen: set[str] = set()
+            for version_id in reference_version_ids:
+                if version_id in seen:
+                    continue
+                seen.add(version_id)
+                record = self.asset_version_service.get(version_id)
+                if record.project_id != project_id or record.entity_type not in {
+                    "character", "location", "prop", "reference_image"
+                }:
+                    raise AppError(422, "invalid_reference_version", "参考图片版本不属于当前项目或类型不支持")
+                if not record.file_path or not Path(record.file_path).is_file():
+                    raise AppError(422, "reference_image_missing", "参考图片版本文件不存在")
+                asset = self._find_asset(project_id, record.entity_id)
+                resolved.append({
+                    "asset_type": record.entity_type,
+                    "id": record.entity_id,
+                    "name": asset["name"],
+                    "reference_prompt": asset.get("reference_prompt", ""),
+                    "version_id": record.id,
+                    "version": record.version,
+                    "file_path": record.file_path,
+                })
+            return resolved
+
+        resolved = []
         for ref in references:
-            asset = self._find_asset(project_id, ref["id"])
-            current = self.asset_version_service.get_current(
-                project_id, asset["asset_type"], ref["id"]
-            )
+            current = self.asset_version_service.get_current(project_id, ref["asset_type"], ref["id"])
             if current is None:
-                raise AppError(
-                    422,
-                    "reference_image_missing",
-                    f"资产「{asset['name']}」还没有可用的图片版本，无法作为参考图",
-                )
-            paths.append(current.file_path)
-        return paths
+                raise AppError(422, "reference_image_missing", f"资产「{ref['name']}」还没有可用的图片版本，无法作为参考图")
+            resolved.append({
+                **ref,
+                "version_id": getattr(current, "id", ""),
+                "version": getattr(current, "version", None),
+                "file_path": current.file_path,
+            })
+        return resolved
 
     def _resolve_shot_asset_references(
         self,

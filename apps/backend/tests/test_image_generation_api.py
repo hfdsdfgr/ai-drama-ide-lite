@@ -108,6 +108,21 @@ def test_image_generate_requires_valid_target_type(client):
     assert response.status_code == 422
 
 
+def test_explicit_empty_references_survive_route(client, monkeypatch):
+    calls = {}
+    def capture(*args, **kwargs):
+        calls.update(kwargs)
+        return _job_out()
+    monkeypatch.setattr(client.app.state.image_generation_service, "start_shot", capture)
+    response = client.post("/api/projects/proj_1/images/generate", json={
+        "target_type": "shot", "target_id": "shot_1", "model_id": "model_img",
+        "reference_version_ids": [], "prompt": "新的提示词",
+    })
+    assert response.status_code == 201
+    assert calls["reference_version_ids"] == []
+    assert calls["prompt"] == "新的提示词"
+
+
 def test_batch_image_plan_route(client, monkeypatch):
     monkeypatch.setattr(
         client.app.state.image_generation_service,

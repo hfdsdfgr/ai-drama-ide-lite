@@ -1,6 +1,7 @@
 """Phase 13 M2 - ImageGenerationService tests."""
 
 from datetime import datetime, timezone
+from types import SimpleNamespace
 
 import pytest
 
@@ -49,6 +50,9 @@ class _FakeRecord:
 class _FakeAssetVersionService:
     def get_current(self, project_id, entity_type, entity_id):
         return _FakeVersion(f"{entity_id}.png")
+
+    def get(self, version_id):
+        raise AssertionError(f"unexpected version lookup: {version_id}")
 
 
 class _FakeVersion:
@@ -224,6 +228,56 @@ def test_start_shot_uses_explicit_reference_assets(monkeypatch):
     assert kwargs["extra"]["source_refs"][1]["id"] == "character_lin_001"
 
 
+def test_start_shot_uses_exact_reference_version(monkeypatch, tmp_path):
+    fake = _FakeGenerationService()
+    service = _service(fake)
+    reference_file = tmp_path / "character-v2.png"
+    reference_file.write_bytes(b"image")
+    monkeypatch.setattr(
+        ScriptRepository,
+        "get_shot_with_scene",
+        lambda self, project_id, shot_id: (_shot(), _scene()),
+    )
+    monkeypatch.setattr(
+        StoryRepository,
+        "list_assets",
+        lambda self, project_id: [
+            {
+                "asset_type": "character",
+                "asset_id": "character_lin_001",
+                "name": "林凡",
+                "reference_prompt": "green robe",
+                "fields": {},
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        service.asset_version_service,
+        "get",
+        lambda version_id: SimpleNamespace(
+            id=version_id,
+            project_id="proj_1",
+            entity_type="character",
+            entity_id="character_lin_001",
+            version=2,
+            file_path=str(reference_file),
+        ),
+    )
+
+    service.start_shot(
+        "proj_1",
+        "shot_01",
+        "model_img",
+        "reference_image",
+        reference_version_ids=["ver_character_v2"],
+    )
+
+    _args, kwargs = fake.calls[0]
+    assert kwargs["images"] == [str(reference_file)]
+    assert kwargs["extra"]["source_refs"][1]["version_id"] == "ver_character_v2"
+    assert kwargs["extra"]["source_refs"][1]["version"] == 2
+
+
 def test_invalid_image_capability_is_rejected():
     service = _service(_FakeGenerationService())
 
@@ -248,6 +302,26 @@ def test_get_job_checks_project_ownership():
     with pytest.raises(AppError) as exc:
         service.get_job("proj_1", "job_1")
     assert exc.value.code == "image_job_not_found"
+
+
+def test_explicit_empty_references_and_prompt_override(monkeypatch):
+    fake = _FakeGenerationService()
+    service = _service(fake)
+    monkeypatch.setattr(ScriptRepository, "get_shot_with_scene", lambda *args: (_shot(), _scene()))
+    def unexpected(*args):
+        pytest.fail("Explicit empty selection must not auto-match assets")
+    monkeypatch.setattr(service, "_resolve_shot_asset_references", unexpected)
+    service.start_shot("proj_1", "shot_1", "model_img", reference_version_ids=[], prompt="用户新的画面描述")
+    _, kwargs = fake.calls[0]
+    assert kwargs["images"] == []
+    assert kwargs["extra"]["user_prompt"] == "用户新的画面描述"
+    assert not any(ref["type"] == "asset" for ref in kwargs["extra"]["source_refs"])
+
+
+def test_pinned_reference_must_be_selected():
+    with pytest.raises(AppError) as exc:
+        _service(_FakeGenerationService()).start_shot("proj_1", "shot_1", "model_img", reference_version_ids=[], pinned_version_ids=["other"])
+    assert exc.value.code == "invalid_pinned_reference"
 
 
 def test_plan_shots_skips_existing_versions_and_keeps_ready_shots(monkeypatch):

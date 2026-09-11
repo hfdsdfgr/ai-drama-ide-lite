@@ -973,7 +973,39 @@ button:disabled {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--bg-elevated);
-  cursor: pointer;
+}
+
+.reference-option > span {
+  display: grid;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.reference-option > span small {
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+}
+
+.reference-version-control {
+  grid-column: 2 / -1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.reference-version-control select {
+  min-height: 32px;
+}
+
+.reference-thumb-button {
+  width: 48px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
 }
 
 .reference-option img {
@@ -3565,4 +3597,257 @@ button:disabled {
 .model-block,
 .builtin-section {
   border-color: var(--border);
+}
+.production-state-stale {
+  color: var(--warning);
+}
+.dependency-details {
+  margin-top: var(--space-1);
+  color: var(--text-secondary);
+  font-size: 12px;
+  white-space: normal;
+}
+.dependency-details summary {
+  cursor: pointer;
+  padding-block: var(--space-1);
+}
+.dependency-details ul {
+  padding-left: var(--space-4);
+  max-width: 28ch;
+}
+.dependency-details li {
+  margin-bottom: var(--space-2);
+  overflow-wrap: anywhere;
+}
+.dependency-details button {
+  white-space: normal;
+}
+
+.workflow-config {
+  display: grid;
+  gap: var(--space-4);
+}
+.workflow-config-head,
+.workflow-actions,
+.workflow-template-row,
+.workflow-diff-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+.workflow-config-head h3 {
+  margin: 0;
+}
+.workflow-config-head p {
+  margin: var(--space-1) 0 0;
+}
+.workflow-auto,
+.workflow-stage-toggle {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  justify-self: start;
+  gap: var(--space-2);
+}
+.workflow-stages {
+  border-block: 1px solid var(--border);
+}
+.workflow-stage {
+  display: grid;
+  grid-template-columns: minmax(140px, 0.45fr) minmax(0, 1.55fr);
+  gap: var(--space-4);
+  align-items: start;
+  padding: var(--space-3) 0;
+}
+.workflow-stage + .workflow-stage {
+  border-top: 1px solid var(--border);
+}
+.workflow-stage-disabled .workflow-stage-fields {
+  opacity: 0.45;
+  pointer-events: none;
+}
+.workflow-stage-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--space-3);
+}
+.workflow-stage-fields label,
+.workflow-template-row label {
+  display: grid;
+  gap: var(--space-1);
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.workflow-stage-fields select,
+.workflow-template-row select,
+.workflow-template-row input {
+  min-width: 0;
+  width: 100%;
+}
+.workflow-template-tools {
+  display: grid;
+  gap: var(--space-3);
+  padding-top: var(--space-1);
+}
+.workflow-template-row label {
+  flex: 1 1 260px;
+}
+
+.workflow-template-manage {
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+
+.workflow-template-manage summary {
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 13px;
+}
+.workflow-diff {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--bg-elevated);
+  border-radius: var(--radius-md);
+}
+.workflow-diff-head span {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.workflow-diff > label {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding: var(--space-2);
+  border-bottom: 1px solid var(--border);
+}
+.workflow-diff > label > span {
+  display: grid;
+  gap: 2px;
+}
+.workflow-diff small {
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+.workflow-diff-blocked {
+  opacity: 0.65;
+}
+
+@media (max-width: 1100px) {
+  .workflow-stage {
+    grid-template-columns: 1fr;
+    gap: var(--space-2);
+  }
+}
+
+@media (max-width: 1000px) {
+  .generation-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .overview-panel {
+    position: static;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+}
+
+.production-dependency-link {
+  margin-top: var(--space-1);
+  padding: 0;
+  border: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  background: transparent;
+}
+.production-dependency-link:hover {
+  color: var(--accent);
+  background: transparent;
+}
+.dependency-view {
+  display: grid;
+  gap: var(--space-4);
+}
+.dependency-view-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+.dependency-view-head h3,
+.dependency-view-head p {
+  margin: 0;
+}
+.dependency-view-head p {
+  margin-top: var(--space-1);
+}
+.dependency-shot {
+  display: grid;
+  gap: var(--space-3);
+}
+.dependency-edge-list {
+  display: grid;
+  gap: var(--space-2);
+}
+.dependency-edge {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-2);
+}
+.dependency-node {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  min-height: 48px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  text-align: left;
+  background: var(--bg-elevated);
+}
+.dependency-node small {
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+.dependency-node-stale,
+.dependency-node-broken {
+  border-color: color-mix(in srgb, var(--warning) 55%, var(--border));
+}
+.dependency-node-pinned {
+  border-color: var(--border-strong);
+}
+.dependency-view-issues summary {
+  cursor: pointer;
+  color: var(--text-secondary);
+}
+.dependency-view-issues li {
+  margin-block: var(--space-1);
+}
+
+.dependency-pagination {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.dependency-pagination span {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+@media (max-width: 900px) {
+  .dependency-edge {
+    grid-template-columns: 1fr;
+  }
+  .dependency-edge > span[aria-hidden="true"] {
+    transform: rotate(90deg);
+    justify-self: center;
+  }
 }

@@ -1,13 +1,21 @@
 import type { JobOut } from "../types/job";
+import type { WorkflowConfig } from "./workflowTemplates";
 import { request } from "./client";
 
 export interface PipelineStagePlan {
   key: string;
   label: string;
-  kind: "llm" | "image" | "video";
-  status: "ready" | "not_ready" | "completed";
+  kind: "llm" | "image" | "video" | "review";
+  status: "ready" | "not_ready" | "completed" | "disabled";
   model_id: string;
   missing_reason: string;
+}
+
+export interface EpisodePipelinePlan extends PipelinePlan {
+  episode_id: string;
+  episode_title: string;
+  config_revision: number;
+  config: WorkflowConfig;
 }
 
 export interface PipelinePlan {
@@ -49,4 +57,37 @@ export function startPipeline(
 
 export function getPipelineStatus(projectId: string): Promise<PipelineStatus> {
   return request<PipelineStatus>(`/projects/${projectId}/pipeline/status`);
+}
+
+export function getEpisodePipelinePlan(
+  projectId: string,
+  episodeId: string,
+): Promise<EpisodePipelinePlan> {
+  return request<EpisodePipelinePlan>(
+    `/projects/${projectId}/pipeline/episodes/${episodeId}/plan`,
+  );
+}
+
+export function startEpisodePipeline(
+  projectId: string,
+  episodeId: string,
+  expectedConfigRevision: number,
+): Promise<JobOut> {
+  return request<JobOut>(
+    `/projects/${projectId}/pipeline/episodes/${episodeId}/start`,
+    {
+      method: "POST",
+      body: JSON.stringify({ expected_config_revision: expectedConfigRevision }),
+    },
+  );
+}
+
+export function getEpisodePipelineStatus(
+  projectId: string,
+  episodeId: string,
+  jobId: string,
+): Promise<PipelineStatus> {
+  return request<PipelineStatus>(
+    `/projects/${projectId}/pipeline/episodes/${episodeId}/status?job_id=${encodeURIComponent(jobId)}`,
+  );
 }

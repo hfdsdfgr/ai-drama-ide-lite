@@ -28,6 +28,7 @@ from app.api.routes import (
     version,
     videos,
     visual_reviews,
+    workflow_templates,
 )
 from app.core.config import Settings, get_settings
 from app.core.crash_log import install_crash_handler
@@ -60,6 +61,7 @@ from app.services.provider_repo import ProviderRepository
 from app.services.secret_store import KeyringSecretStore, SecretStore
 from app.services.story_analysis import StoryAnalysisService
 from app.services.video_generation_service import VideoGenerationService
+from app.services.workflow_template_service import WorkflowTemplateService
 
 logger = get_logger("main")
 
@@ -167,6 +169,9 @@ def create_app(
         app.state.job_store, app.state.provider_manager, config.db_path
     )
     app.state.production_graph_service = ProductionGraphService(config.db_path)
+    app.state.workflow_template_service = WorkflowTemplateService(
+        config.db_path, app.state.provider_manager
+    )
     app.state.ai_novel_service = AiNovelService(
         app.state.provider_manager, config.db_path
     )
@@ -184,6 +189,7 @@ def create_app(
         asset_version_service=app.state.asset_version_service,
         visual_review_service=app.state.visual_review_service,
         story_consistency_service=app.state.story_consistency_service,
+        workflow_template_service=app.state.workflow_template_service,
         dialogue_review_service=app.state.dialogue_review_service,
     )
     app.state.job_worker.pipeline_service = app.state.pipeline_service
@@ -216,6 +222,7 @@ def create_app(
     app.include_router(quality.router)
     app.include_router(story_reviews.router)
     app.include_router(pipeline.router)
+    app.include_router(workflow_templates.router)
     app.include_router(version.router)
     logger.info("Application started (env=%s)", config.env)
     return app

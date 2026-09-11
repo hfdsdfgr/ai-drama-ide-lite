@@ -9,6 +9,7 @@ from app.db.database import get_connection
 from app.schemas.script import Scene, Shot
 from app.services.capability_registry import IMAGE_CAPABILITIES, VIDEO_CAPABILITIES
 from app.services.image_prompt_builder import build_shot_image_prompt
+from app.services.production_graph import ProductionGraphService
 
 
 ACTIVE_STATUSES = {"queued", "running", "paused"}
@@ -65,10 +66,10 @@ def build_episode_workspace(db_path: Path, project_id: str) -> dict:
             ).fetchall()
         ]
         current_versions = {
-            (row["entity_type"], row["entity_id"])
+            (row["entity_type"], row["entity_id"]): row["id"]
             for row in conn.execute(
                 """
-                SELECT entity_type, entity_id FROM versions
+                SELECT id, entity_type, entity_id FROM versions
                 WHERE project_id = ? AND is_current = 1
                 """,
                 (project_id,),
@@ -76,6 +77,10 @@ def build_episode_workspace(db_path: Path, project_id: str) -> dict:
         }
         latest_jobs = _latest_shot_jobs(conn, project_id)
         reviews = _review_statuses(conn, project_id)
+
+    health = ProductionGraphService(db_path).dependency_health(
+        project_id, [value for (kind, _), value in current_versions.items() if kind in {"shot", "shot_video"}]
+    )
 
     scene_by_id = {scene["id"]: scene for scene in scenes}
     shots_by_scene: dict[str, list[dict]] = {}
@@ -100,6 +105,7 @@ def build_episode_workspace(db_path: Path, project_id: str) -> dict:
                         current_versions,
                         latest_jobs,
                         reviews,
+                        health,
                     )
                 )
         completed = sum(_shot_completed(item) for item in episode_shots)
@@ -112,6 +118,9 @@ def build_episode_workspace(db_path: Path, project_id: str) -> dict:
                 "shot_count": len(episode_shots),
                 "completed_shots": completed,
                 "attention_count": len(episode_shots) - completed,
+                "stale_count": sum(any(item[f"{kind}_dependency_state"] in {"stale", "broken"} for kind in ("image", "video")) for item in episode_shots),
+                "unknown_dependency_count": sum(any(issue["state"] == "unknown" for issue in item["dependency_issues"]) for item in episode_shots),
+                "pinned_dependency_count": sum(any(issue["state"] == "pinned" for issue in item["dependency_issues"]) for item in episode_shots),
                 "active_count": sum(
                     item["image_status"] == "active"
                     or item["video_status"] == "active"
@@ -224,7 +233,7 @@ def _fill_missing_prompts(db_path: Path, project_id: str, episode_id: str) -> in
     return len(updates)
 
 
-def _build_shot(shot, scene, assets, current_versions, latest_jobs, reviews) -> dict:
+def _build_shot(shot, scene, assets, current_versions, latest_jobs, reviews, health) -> dict:
     script_ready = bool((shot["action"] or "").strip() or (shot["dialogue"] or "").strip())
     prompt_ready = bool((shot["prompt"] or "").strip())
     references = _matched_assets(shot, scene, assets, current_versions)
@@ -240,6 +249,20 @@ def _build_shot(shot, scene, assets, current_versions, latest_jobs, reviews) -> 
     review_status = reviews.get(shot_id, "pending" if has_image else "not_started")
 
     blockers = []
+    dependency_states = {}
+    dependency_issues = []
+    for kind, entity_type in (("image", "shot"), ("video", "shot_video")):
+        dependency = health.get(current_versions.get((entity_type, shot_id)), {"state": "none", "issues": []})
+        dependency_states[f"{kind}_dependency_state"] = dependency["state"]
+        for index, issue in enumerate(dependency["issues"]):
+            dependency_issues.append({**issue, "media": kind})
+            if issue["state"] in {"stale", "broken"}:
+                blockers.append(_blocker(f"{kind}_dependency:{index}", issue["label"], "storyboard"))
+        if dependency["state"] in {"stale", "broken"}:
+            if kind == "image" and image_status == "ready":
+                image_status = "stale"
+            elif kind == "video" and video_status == "ready":
+                video_status = "stale"
     if not script_ready:
         blockers.append(_blocker("script_missing", "缺少镜头动作或台词", "storyboard"))
     if character_unmatched:
@@ -283,6 +306,8 @@ def _build_shot(shot, scene, assets, current_versions, latest_jobs, reviews) -> 
         "image_status": image_status,
         "video_status": video_status,
         "review_status": review_status,
+        **dependency_states,
+        "dependency_issues": dependency_issues,
         "assets": references,
         "blockers": blockers,
     }

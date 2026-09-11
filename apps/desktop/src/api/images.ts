@@ -11,6 +11,10 @@ export interface ImageGenerateInput {
   art_style?: string;
   negative_prompt?: string;
   reference_asset_ids?: string[];
+  reference_version_ids?: string[];
+  pinned_version_ids?: string[];
+  prompt?: string;
+  regenerated_from_version_id?: string;
 }
 
 export interface BatchImagePlanItem {

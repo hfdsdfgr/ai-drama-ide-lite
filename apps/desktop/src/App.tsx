@@ -42,10 +42,13 @@ const CREATION_MODULES: ModuleDef[] = [
 function App() {
   const [view, setView] = useState<View>("project");
   const [jumpToShotId, setJumpToShotId] = useState<string | null>(null);
+  const [jumpToMedia, setJumpToMedia] = useState<"image" | "video" | undefined>();
+  const [jumpToAssetId, setJumpToAssetId] = useState<string | null>(null);
   const [activeProjectId, setActiveProjectId] = useState("");
   const [novelJump, setNovelJump] = useState<NovelJump | null>(null);
 
-  function handleJumpToShot(shotId: string) {
+  function handleJumpToShot(shotId: string, media?: "image" | "video") {
+    setJumpToMedia(media);
     setJumpToShotId(shotId);
     setView("storyboard");
   }
@@ -53,12 +56,18 @@ function App() {
   function handleSelectProject(projectId: string) {
     setActiveProjectId(projectId);
     setNovelJump(null);
+    setJumpToAssetId(null);
     setView("project");
   }
 
   function handleNovelJump(target: NovelJump) {
     setNovelJump(target);
     setView("novel");
+  }
+
+  function handleOpenAssets(assetId?: string) {
+    setJumpToAssetId(assetId ?? null);
+    setView("assets");
   }
 
   return (
@@ -140,7 +149,11 @@ function App() {
                 active={view === "storyboard"}
                 projectId={activeProjectId}
                 jumpToShotId={view === "storyboard" ? jumpToShotId : null}
-                onJumpConsumed={() => setJumpToShotId(null)}
+                jumpToMedia={jumpToMedia}
+                onJumpConsumed={() => {
+                  setJumpToShotId(null);
+                  setJumpToMedia(undefined);
+                }}
               />
             </div>
             <div className={view === "assets" ? "view-pane active" : "view-pane"}>
@@ -148,6 +161,9 @@ function App() {
                 active={view === "assets"}
                 projectId={activeProjectId}
                 onOpenStoryboard={() => setView("storyboard")}
+                onJumpToShot={handleJumpToShot}
+                jumpToAssetId={jumpToAssetId}
+                onAssetJumpConsumed={() => setJumpToAssetId(null)}
               />
             </div>
             <div className={view === "generation" ? "view-pane active" : "view-pane"}>
@@ -155,7 +171,7 @@ function App() {
                 active={view === "generation"}
                 projectId={activeProjectId}
                 onJumpToShot={handleJumpToShot}
-                onOpenAssets={() => setView("assets")}
+                onOpenAssets={handleOpenAssets}
               />
             </div>
             <div className={view === "settings" ? "view-pane active" : "view-pane"}>

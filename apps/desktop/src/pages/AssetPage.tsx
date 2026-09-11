@@ -197,10 +197,16 @@ export function AssetPage({
   active,
   projectId,
   onOpenStoryboard,
+  onJumpToShot,
+  jumpToAssetId,
+  onAssetJumpConsumed,
 }: {
   active: boolean;
   projectId: string;
   onOpenStoryboard?: () => void;
+  onJumpToShot?: (shotId: string, media?: "image" | "video") => void;
+  jumpToAssetId?: string | null;
+  onAssetJumpConsumed?: () => void;
 }) {
   const [assets, setAssets] = useState<AssetCard[]>([]);
   const [assetType, setAssetType] = useState<AssetType>("character");
@@ -234,8 +240,6 @@ export function AssetPage({
   const [regenerationPlan, setRegenerationPlan] =
     useState<RegenerationPlanResponse | null>(null);
   const [planLoading, setPlanLoading] = useState(false);
-  const [planBusy, setPlanBusy] = useState(false);
-  const [selectedPlanShots, setSelectedPlanShots] = useState<string[]>([]);
   const [planNotice, setPlanNotice] = useState("");
   const pollRef = useRef<string | null>(null);
   const imagePollRef = useRef<string | null>(null);
@@ -324,6 +328,15 @@ export function AssetPage({
     setPlanNotice("");
   }
 
+  useEffect(() => {
+    if (!active || !jumpToAssetId) return;
+    const target = assets.find((asset) => asset.asset_id === jumpToAssetId);
+    if (!target) return;
+    setAssetType(target.asset_type);
+    selectAsset(target);
+    onAssetJumpConsumed?.();
+  }, [active, assets, jumpToAssetId, onAssetJumpConsumed]);
+
   function changeType(next: AssetType) {
     setAssetType(next);
     setSelectedName(null);
@@ -365,11 +378,11 @@ export function AssetPage({
   useEffect(() => {
     if (!regenerationPlan) return;
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape" && !planBusy) setRegenerationPlan(null);
+      if (event.key === "Escape") setRegenerationPlan(null);
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [regenerationPlan, planBusy]);
+  }, [regenerationPlan]);
 
   async function handlePromoteVersion(versionId: string) {
     if (!projectId || !selected?.asset_id) return;
@@ -460,39 +473,10 @@ export function AssetPage({
     try {
       const plan = await getRegenerationPlan(projectId, "asset", selected.asset_id);
       setRegenerationPlan(plan);
-      setSelectedPlanShots(plan.image_shots.map((item) => item.shot_id));
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setPlanLoading(false);
-    }
-  }
-
-  async function runRegenerationPlan() {
-    if (!projectId || !imageModelId || selectedPlanShots.length === 0) return;
-    setPlanBusy(true);
-    setError("");
-    try {
-      const results = await Promise.allSettled(
-        selectedPlanShots.map((shotId) =>
-          generateImage(projectId, {
-            target_type: "shot",
-            target_id: shotId,
-            model_id: imageModelId,
-          }),
-        ),
-      );
-      const failed = results.filter((result) => result.status === "rejected").length;
-      if (failed) {
-        setError(`${failed} 个关键帧任务未能创建，请在生成中心查看后重试。`);
-      } else {
-        setRegenerationPlan(null);
-        setPlanNotice(
-          `已创建 ${selectedPlanShots.length} 个关键帧任务，可在生成中心查看进度。`,
-        );
-      }
-    } finally {
-      setPlanBusy(false);
     }
   }
 
@@ -1188,7 +1172,7 @@ export function AssetPage({
       {regenerationPlan && (
         <div
           className="regeneration-plan-overlay"
-          onClick={() => !planBusy && setRegenerationPlan(null)}
+          onClick={() => setRegenerationPlan(null)}
         >
           <section
             className="regeneration-plan"
@@ -1208,7 +1192,6 @@ export function AssetPage({
                 type="button"
                 className="button-ghost"
                 onClick={() => setRegenerationPlan(null)}
-                disabled={planBusy}
                 autoFocus
               >
                 关闭
@@ -1216,8 +1199,8 @@ export function AssetPage({
             </div>
 
             <div className="regeneration-plan-summary">
-              <span>{regenerationPlan.image_shots.length} 个关键帧待确认</span>
-              <span>{regenerationPlan.video_shots.length} 个视频将等待关键帧确认</span>
+              <span>{regenerationPlan.image_shots.length} 个相关关键帧</span>
+              <span>{regenerationPlan.video_shots.length} 个相关视频</span>
             </div>
 
             <section className="regeneration-plan-section">
@@ -1226,23 +1209,30 @@ export function AssetPage({
                 <ul className="regeneration-plan-list">
                   {regenerationPlan.image_shots.map((item) => (
                     <li key={item.shot_id}>
-                      <label>
-                        <input
-                          type="checkbox"
-                          checked={selectedPlanShots.includes(item.shot_id)}
-                          onChange={(event) =>
-                            setSelectedPlanShots((current) =>
-                              event.target.checked
-                                ? [...current, item.shot_id]
-                                : current.filter((shotId) => shotId !== item.shot_id),
-                            )
-                          }
-                        />
+                      <div>
                         <span>
                           {item.label}
                           <small>{item.reason}</small>
                         </span>
-                      </label>
+                        <small>
+                          {item.dependency_state === "pinned"
+                            ? "沿用指定版"
+                            : item.dependency_state === "unknown"
+                              ? "来源待核实"
+                              : "依赖待确认"}
+                        </small>
+                        {onJumpToShot && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setRegenerationPlan(null);
+                              onJumpToShot(item.shot_id, "image");
+                            }}
+                          >
+                            配置此镜头图片
+                          </button>
+                        )}
+                      </div>
                     </li>
                   ))}
                 </ul>
@@ -1259,6 +1249,24 @@ export function AssetPage({
                     <li key={item.shot_id}>
                       {item.label}
                       <small>{item.reason}</small>
+                      <small>
+                        {item.dependency_state === "pinned"
+                          ? "沿用指定版"
+                          : item.dependency_state === "unknown"
+                            ? "来源待核实"
+                            : "依赖待确认"}
+                      </small>
+                      {onJumpToShot && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRegenerationPlan(null);
+                            onJumpToShot(item.shot_id, "video");
+                          }}
+                        >
+                          配置此镜头视频
+                        </button>
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -1279,23 +1287,14 @@ export function AssetPage({
                     setRegenerationPlan(null);
                     onOpenStoryboard();
                   }}
-                  disabled={planBusy}
                 >
-                  前往分镜
+                  前往分镜逐个配置
                 </button>
               )}
-              <button
-                type="button"
-                className="btn-primary"
-                disabled={!imageModelId || selectedPlanShots.length === 0 || planBusy}
-                onClick={() => void runRegenerationPlan()}
-              >
-                {planBusy
-                  ? "正在创建任务…"
-                  : `创建 ${selectedPlanShots.length} 个关键帧任务`}
-              </button>
             </div>
-            {!imageModelId && <p className="error">请先在资产页选择可用的图片模型。</p>}
+            <p className="muted">
+              为避免错误参考图和意外费用，关键帧需在分镜页逐个确认参考资产与版本后再创建任务。
+            </p>
           </section>
         </div>
       )}

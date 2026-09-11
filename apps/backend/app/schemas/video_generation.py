@@ -12,6 +12,10 @@ class VideoGenerateRequest(BaseModel):
     # None = 跟随模型能力：支持原生对白/音效的模型默认带声音。
     with_audio: bool | None = None
     reference_asset_ids: list[str] = Field(default_factory=list)
+    reference_version_ids: list[str] = Field(default_factory=list, max_length=16)
+    pinned_version_ids: list[str] = Field(default_factory=list, max_length=17)
+    source_image_version_id: str | None = Field(default=None, max_length=100)
+    regenerated_from_version_id: str | None = Field(default=None, max_length=100)
 
 
 class VideoComposeRequest(BaseModel):

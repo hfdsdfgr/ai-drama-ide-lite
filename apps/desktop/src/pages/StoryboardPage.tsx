@@ -25,6 +25,7 @@ import {
   getCurrentImageVersion,
   getImageJob,
   importShotImage,
+  listImageVersions,
   planBatchImages,
   type BatchImagePlan,
 } from "../api/images";
@@ -200,11 +201,13 @@ export function StoryboardPage({
   active,
   projectId,
   jumpToShotId = null,
+  jumpToMedia,
   onJumpConsumed,
 }: {
   active: boolean;
   projectId: string;
   jumpToShotId?: string | null;
+  jumpToMedia?: "image" | "video";
   onJumpConsumed?: () => void;
 }) {
   const [novels, setNovels] = useState<Novel[]>([]);
@@ -283,6 +286,22 @@ export function StoryboardPage({
   const [selectedReferenceAssetIds, setSelectedReferenceAssetIds] = useState<string[]>(
     [],
   );
+  const [selectedReferenceVersionIds, setSelectedReferenceVersionIds] = useState<
+    Record<string, string>
+  >({});
+  const [referenceVersions, setReferenceVersions] = useState<
+    Record<string, AssetVersion[]>
+  >({});
+  const [expandedReferenceId, setExpandedReferenceId] = useState<string | null>(null);
+  const [shotImageVersionOptions, setShotImageVersionOptions] = useState<AssetVersion[]>(
+    [],
+  );
+  const [sourceImageVersionId, setSourceImageVersionId] = useState("");
+  const [pinnedVersionIds, setPinnedVersionIds] = useState<string[]>([]);
+  const [loadingRecipe, setLoadingRecipe] = useState(false);
+  const detailRequest = useRef(0);
+  const imageConfigRef = useRef<HTMLDivElement>(null);
+  const videoConfigRef = useRef<HTMLDivElement>(null);
   const [zoomImageUrl, setZoomImageUrl] = useState<string | null>(null);
   const [zoomVideoUrl, setZoomVideoUrl] = useState<string | null>(null);
   const [batchImagePlan, setBatchImagePlan] = useState<BatchImagePlan | null>(null);
@@ -377,7 +396,7 @@ export function StoryboardPage({
         for (const sceneId of Object.keys(sceneDetails)) {
           const shot = sceneDetails[sceneId]?.shots.find((s) => s.id === jumpToShotId);
           if (shot) {
-            openShotDetail(sceneId, shot);
+            openShotDetail(sceneId, shot, jumpToMedia);
             onJumpConsumed?.();
             return;
           }
@@ -390,21 +409,23 @@ export function StoryboardPage({
             const shot = sceneDetail.shots.find((s) => s.id === jumpToShotId);
             if (shot && !cancelled) {
               await selectEpisode(episode.id);
-              openShotDetail(scene.id, shot);
+              if (cancelled) return;
+              openShotDetail(scene.id, shot, jumpToMedia);
               onJumpConsumed?.();
               return;
             }
           }
         }
-      } catch {
-        // 跳转失败不阻塞页面
+        if (!cancelled) setError("未找到目标镜头，请确认镜头仍存在于当前项目。");
+      } catch (err) {
+        if (!cancelled) setError(`无法打开镜头：${(err as Error).message}`);
       }
     })();
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jumpToShotId, projectId]);
+  }, [jumpToShotId, projectId, jumpToMedia]);
 
   const refreshNovels = useCallback(async (pid: string) => {
     setError("");
@@ -416,6 +437,10 @@ export function StoryboardPage({
   }, []);
 
   useEffect(() => {
+    detailRequest.current++;
+    setSelectedShotId(null);
+    setShotDetailDraft(null);
+    setPinnedVersionIds([]);
     if (!projectId) return;
     setShotVersions({});
     setShotVideoVersions({});
@@ -434,6 +459,11 @@ export function StoryboardPage({
     setVideoDuration(5);
     setReferenceAssets([]);
     setSelectedReferenceAssetIds([]);
+    setSelectedReferenceVersionIds({});
+    setReferenceVersions({});
+    setExpandedReferenceId(null);
+    setShotImageVersionOptions([]);
+    setSourceImageVersionId("");
     setNovelId("");
     setEpisodes([]);
     setEpisodeDetail(null);
@@ -586,7 +616,46 @@ export function StoryboardPage({
     [sceneDetails, referenceAssets],
   );
 
-  function openShotDetail(sceneId: string, shot: Shot) {
+  function restoreReferences(
+    version: AssetVersion | null | undefined,
+    sceneId: string,
+    shot: Shot,
+  ) {
+    const refs = version?.payload.source_refs;
+    const saved = Array.isArray(refs)
+      ? refs.filter(
+          (ref): ref is Record<string, unknown> =>
+            typeof ref === "object" &&
+            ref !== null &&
+            ref.type === "asset" &&
+            typeof ref.id === "string",
+        )
+      : [];
+    setSelectedReferenceAssetIds(
+      Array.isArray(refs)
+        ? saved.map((ref) => ref.id as string)
+        : autoMatchReferenceAssets(sceneId, shot),
+    );
+    setSelectedReferenceVersionIds(
+      Object.fromEntries(
+        saved
+          .filter((ref) => typeof ref.version_id === "string")
+          .map((ref) => [ref.id, ref.version_id]),
+      ),
+    );
+    setPinnedVersionIds(
+      Array.isArray(refs)
+        ? refs
+            .filter((ref) => ref?.selection_mode === "historical")
+            .map((ref) => ref.version_id as string)
+        : [],
+    );
+    autoMatchedShotIdRef.current = Array.isArray(refs) ? shot.id : null;
+  }
+
+  function openShotDetail(sceneId: string, shot: Shot, media?: "image" | "video") {
+    const requestId = ++detailRequest.current;
+    setLoadingRecipe(true);
     setSelectedShotSceneId(sceneId);
     setSelectedShotId(shot.id);
     setShotDetailDraft({ ...shot });
@@ -595,13 +664,43 @@ export function StoryboardPage({
     setVideoJob(null);
     setVideoPrompt(shot.prompt || shot.action || "");
     setVideoDuration(Math.max(5, Math.min(15, Math.round(shot.duration || 5))));
-    setSelectedReferenceAssetIds(autoMatchReferenceAssets(sceneId, shot));
-    autoMatchedShotIdRef.current = null;
+    const currentVersion = shotVersions[shot.id];
+    restoreReferences(currentVersion, sceneId, shot);
+    setExpandedReferenceId(null);
+    requestAnimationFrame(() => {
+      if (detailRequest.current !== requestId || !media) return;
+      const target = media === "video" ? videoConfigRef.current : imageConfigRef.current;
+      target?.scrollIntoView({ block: "start" });
+      target?.focus({ preventScroll: true });
+    });
     setShotVideoVersion(null);
     setShotVoicedVersion(null);
     setDubJob(null);
     setAudioFilePath("");
     setAudioFileName("");
+    setShotImageVersionOptions([]);
+    setSourceImageVersionId(currentVersion?.id ?? "");
+    void Promise.all([
+      listImageVersions(projectId, "shot", shot.id),
+      getCurrentVideoVersion(projectId, shot.id),
+    ])
+      .then(([versions, video]) => {
+        if (detailRequest.current !== requestId) return;
+        setShotImageVersionOptions(versions);
+        const image = versions.find((v) => v.is_current);
+        if (image) setShotVersions((current) => ({ ...current, [shot.id]: image }));
+        setSourceImageVersionId(image?.id || "");
+        setShotVideoVersion(video);
+        if (media === "video" && video) restoreVideoConfiguration(video, sceneId, shot);
+        else restoreReferences(image, sceneId, shot);
+      })
+      .catch((err) => {
+        if (detailRequest.current === requestId)
+          setError(`生成配置加载失败，请重新打开镜头：${(err as Error).message}`);
+      })
+      .finally(() => {
+        if (detailRequest.current === requestId) setLoadingRecipe(false);
+      });
     setLatestReview(null);
     setReviewingJob(null);
     setManualDetected("");
@@ -611,9 +710,6 @@ export function StoryboardPage({
     setLatestStoryReview(null);
     setStoryReviewingJob(null);
     setStoryManualIssue("");
-    void getCurrentVideoVersion(projectId, shot.id)
-      .then(setShotVideoVersion)
-      .catch(() => setShotVideoVersion(null));
     void getCurrentVoicedVersion(projectId, shot.id)
       .then(setShotVoicedVersion)
       .catch(() => setShotVoicedVersion(null));
@@ -635,6 +731,7 @@ export function StoryboardPage({
   }
 
   function closeShotDetail() {
+    detailRequest.current++;
     setSelectedShotSceneId(null);
     setSelectedShotId(null);
     setShotDetailDraft(null);
@@ -645,6 +742,17 @@ export function StoryboardPage({
     setDubJob(null);
   }
 
+  function restoreVideoConfiguration(version: AssetVersion, sceneId: string, shot: Shot) {
+    restoreReferences(version, sceneId, shot);
+    if (typeof version.payload.user_prompt === "string")
+      setVideoPrompt(version.payload.user_prompt);
+    const refs = version.payload.source_refs;
+    const keyframe = Array.isArray(refs)
+      ? refs.find((ref) => ref?.type === "shot" && typeof ref.version_id === "string")
+      : null;
+    if (keyframe) setSourceImageVersionId(keyframe.version_id);
+  }
+
   useEffect(() => {
     if (!selectedShotId || !selectedShotSceneId || !shotDetailDraft) return;
     if (autoMatchedShotIdRef.current === selectedShotId) return;
@@ -652,6 +760,7 @@ export function StoryboardPage({
     setSelectedReferenceAssetIds(
       autoMatchReferenceAssets(selectedShotSceneId, shotDetailDraft),
     );
+    setSelectedReferenceVersionIds({});
     autoMatchedShotIdRef.current = selectedShotId;
   }, [
     selectedShotId,
@@ -686,22 +795,38 @@ export function StoryboardPage({
   }
 
   async function runShotImageGeneration() {
-    if (!projectId || !selectedShotId || !imageModelId) return;
+    if (
+      !projectId ||
+      !selectedShotId ||
+      !imageModelId ||
+      loadingRecipe ||
+      generatingShotId === selectedShotId
+    )
+      return;
+    const requestId = detailRequest.current;
     setGeneratingShotId(selectedShotId);
     setImageJob(null);
     setError("");
     try {
+      const referenceVersionIds = selectedReferenceIds();
       const job = await generateImage(projectId, {
         target_type: "shot",
         target_id: selectedShotId,
         model_id: imageModelId,
         capability: "text_to_image",
-        reference_asset_ids: selectedReferenceAssetIds,
+        reference_version_ids: referenceVersionIds,
+        pinned_version_ids: pinnedVersionIds.filter((id) =>
+          referenceVersionIds.includes(id),
+        ),
+        prompt: shotDetailDraft?.prompt,
+        regenerated_from_version_id: shotVersions[selectedShotId]?.id,
       });
+      if (detailRequest.current !== requestId) return;
       setImageJob(job);
       while (true) {
         await new Promise((resolve) => setTimeout(resolve, 1500));
         const updated = await getImageJob(projectId, job.job_id);
+        if (detailRequest.current !== requestId) return;
         setImageJob(updated);
         if (["completed", "failed", "cancelled"].includes(updated.status)) {
           if (updated.status === "completed") {
@@ -711,6 +836,10 @@ export function StoryboardPage({
               selectedShotId,
             );
             if (version) {
+              const versions = await listImageVersions(projectId, "shot", selectedShotId);
+              if (detailRequest.current !== requestId) return;
+              setShotImageVersionOptions(versions);
+              setSourceImageVersionId(version.id);
               setShotVersions((prev) => ({
                 ...prev,
                 [selectedShotId]: version,
@@ -778,6 +907,10 @@ export function StoryboardPage({
     try {
       const version = await importShotImage(projectId, selectedShotId, file);
       setShotVersions((prev) => ({ ...prev, [selectedShotId]: version }));
+      setShotImageVersionOptions(
+        await listImageVersions(projectId, "shot", selectedShotId),
+      );
+      setSourceImageVersionId(version.id);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -786,7 +919,15 @@ export function StoryboardPage({
   }
 
   async function runShotVideoGeneration() {
-    if (!projectId || !selectedShotId || !videoModelId) return;
+    if (
+      !projectId ||
+      !selectedShotId ||
+      !videoModelId ||
+      loadingRecipe ||
+      generatingVideoShotId === selectedShotId
+    )
+      return;
+    const requestId = detailRequest.current;
     const prompt = videoPrompt.trim();
     if (!prompt) {
       setError("请输入视频生成提示词");
@@ -796,6 +937,7 @@ export function StoryboardPage({
     setVideoJob(null);
     setError("");
     try {
+      const referenceVersionIds = selectedReferenceIds();
       const videoModel = videoModels.find((m) => m.id === videoModelId);
       const supportsAudio = videoModel?.capabilities.includes("video_audio") ?? false;
       const supportsDialogue =
@@ -806,16 +948,24 @@ export function StoryboardPage({
         prompt,
         duration: videoDuration,
         with_audio: (supportsAudio || supportsDialogue) && withAudio,
-        reference_asset_ids: selectedReferenceAssetIds,
+        reference_version_ids: referenceVersionIds,
+        pinned_version_ids: pinnedVersionIds.filter(
+          (id) => referenceVersionIds.includes(id) || id === sourceImageVersionId,
+        ),
+        source_image_version_id: sourceImageVersionId || undefined,
+        regenerated_from_version_id: shotVideoVersion?.id,
       });
+      if (detailRequest.current !== requestId) return;
       setVideoJob(job);
       while (true) {
         await new Promise((resolve) => setTimeout(resolve, 1500));
         const updated = await getVideoJob(projectId, job.job_id);
+        if (detailRequest.current !== requestId) return;
         setVideoJob(updated);
         if (["completed", "failed", "cancelled"].includes(updated.status)) {
           if (updated.status === "completed") {
             const version = await getCurrentVideoVersion(projectId, selectedShotId);
+            if (detailRequest.current !== requestId) return;
             setShotVideoVersion(version);
           }
           break;
@@ -867,6 +1017,30 @@ export function StoryboardPage({
     } finally {
       setImportingReference(false);
     }
+  }
+
+  async function showReferenceVersions(reference: ReferenceAsset) {
+    if (!projectId) return;
+    const requestId = detailRequest.current;
+    setExpandedReferenceId(reference.id);
+    if (referenceVersions[reference.id]) return;
+    try {
+      const versions = await listImageVersions(projectId, "asset", reference.id);
+      if (detailRequest.current !== requestId) return;
+      setReferenceVersions((current) => ({ ...current, [reference.id]: versions }));
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  function selectedReferenceIds(): string[] {
+    return selectedReferenceAssetIds.map((id) => {
+      const versionId =
+        selectedReferenceVersionIds[id] ||
+        referenceAssets.find((ref) => ref.id === id)?.version.id;
+      if (!versionId) throw new Error("所选参考图已不可用，请重新选择参考图后生成。");
+      return versionId;
+    });
   }
 
   useEffect(() => {
@@ -1536,7 +1710,11 @@ export function StoryboardPage({
                   placeholder="视觉提示词（后续生图使用）"
                 />
               </label>
-              <div className="card image-generate-card">
+              <div
+                className="card image-generate-card"
+                ref={imageConfigRef}
+                tabIndex={-1}
+              >
                 <div className="sidebar-head">
                   <h3>分镜图片</h3>
                 </div>
@@ -1605,45 +1783,129 @@ export function StoryboardPage({
                       暂无可用参考图。可导入风格/构图参考，或先在「资产」页生成图片。
                     </p>
                   ) : (
-                    referenceAssets.map((ref) => (
-                      <label key={ref.id} className="reference-option">
-                        <input
-                          type="checkbox"
-                          checked={selectedReferenceAssetIds.includes(ref.id)}
-                          onChange={(e) => {
-                            const id = ref.id;
-                            setSelectedReferenceAssetIds((prev) =>
-                              e.target.checked
-                                ? [...prev, id]
-                                : prev.filter((item) => item !== id),
-                            );
-                          }}
-                        />
-                        <img
-                          src={`${apiBase}${ref.version.file_url}`}
-                          alt={ref.name}
-                          className="reference-thumb"
-                          title="点击放大"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            setZoomImageUrl(`${apiBase}${ref.version.file_url}`);
-                          }}
-                        />
-                        <span>
-                          {ref.label} · {ref.name}
-                        </span>
-                      </label>
-                    ))
+                    referenceAssets.map((ref) => {
+                      const selectedVersion =
+                        referenceVersions[ref.id]?.find(
+                          (version) => version.id === selectedReferenceVersionIds[ref.id],
+                        ) ??
+                        (selectedReferenceVersionIds[ref.id] &&
+                        selectedReferenceVersionIds[ref.id] !== ref.version.id
+                          ? null
+                          : ref.version);
+                      return (
+                        <div key={ref.id} className="reference-option">
+                          <input
+                            type="checkbox"
+                            disabled={loadingRecipe}
+                            aria-label={`使用${ref.label} ${ref.name}作为参考图`}
+                            checked={selectedReferenceAssetIds.includes(ref.id)}
+                            onChange={(e) => {
+                              const id = ref.id;
+                              setSelectedReferenceAssetIds((prev) =>
+                                e.target.checked
+                                  ? [...prev, id]
+                                  : prev.filter((item) => item !== id),
+                              );
+                              if (!e.target.checked) {
+                                setSelectedReferenceVersionIds((current) => {
+                                  const { [id]: _removed, ...rest } = current;
+                                  return rest;
+                                });
+                              }
+                            }}
+                          />
+                          <button
+                            type="button"
+                            className="reference-thumb-button"
+                            aria-label={`放大查看${ref.name}`}
+                            onClick={() => {
+                              if (selectedVersion)
+                                setZoomImageUrl(`${apiBase}${selectedVersion.file_url}`);
+                            }}
+                          >
+                            {selectedVersion ? (
+                              <img
+                                src={`${apiBase}${selectedVersion.file_url}`}
+                                alt=""
+                                className="reference-thumb"
+                              />
+                            ) : (
+                              <span>待核实</span>
+                            )}
+                          </button>
+                          <span>
+                            <strong>
+                              {ref.label} · {ref.name}
+                            </strong>
+                            <small>
+                              {selectedVersion
+                                ? `使用 v${selectedVersion.version}${pinnedVersionIds.includes(selectedVersion.id) ? " · 沿用指定版" : ""}`
+                                : "历史版本未加载，请选择版本核实"}
+                            </small>
+                          </span>
+                          {selectedReferenceAssetIds.includes(ref.id) && (
+                            <div className="reference-version-control">
+                              {expandedReferenceId === ref.id ? (
+                                <select
+                                  aria-label={`${ref.name}参考版本`}
+                                  value={
+                                    selectedReferenceVersionIds[ref.id] ?? ref.version.id
+                                  }
+                                  onChange={(event) => {
+                                    const versionId = event.target.value;
+                                    const options = referenceVersions[ref.id] ?? [];
+                                    setPinnedVersionIds((current) => [
+                                      ...current.filter(
+                                        (id) => !options.some((v) => v.id === id),
+                                      ),
+                                      ...(versionId !== ref.version.id
+                                        ? [versionId]
+                                        : []),
+                                    ]);
+                                    setSelectedReferenceVersionIds((current) => ({
+                                      ...current,
+                                      [ref.id]: event.target.value,
+                                    }));
+                                  }}
+                                >
+                                  {(referenceVersions[ref.id] ?? [ref.version]).map(
+                                    (version) => (
+                                      <option key={version.id} value={version.id}>
+                                        v{version.version}
+                                        {version.is_current ? "（当前）" : ""}
+                                      </option>
+                                    ),
+                                  )}
+                                </select>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="button-ghost"
+                                  onClick={() => void showReferenceVersions(ref)}
+                                >
+                                  选择历史版本
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
                   )}
                 </div>
                 <button
                   type="button"
                   className="btn-primary"
-                  disabled={!imageModelId || generatingShotId === selectedShotId}
+                  disabled={
+                    loadingRecipe || !imageModelId || generatingShotId === selectedShotId
+                  }
                   onClick={runShotImageGeneration}
                 >
-                  {generatingShotId === selectedShotId ? "生成中…" : "生成图片"}
+                  {generatingShotId === selectedShotId
+                    ? "生成中…"
+                    : shotVersions[selectedShotId]
+                      ? "按以上配置重新生成图片"
+                      : "生成图片"}
                 </button>
                 <input
                   id="shot-image-import"
@@ -1672,10 +1934,28 @@ export function StoryboardPage({
                   </p>
                 )}
               </div>
-              <div className="card image-generate-card">
+              <div
+                className="card image-generate-card"
+                ref={videoConfigRef}
+                tabIndex={-1}
+              >
                 <div className="sidebar-head">
                   <h3>分镜视频</h3>
                 </div>
+                {shotVideoVersion && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      restoreVideoConfiguration(
+                        shotVideoVersion,
+                        selectedShotSceneId!,
+                        shotDetailDraft!,
+                      )
+                    }
+                  >
+                    载入当前视频的参考图与提示词
+                  </button>
+                )}
                 {videoModels.length > 0 ? (
                   <>
                     <label>
@@ -1721,6 +2001,39 @@ export function StoryboardPage({
                         disabled={generatingVideoShotId === selectedShotId}
                       />
                     </label>
+                    {shotImageVersionOptions.length > 0 && (
+                      <label>
+                        源关键帧版本
+                        <select
+                          value={sourceImageVersionId}
+                          onChange={(e) => {
+                            const id = e.target.value;
+                            setSourceImageVersionId(id);
+                            setPinnedVersionIds((current) => [
+                              ...current.filter(
+                                (value) =>
+                                  !shotImageVersionOptions.some((v) => v.id === value),
+                              ),
+                              ...(shotImageVersionOptions.find((v) => v.id === id)
+                                ?.is_current
+                                ? []
+                                : [id]),
+                            ]);
+                          }}
+                          disabled={generatingVideoShotId === selectedShotId}
+                        >
+                          {shotImageVersionOptions.map((version) => (
+                            <option key={version.id} value={version.id}>
+                              v{version.version}
+                              {version.is_current ? "（当前）" : ""}
+                            </option>
+                          ))}
+                        </select>
+                        <span className="field-help">
+                          选择历史版表示主动沿用；选择当前版后，上游变化会提醒确认。
+                        </span>
+                      </label>
+                    )}
                     <label>
                       时长（秒）
                       <select
@@ -1761,13 +2074,17 @@ export function StoryboardPage({
                         type="button"
                         className="btn-primary"
                         disabled={
-                          !videoModelId || generatingVideoShotId === selectedShotId
+                          loadingRecipe ||
+                          !videoModelId ||
+                          generatingVideoShotId === selectedShotId
                         }
                         onClick={runShotVideoGeneration}
                       >
                         {generatingVideoShotId === selectedShotId
                           ? "生成中…"
-                          : "生成视频"}
+                          : shotVideoVersion
+                            ? "按以上配置重新生成视频"
+                            : "生成视频"}
                       </button>
                     ) : (
                       <p className="muted">请先生成该镜头的分镜图片，再进行图生视频。</p>

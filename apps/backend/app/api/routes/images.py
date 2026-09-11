@@ -36,15 +36,26 @@ def generate_image(
             art_style=payload.art_style,
             negative_prompt=payload.negative_prompt,
         )
+    options = {
+        "aspect_ratio": payload.aspect_ratio,
+        "art_style": payload.art_style,
+        "negative_prompt": payload.negative_prompt,
+        "reference_asset_ids": payload.reference_asset_ids,
+    }
+    if "reference_version_ids" in payload.model_fields_set:
+        options["reference_version_ids"] = payload.reference_version_ids
+    if payload.pinned_version_ids:
+        options["pinned_version_ids"] = payload.pinned_version_ids
+    if payload.prompt is not None:
+        options["prompt"] = payload.prompt
+    if payload.regenerated_from_version_id:
+        options["regenerated_from_version_id"] = payload.regenerated_from_version_id
     return service.start_shot(
         project_id,
         payload.target_id,
         payload.model_id,
         payload.capability,
-        aspect_ratio=payload.aspect_ratio,
-        art_style=payload.art_style,
-        negative_prompt=payload.negative_prompt,
-        reference_asset_ids=payload.reference_asset_ids,
+        **options,
     )
 
 

@@ -132,6 +132,7 @@ export interface Model {
   provider_base_url: string;
   provider_needs_key: boolean;
   provider_has_api_key: boolean;
+  provider_enabled?: boolean;
   model_id: string;
   model_type: ModelType;
   capabilities: CapabilityKey[];

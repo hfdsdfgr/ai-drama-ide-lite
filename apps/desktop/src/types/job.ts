@@ -17,6 +17,7 @@ export interface JobOut {
   batch_id: string;
   batch_label: string;
   target_id: string;
+  target_type?: string;
   target_label: string;
   has_remote_task: boolean;
   created_at: string;

@@ -1,6 +1,7 @@
 """Phase 14 M1 - Video generation API route tests."""
 
 from types import SimpleNamespace
+from pathlib import Path
 
 from app.db.database import get_connection
 from app.services.video_generation_service import VIDEO_MOTION_CONSISTENCY
@@ -364,3 +365,48 @@ def test_start_shot_video_skips_assets_without_image(client, monkeypatch):
     )
 
     assert calls["reference_images"] == []
+
+
+def test_start_shot_video_uses_selected_keyframe_and_reference_versions(client, monkeypatch, tmp_path):
+    project_id = _create_project_with_shot(client, "")
+    service = client.app.state.video_generation_service
+    calls = {}
+    _capture_create_job(service, calls, monkeypatch)
+    keyframe = tmp_path / "shot-v1.png"
+    reference = tmp_path / "character-v2.png"
+    keyframe.write_bytes(b"keyframe")
+    reference.write_bytes(b"reference")
+
+    def fake_get(version_id):
+        if version_id == "ver_shot_v1":
+            return SimpleNamespace(
+                id=version_id,
+                project_id=project_id,
+                entity_type="shot",
+                entity_id="shot1",
+                version=1,
+                file_path=str(keyframe),
+            )
+        return SimpleNamespace(
+            id=version_id,
+            project_id=project_id,
+            entity_type="character",
+            entity_id="character_1",
+            version=2,
+            file_path=str(reference),
+        )
+
+    monkeypatch.setattr(service.versions, "get", fake_get)
+    service.start_shot_video(
+        project_id,
+        "shot1",
+        "model_video",
+        "镜头缓缓推进",
+        source_image_version_id="ver_shot_v1",
+        reference_version_ids=["ver_character_v2"],
+    )
+
+    assert calls["images"] == [str(keyframe)]
+    assert calls["reference_images"] == [str(reference)]
+    assert calls["extra"]["source_refs"][0]["version_id"] == "ver_shot_v1"
+    assert calls["extra"]["source_refs"][1]["version_id"] == "ver_character_v2"

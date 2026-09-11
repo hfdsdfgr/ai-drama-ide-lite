@@ -315,3 +315,33 @@ def test_prepare_episode_is_preflight_only_and_creates_no_jobs(client):
         ).fetchone()["prompt"]
     assert count == 0
     assert "主角抬头" in prompt
+
+
+def test_episode_dependency_changes_and_prepare_stays_free(client):
+    test_prepare_episode_is_preflight_only_and_creates_no_jobs(client)
+    db_path = client.app.state.settings.db_path
+    with get_connection(db_path) as conn:
+        pid = conn.execute("SELECT project_id FROM shots WHERE id = 'shot1'").fetchone()["project_id"]
+    versions = client.app.state.asset_version_service
+    asset = versions.add_version(pid, "character", "ref1", file_bytes=b"test-image")
+    image = versions.add_version(pid, "shot", "shot1", file_bytes=b"test-image", payload={"source_refs": [{
+        "type": "asset", "id": "ref1", "entity_type": "character", "version_id": asset.id,
+        "version": asset.version, "selection_mode": "current",
+    }]})
+    versions.add_version(pid, "shot_video", "shot1", file_bytes=b"test-video", payload={"source_refs": [{
+        "type": "shot", "id": "shot1", "version_id": image.id,
+        "version": image.version, "selection_mode": "current",
+    }]})
+    versions.add_version(pid, "character", "ref1", file_bytes=b"updated-image")
+    response = client.post(f"/api/projects/{pid}/overview/episodes/ep1/prepare")
+    assert response.status_code == 200
+    assert response.json()["created_jobs"] == 0
+    episode = response.json()["episode"]
+    assert episode["stale_count"] == 1
+    shot = episode["shots"][0]
+    assert shot["image_status"] == shot["video_status"] == "stale"
+    assert {issue["media"] for issue in shot["dependency_issues"]} == {"image", "video"}
+    assert all(issue["used_version_id"] for issue in shot["dependency_issues"])
+    assert episode["completed_shots"] == 0
+    with get_connection(db_path) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM jobs").fetchone()[0] == 0

@@ -1642,3 +1642,15 @@ All future features and UI designs MUST follow these usability principles, not o
 8. Never fake progress. Show real provider progress when available; otherwise show an indeterminate "processing" state.
 9. Avoid developer jargon in user-facing UI. Use clear Chinese industry terms, not raw enums such as `INT` or `medium close`.
 10. Acceptance criteria must include a usability review, not only functionality, type checks, and tests.
+
+79. 视觉输入工具按能力选择
+
+处理截图、图片、视频或其他视觉输入前，先判断当前执行模型是否具备可用的多模态能力：
+
+- 当前模型具备多模态能力时，直接使用当前模型完成视觉理解、文字识别或界面检查，不强制调用 `see` skill。
+- 当前模型不具备可靠的视觉输入能力，或无法完成所需的视觉检查时，才调用 `see` skill 作为视觉处理后端。
+- 用户明确要求使用 `see`，或项目环境明确规定必须使用 `see` 时，按用户或项目要求执行。
+- 不得因为调用了 `see` 就跳过当前模型已有的多模态能力；不得为了形式上的工具调用重复上传同一份媒体。
+- 如果 `see` 需要把项目截图、图片或视频发送到外部服务，必须先确认外部目的地和数据范围已获得授权；未获授权时使用当前模型或本地 OCR / 本地视觉能力完成检查，并如实记录限制。
+
+该规则只决定视觉输入的处理工具，不改变 UI 改动仍需截图、读图检查、清理和记录验证结果的要求。

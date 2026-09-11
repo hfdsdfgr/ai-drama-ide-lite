@@ -5,6 +5,7 @@ from fastapi import APIRouter, Request
 from app.core.errors import AppError
 from app.schemas.production_graph import (
     AffectedNodesOut,
+    DependencyViewOut,
     ProductionEdgeCreate,
     ProductionEdgeOut,
     RegenerationPlanOut,
@@ -70,6 +71,24 @@ def regeneration_plan(
     project_id: str, node_type: str, node_id: str, request: Request
 ) -> dict:
     return _service(request).regeneration_plan(project_id, node_type, node_id)
+
+
+@router.get("/view", response_model=DependencyViewOut)
+def dependency_view(
+    project_id: str,
+    request: Request,
+    shot_id: str | None = None,
+    scene_id: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> dict:
+    return _service(request).dependency_view(
+        project_id,
+        shot_id=shot_id,
+        scene_id=scene_id,
+        limit=max(1, min(limit, 100)),
+        offset=max(0, offset),
+    )
 
 
 @router.delete("/edges/{edge_id}", status_code=204)

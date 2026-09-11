@@ -32,6 +32,7 @@ class ProjectOverviewOut(BaseModel):
 ProductionState = Literal[
     "missing",
     "ready",
+    "stale",
     "active",
     "failed",
     "pending",
@@ -67,8 +68,23 @@ class EpisodeShotOut(BaseModel):
     image_status: ProductionState
     video_status: ProductionState
     review_status: ProductionState
+    image_dependency_state: Literal["none", "current", "stale", "pinned", "unknown", "broken"] = "none"
+    video_dependency_state: Literal["none", "current", "stale", "pinned", "unknown", "broken"] = "none"
+    dependency_issues: list["DependencyIssueOut"] = Field(default_factory=list)
     assets: list[EpisodeAssetOut] = Field(default_factory=list)
     blockers: list[EpisodeBlockerOut] = Field(default_factory=list)
+
+
+class DependencyIssueOut(BaseModel):
+    state: Literal["stale", "pinned", "unknown", "broken"]
+    label: str
+    media: Literal["image", "video"]
+    source_id: str = ""
+    source_name: str = ""
+    used_version_id: str = ""
+    used_version: int | None = None
+    current_version_id: str = ""
+    current_version: int | None = None
 
 
 class EpisodeProductionOut(BaseModel):
@@ -80,6 +96,9 @@ class EpisodeProductionOut(BaseModel):
     completed_shots: int = 0
     attention_count: int = 0
     active_count: int = 0
+    stale_count: int = 0
+    unknown_dependency_count: int = 0
+    pinned_dependency_count: int = 0
     shots: list[EpisodeShotOut] = Field(default_factory=list)
 
 
