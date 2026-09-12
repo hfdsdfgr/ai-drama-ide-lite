@@ -21,6 +21,9 @@ class _FakeManager:
     def adapter_for(self, model_id, capability):
         return object()
 
+    def validate_declared_parameters(self, model_id, capability, values):
+        return values
+
 
 class _FakeStore:
     def __init__(self):

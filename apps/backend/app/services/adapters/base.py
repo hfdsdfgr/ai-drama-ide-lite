@@ -20,6 +20,32 @@ SUPPORTED_PROTOCOLS = frozenset(
 )
 
 
+def select_parameter(
+    key: str,
+    label: str,
+    value_type: str,
+    values: list,
+    default,
+    help_text: str,
+) -> dict:
+    return {
+        "key": key,
+        "label": label,
+        "control": "select",
+        "value_type": value_type,
+        "default": default,
+        "options": [
+            {
+                "value": value,
+                "label": f"{value} 秒" if key == "duration" else str(value),
+            }
+            for value in values
+        ],
+        "required": True,
+        "help": help_text,
+    }
+
+
 class AdapterError(AppError):
     """适配层错误：message 已带厂商与模型上下文，可直接展示给用户。"""
 
@@ -76,6 +102,58 @@ class Adapter:
     name: str = "base"
     provider_label: str = "未知厂商"
     protocol: str = DEFAULT_PROTOCOL
+
+    def parameter_schema(
+        self,
+        ctx: ProviderContext,
+        capability: str,
+    ) -> list[dict]:
+        """Return only parameters verified for this adapter/model combination."""
+        return []
+
+    def validate_parameters(
+        self,
+        ctx: ProviderContext,
+        capability: str,
+        values: dict,
+    ) -> dict:
+        fields = self.parameter_schema(ctx, capability)
+        allowed = {field["key"]: field for field in fields}
+        unknown = sorted(set(values) - set(allowed))
+        if unknown:
+            raise AdapterError(
+                422,
+                "unknown_generation_parameter",
+                f"模型不支持参数: {', '.join(unknown)}",
+            )
+        result = {}
+        for key, field in allowed.items():
+            value = values.get(key, field.get("default"))
+            if value is None:
+                if field.get("required"):
+                    raise AdapterError(422, "generation_parameter_required", f"缺少参数: {key}")
+                continue
+            value_type = field["value_type"]
+            valid_type = (
+                isinstance(value, bool)
+                if value_type == "boolean"
+                else isinstance(value, int) and not isinstance(value, bool)
+                if value_type == "integer"
+                else isinstance(value, (int, float)) and not isinstance(value, bool)
+                if value_type == "number"
+                else isinstance(value, str)
+            )
+            if not valid_type:
+                raise AdapterError(422, "generation_parameter_type", f"参数 {key} 类型错误")
+            options = field.get("options", [])
+            if options and value not in {option["value"] for option in options}:
+                raise AdapterError(422, "generation_parameter_option", f"参数 {key} 取值不受支持")
+            if "minimum" in field and value < field["minimum"]:
+                raise AdapterError(422, "generation_parameter_range", f"参数 {key} 小于最小值")
+            if "maximum" in field and value > field["maximum"]:
+                raise AdapterError(422, "generation_parameter_range", f"参数 {key} 超过最大值")
+            result[key] = value
+        return result
 
     def chat(
         self,

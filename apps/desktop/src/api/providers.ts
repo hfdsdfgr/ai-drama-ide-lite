@@ -1,6 +1,8 @@
 import type {
   BuiltinModel,
   CapabilityKey,
+  GenerationParameterSchema,
+  GenerationParameterValue,
   Model,
   ModelInput,
   ModelRecommendation,
@@ -127,5 +129,34 @@ export function setDefaultModel(
   return request<Model>(`/models/${id}/default`, {
     method: "POST",
     body: JSON.stringify({ model_type: modelType }),
+  });
+}
+
+export function getGenerationParameterSchema(
+  modelId: string,
+  capability: CapabilityKey,
+): Promise<GenerationParameterSchema> {
+  const query = new URLSearchParams({ capability });
+  return request<GenerationParameterSchema>(
+    `/models/${modelId}/generation-schema?${query.toString()}`,
+  );
+}
+
+export function validateGenerationParameters(
+  modelId: string,
+  capability: CapabilityKey,
+  values: Record<string, GenerationParameterValue>,
+): Promise<{
+  model_id: string;
+  capability: CapabilityKey;
+  values: Record<string, GenerationParameterValue>;
+}> {
+  return request<{
+    model_id: string;
+    capability: CapabilityKey;
+    values: Record<string, GenerationParameterValue>;
+  }>(`/models/${modelId}/generation-schema/validate`, {
+    method: "POST",
+    body: JSON.stringify({ capability, values }),
   });
 }

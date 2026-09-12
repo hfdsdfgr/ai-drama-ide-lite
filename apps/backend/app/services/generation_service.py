@@ -39,8 +39,12 @@ class GenerationService:
         negative_prompt: str = "",
         extra: dict | None = None,
     ) -> dict:
-        # fail-fast：校验模型启用/Key/能力（不触发任何 API 调用或费用）
-        self.manager.adapter_for(model_id, capability)
+        # fail-fast：模型状态、能力和已声明参数共用 Adapter 规则，不触发厂商 API。
+        self.manager.validate_declared_parameters(
+            model_id,
+            capability,
+            {"aspect_ratio": aspect_ratio, "duration": duration},
+        )
         model = self.manager.repo.get_model(model_id)
         extra = dict(extra or {})
         max_reference_images = resolve_max_reference_images(

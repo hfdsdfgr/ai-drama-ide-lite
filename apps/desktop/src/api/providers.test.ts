@@ -2,10 +2,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   createProvider,
+  getGenerationParameterSchema,
   listModels,
   recommendModels,
   testProvider,
   updateModelCapabilities,
+  validateGenerationParameters,
 } from "./providers";
 
 afterEach(() => {
@@ -78,6 +80,31 @@ describe("providers api", () => {
     expect(JSON.parse(String(init.body))).toEqual({
       capabilities: ["text_to_image"],
       source: "manual",
+    });
+  });
+
+  it("gets the parameter schema for one model capability", async () => {
+    const mock = stubFetch({ model_id: "model_1", fields: [] });
+    await getGenerationParameterSchema("model_1", "image_to_video");
+    const [url] = mock.mock.calls[0] as unknown as [string];
+    expect(url).toBe("/api/models/model_1/generation-schema?capability=image_to_video");
+  });
+
+  it("validates parameter values before generation", async () => {
+    const mock = stubFetch({
+      model_id: "model_1",
+      capability: "image_to_video",
+      values: { duration: 10 },
+    });
+    await validateGenerationParameters("model_1", "image_to_video", {
+      duration: 10,
+    });
+    const [url, init] = mock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("/api/models/model_1/generation-schema/validate");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(String(init.body))).toEqual({
+      capability: "image_to_video",
+      values: { duration: 10 },
     });
   });
 });

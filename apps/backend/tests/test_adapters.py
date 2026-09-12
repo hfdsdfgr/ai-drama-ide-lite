@@ -11,6 +11,9 @@ from app.services.adapters.base import (
 )
 from app.services.adapters.dashscope import DashScopeAdapter
 from app.services.adapters.openai_compat import OpenAICompatAdapter
+from app.services.adapters.sora import SoraVideoAdapter
+from app.services.adapters.volcengine import VolcengineAdapter
+from app.services.adapters.zhipu_video import ZhipuVideoAdapter
 
 
 def _ctx(model_id="gpt-4o", base_url="https://api.openai.com/v1", preset=None, key="sk-test"):
@@ -86,6 +89,41 @@ def test_resolve_max_reference_images_uses_catalog_and_fallback():
     assert resolve_max_reference_images("openai", "gpt-image-2") == 16
     assert resolve_max_reference_images(None, "qwen-image-next") == 3
     assert resolve_max_reference_images(None, "unknown-model") is None
+
+
+def test_adapter_parameter_schema_only_exposes_verified_video_values():
+    sora = SoraVideoAdapter()
+    fields = sora.parameter_schema(_ctx(model_id="sora-2"), "image_to_video")
+    assert [item["value"] for item in fields[0]["options"]] == [5, 10, 15]
+    assert sora.validate_parameters(
+        _ctx(model_id="sora-2"), "image_to_video", {"duration": 10}
+    ) == {"duration": 10}
+
+    zhipu = ZhipuVideoAdapter()
+    with pytest.raises(AppError) as exc:
+        zhipu.validate_parameters(
+            _ctx(model_id="cogvideox-3"), "image_to_video", {"duration": 15}
+        )
+    assert exc.value.code == "generation_parameter_option"
+
+
+def test_volcengine_schema_is_model_specific_and_rejects_unknown_fields():
+    adapter = VolcengineAdapter()
+    seedance2 = adapter.parameter_schema(
+        _ctx(model_id="doubao-seedance-2-0-pro"), "image_to_video"
+    )
+    seedance1 = adapter.parameter_schema(
+        _ctx(model_id="doubao-seedance-1-0-pro"), "image_to_video"
+    )
+    assert [item["value"] for item in seedance2[1]["options"]] == [5, 10, 15]
+    assert [item["value"] for item in seedance1[1]["options"]] == [5, 10]
+    with pytest.raises(AppError) as exc:
+        adapter.validate_parameters(
+            _ctx(model_id="doubao-seedance-2-0-pro"),
+            "image_to_video",
+            {"secret": "x"},
+        )
+    assert exc.value.code == "unknown_generation_parameter"
 
 
 # ---------- OpenAI 兼容：chat ----------

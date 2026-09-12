@@ -131,6 +131,46 @@ class ModelRecommendationOut(BaseModel):
     message: str = ""
 
 
+ParameterValue = str | int | float | bool
+
+
+class GenerationParameterOptionOut(BaseModel):
+    value: ParameterValue
+    label: str
+
+
+class GenerationParameterFieldOut(BaseModel):
+    key: str
+    label: str
+    control: Literal["select", "boolean", "integer", "number", "text"]
+    value_type: Literal["string", "boolean", "integer", "number"]
+    default: ParameterValue | None = None
+    options: list[GenerationParameterOptionOut] = Field(default_factory=list)
+    minimum: float | None = None
+    maximum: float | None = None
+    step: float | None = None
+    required: bool = False
+    help: str = ""
+
+
+class GenerationParameterSchemaOut(BaseModel):
+    model_id: str
+    capability: str
+    schema_version: int = 1
+    fields: list[GenerationParameterFieldOut] = Field(default_factory=list)
+
+
+class GenerationParameterValidationRequest(BaseModel):
+    capability: str = Field(min_length=1, max_length=50)
+    values: dict[str, ParameterValue] = Field(default_factory=dict, max_length=30)
+
+
+class GenerationParameterValidationOut(BaseModel):
+    model_id: str
+    capability: str
+    values: dict[str, ParameterValue]
+
+
 class ProviderCheckOut(BaseModel):
     label: str
     status: Literal["ok", "fail", "skipped"]

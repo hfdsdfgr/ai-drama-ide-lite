@@ -41,6 +41,9 @@ class _FakeProviderManager:
     def adapter_for(self, model_id, capability):
         return object()
 
+    def validate_declared_parameters(self, model_id, capability, values):
+        return values
+
 
 class _FakeRecord:
     def __init__(self, project_id):

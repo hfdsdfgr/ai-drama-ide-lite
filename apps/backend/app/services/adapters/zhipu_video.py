@@ -8,6 +8,7 @@ from app.services.adapters.base import (
     GenerationResult,
     JobStatus,
     ProviderContext,
+    select_parameter,
 )
 from app.services.adapters.openai_compat import OpenAICompatAdapter, image_to_data_url
 
@@ -22,6 +23,20 @@ class ZhipuVideoAdapter(OpenAICompatAdapter):
     name = "zhipu-video"
     protocol = "zhipu_video"
     provider_label = "智谱 CogVideoX"
+
+    def parameter_schema(self, ctx: ProviderContext, capability: str) -> list[dict]:
+        if capability not in {"text_to_video", "image_to_video"}:
+            return []
+        return [
+            select_parameter(
+                "duration",
+                "视频时长",
+                "integer",
+                [5, 10],
+                5,
+                "智谱接口当前最多提交 10 秒。",
+            )
+        ]
 
     def submit(
         self,

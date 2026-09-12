@@ -144,6 +144,34 @@ export interface Model {
   updated_at: string;
 }
 
+export type GenerationParameterValue = string | number | boolean;
+
+export interface GenerationParameterOption {
+  value: GenerationParameterValue;
+  label: string;
+}
+
+export interface GenerationParameterField {
+  key: string;
+  label: string;
+  control: "select" | "boolean" | "integer" | "number" | "text";
+  value_type: "string" | "boolean" | "integer" | "number";
+  default: GenerationParameterValue | null;
+  options: GenerationParameterOption[];
+  minimum: number | null;
+  maximum: number | null;
+  step: number | null;
+  required: boolean;
+  help: string;
+}
+
+export interface GenerationParameterSchema {
+  model_id: string;
+  capability: CapabilityKey;
+  schema_version: number;
+  fields: GenerationParameterField[];
+}
+
 export type ModelRoutingPreference = "balanced" | "quality" | "speed" | "cost";
 
 export interface ModelRecommendationCandidate {

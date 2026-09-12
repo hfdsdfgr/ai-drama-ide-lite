@@ -14,6 +14,7 @@ from app.services.adapters.base import (
     GenerationResult,
     JobStatus,
     ProviderContext,
+    select_parameter,
 )
 from app.services.adapters.openai_compat import (
     OpenAICompatAdapter,
@@ -56,6 +57,46 @@ class VolcengineAdapter(OpenAICompatAdapter):
     name = "volcengine"
     protocol = "volcengine"
     provider_label = "火山引擎（方舟）"
+
+    def parameter_schema(self, ctx: ProviderContext, capability: str) -> list[dict]:
+        if capability in {
+            "text_to_image",
+            "image_to_image",
+            "reference_image",
+            "character_reference",
+        }:
+            return [
+                select_parameter(
+                    "aspect_ratio",
+                    "画面比例",
+                    "string",
+                    list(_SEEDREAM_SIZES),
+                    "1:1",
+                    "Adapter 会映射为满足 Seedream 像素下限的尺寸。",
+                )
+            ]
+        if capability not in {"text_to_video", "image_to_video"}:
+            return []
+        durations = [5, 10, 15] if "seedance-2" in ctx.model_id.lower() else [5, 10]
+        specifications = ["720P", "1080P", *sorted(_SUPPORTED_RATIOS)]
+        return [
+            select_parameter(
+                "aspect_ratio",
+                "视频规格",
+                "string",
+                specifications,
+                "720P",
+                "可选择分辨率或画幅，未支持画幅由 Adapter 使用 adaptive。",
+            ),
+            select_parameter(
+                "duration",
+                "视频时长",
+                "integer",
+                durations,
+                5,
+                "仅展示当前系列已接入的安全档位。",
+            ),
+        ]
 
     def _text_to_image(
         self, ctx: ProviderContext, request: GenerationRequest

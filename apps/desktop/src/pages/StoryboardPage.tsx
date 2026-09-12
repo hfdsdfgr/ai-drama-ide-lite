@@ -86,6 +86,11 @@ import type {
 } from "../types/provider";
 import type { AssetType } from "../types/story";
 import type { Episode, EpisodeDetail, SceneDetail, Shot } from "../types/script";
+import { GenerationParameterFields } from "../components/GenerationParameterFields";
+import {
+  unsupportedParameterKeys,
+  useGenerationParameterSchema,
+} from "../components/generationParameters";
 
 const ASSET_TYPE_LABELS: Record<AssetType, string> = {
   character: "角色",
@@ -311,6 +316,24 @@ export function StoryboardPage({
   const [batchCreating, setBatchCreating] = useState(false);
   const [batchNotice, setBatchNotice] = useState("");
   const autoMatchedShotIdRef = useRef<string | null>(null);
+  const videoParameters = useGenerationParameterSchema(videoModelId, "image_to_video");
+  const loadedVideoSchema = videoParameters.schema;
+  const videoSchema =
+    loadedVideoSchema &&
+    loadedVideoSchema.model_id === videoModelId &&
+    loadedVideoSchema.capability === "image_to_video"
+      ? loadedVideoSchema
+      : null;
+  const videoParameterFields = (videoSchema?.fields ?? []).filter(
+    (field) => field.key === "duration",
+  );
+  const unsupportedVideoParameters = unsupportedParameterKeys(videoParameterFields, {
+    duration: videoDuration,
+  });
+  const videoParametersBlocked =
+    videoParameters.loading ||
+    Boolean(videoParameters.error) ||
+    Boolean(videoSchema && !videoParameterFields.length);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -924,6 +947,8 @@ export function StoryboardPage({
       !selectedShotId ||
       !videoModelId ||
       loadingRecipe ||
+      videoParametersBlocked ||
+      unsupportedVideoParameters.length > 0 ||
       generatingVideoShotId === selectedShotId
     )
       return;
@@ -2034,20 +2059,39 @@ export function StoryboardPage({
                         </span>
                       </label>
                     )}
-                    <label>
-                      时长（秒）
-                      <select
-                        value={videoDuration}
-                        onChange={(e) => setVideoDuration(Number(e.target.value))}
+                    {videoParameterFields.length ? (
+                      <GenerationParameterFields
+                        fields={videoParameterFields}
+                        values={{ duration: videoDuration }}
                         disabled={generatingVideoShotId === selectedShotId}
-                      >
-                        {[5, 10, 15].map((value) => (
-                          <option key={value} value={value}>
-                            {value} 秒
+                        onChange={(_, value) => setVideoDuration(Number(value))}
+                      />
+                    ) : (
+                      <label>
+                        时长（秒）
+                        <select
+                          value={videoDuration}
+                          aria-invalid={Boolean(videoSchema)}
+                          disabled
+                        >
+                          <option value={videoDuration}>
+                            {videoSchema
+                              ? `当前值 ${videoDuration} 秒（该模型暂无已验证档位）`
+                              : `${videoDuration} 秒`}
                           </option>
-                        ))}
-                      </select>
-                    </label>
+                        </select>
+                      </label>
+                    )}
+                    {videoParameters.error && (
+                      <p className="error" role="alert">
+                        无法读取该模型的参数能力：{videoParameters.error}
+                      </p>
+                    )}
+                    {!!unsupportedVideoParameters.length && (
+                      <p className="error" role="alert">
+                        当前时长不受所选模型支持，请重新选择。
+                      </p>
+                    )}
                     {(() => {
                       const videoModel = videoModels.find((m) => m.id === videoModelId);
                       const supportsDialogue =
@@ -2076,6 +2120,8 @@ export function StoryboardPage({
                         disabled={
                           loadingRecipe ||
                           !videoModelId ||
+                          videoParametersBlocked ||
+                          unsupportedVideoParameters.length > 0 ||
                           generatingVideoShotId === selectedShotId
                         }
                         onClick={runShotVideoGeneration}

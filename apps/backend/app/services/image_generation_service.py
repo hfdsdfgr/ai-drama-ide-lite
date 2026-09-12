@@ -258,6 +258,11 @@ class ImageGenerationService:
         user_prompt: str = "",
         regenerated_from_version_id: str = "",
     ) -> dict:
+        self.provider_manager.validate_declared_parameters(
+            model_id,
+            capability,
+            {"aspect_ratio": plan.aspect_ratio},
+        )
         # Adapter 使用像素串作为尺寸，例如 OpenAI 兼容接口要求 1024x1536。
         size = f"{plan.width}x{plan.height}"
         return self.generation_service.create_job(

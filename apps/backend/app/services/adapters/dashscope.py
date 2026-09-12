@@ -21,6 +21,7 @@ from app.services.adapters.base import (
     GenerationResult,
     JobStatus,
     ProviderContext,
+    select_parameter,
 )
 from app.services.adapters.openai_compat import OpenAICompatAdapter, build_reference_sheet
 
@@ -46,6 +47,20 @@ class DashScopeAdapter(OpenAICompatAdapter):
     name = "dashscope"
     protocol = "dashscope"
     provider_label = "阿里云百炼"
+
+    def parameter_schema(self, ctx: ProviderContext, capability: str) -> list[dict]:
+        if capability not in {"text_to_video", "image_to_video"}:
+            return []
+        return [
+            select_parameter(
+                "duration",
+                "视频时长",
+                "integer",
+                [5],
+                5,
+                "使用项目已验证的 5 秒档位；具体型号仍由提交接口校验。",
+            )
+        ]
 
     def generate(
         self,

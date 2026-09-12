@@ -1174,7 +1174,8 @@ M3 — 结构化导演控制（P1 / P2）
 
 M4 — Schema 驱动参数与 Agent 入口（P2）
 
-- [ ] Adapter 返回已验证的模型参数描述，UI 动态生成控件并在提交前校验。
+- [x] 参数 Schema 子集：Adapter 返回已验证的模型参数描述，工作流 / 分镜 UI 动态生成控件，并在 Job 创建前复用服务端校验；详见
+  [Phase 24 M4 参数 Schema 实施报告](docs/investigations/phase24-m4-parameter-schema-implementation-report.md)。
 - [ ] 在现有 API 上提供薄 CLI / Agent 接口，不复制业务逻辑。
 - [ ] 仅在线性制作台无法覆盖真实案例时，再评估无限节点画布。
 

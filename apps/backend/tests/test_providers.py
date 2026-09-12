@@ -488,3 +488,55 @@ def test_classify_rules():
     assert classify_model("bailian", "qwen-audio-3.0-asr-flash") == "audio"
     assert classify_model("bailian", "qwen-tts") == "audio"
     assert classify_model(None, "anything") == "llm"
+
+
+def test_generation_parameter_schema_and_validation_api(client):
+    provider = _create_provider(client, preset_key="zhipu").json()
+    model = client.post(
+        "/api/models",
+        json={
+            "provider_id": provider["id"],
+            "model_id": "cogvideox-3",
+            "model_type": "video",
+        },
+    ).json()
+
+    response = client.get(
+        f"/api/models/{model['id']}/generation-schema",
+        params={"capability": "image_to_video"},
+    )
+    assert response.status_code == 200
+    schema = response.json()
+    assert schema["fields"][0]["key"] == "duration"
+    assert set(schema) == {"model_id", "capability", "schema_version", "fields"}
+    assert "api_key" not in response.text
+    assert "audio" not in response.text
+
+    valid = client.post(
+        f"/api/models/{model['id']}/generation-schema/validate",
+        json={"capability": "image_to_video", "values": {"duration": 10}},
+    )
+    assert valid.status_code == 200
+    assert valid.json()["values"] == {"duration": 10}
+
+    invalid = client.post(
+        f"/api/models/{model['id']}/generation-schema/validate",
+        json={"capability": "image_to_video", "values": {"duration": 15}},
+    )
+    assert invalid.status_code == 422
+    assert invalid.json()["error"]["code"] == "generation_parameter_option"
+
+    jobs_before = len(client.app.state.job_store.list_jobs(limit=None))
+    rejected_job = client.post(
+        "/api/generation/jobs",
+        json={
+            "model_id": model["id"],
+            "capability": "image_to_video",
+            "prompt": "镜头推进",
+            "duration": 15,
+            "images": ["frame.png"],
+        },
+    )
+    assert rejected_job.status_code == 422
+    assert rejected_job.json()["error"]["code"] == "generation_parameter_option"
+    assert len(client.app.state.job_store.list_jobs(limit=None)) == jobs_before

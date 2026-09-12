@@ -116,6 +116,51 @@ class ProviderManager:
         self._check_model(model, capability)
         return self._adapter(model, capability)
 
+    def parameter_schema(self, model_id: str, capability: str) -> dict:
+        adapter = self.adapter_for(model_id, capability)
+        model = self.repo.get_model(model_id)
+        return {
+            "model_id": model.id,
+            "capability": capability,
+            "schema_version": 1,
+            "fields": adapter.parameter_schema(self._ctx(model), capability),
+        }
+
+    def validate_parameters(
+        self,
+        model_id: str,
+        capability: str,
+        values: dict,
+    ) -> dict:
+        adapter = self.adapter_for(model_id, capability)
+        model = self.repo.get_model(model_id)
+        return adapter.validate_parameters(self._ctx(model), capability, values)
+
+    def validate_declared_parameters(
+        self,
+        model_id: str,
+        capability: str,
+        values: dict,
+    ) -> dict:
+        """Validate only canonical parameters declared by this adapter.
+
+        Legacy adapters with no verified schema keep their existing request path;
+        once a field is declared, the same rules guard API and Job creation.
+        """
+        adapter = self.adapter_for(model_id, capability)
+        model = self.repo.get_model(model_id)
+        ctx = self._ctx(model)
+        fields = adapter.parameter_schema(ctx, capability)
+        if not fields:
+            return {}
+        allowed = {field["key"] for field in fields}
+        declared = {
+            key: value
+            for key, value in values.items()
+            if key in allowed and value is not None and value != ""
+        }
+        return adapter.validate_parameters(ctx, capability, declared)
+
     def ctx_for(self, model_id: str) -> ProviderContext:
         return self._ctx(self.repo.get_model(model_id))
 

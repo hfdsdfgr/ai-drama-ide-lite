@@ -16,6 +16,11 @@ import {
 } from "../api/workflowTemplates";
 import type { JobOut } from "../types/job";
 import type { Model } from "../types/provider";
+import { GenerationParameterFields } from "./GenerationParameterFields";
+import {
+  unsupportedParameterKeys,
+  useGenerationParameterSchema,
+} from "./generationParameters";
 
 const VALUE_LABEL: Record<string, string> = {
   true: "开启",
@@ -94,6 +99,64 @@ export function EpisodeWorkflowConfig({
   );
 
   const selectedTemplate = templates.find((template) => template.id === templateId);
+  const imageParameters = useGenerationParameterSchema(
+    config?.shot_images.enabled ? config.shot_images.model_id : "",
+    config?.shot_images.capability ?? "text_to_image",
+  );
+  const videoParameters = useGenerationParameterSchema(
+    config?.videos.enabled ? config.videos.model_id : "",
+    "image_to_video",
+  );
+  const loadedImageSchema = imageParameters.schema;
+  const loadedVideoSchema = videoParameters.schema;
+  const imageSchema =
+    loadedImageSchema &&
+    loadedImageSchema.model_id === config?.shot_images.model_id &&
+    loadedImageSchema.capability === config?.shot_images.capability
+      ? loadedImageSchema
+      : null;
+  const videoSchema =
+    loadedVideoSchema &&
+    loadedVideoSchema.model_id === config?.videos.model_id &&
+    loadedVideoSchema.capability === "image_to_video"
+      ? loadedVideoSchema
+      : null;
+  const imageParameterFields = (imageSchema?.fields ?? []).filter(
+    (field) => field.key === "aspect_ratio",
+  );
+  const videoParameterFields = (videoSchema?.fields ?? []).filter(
+    (field) =>
+      field.key === "aspect_ratio" ||
+      (field.key === "duration" && config?.videos.duration_mode === "fixed"),
+  );
+  const unsupportedParameters = config
+    ? [
+        ...unsupportedParameterKeys(imageParameterFields, {
+          aspect_ratio: config.shot_images.aspect_ratio,
+        }),
+        ...(imageSchema &&
+        !imageParameterFields.some((field) => field.key === "aspect_ratio") &&
+        config.shot_images.aspect_ratio
+          ? ["aspect_ratio"]
+          : []),
+        ...unsupportedParameterKeys(videoParameterFields, {
+          aspect_ratio: config.videos.aspect_ratio,
+          duration: config.videos.duration,
+        }),
+        ...(videoSchema &&
+        !videoParameterFields.some((field) => field.key === "aspect_ratio") &&
+        config.videos.aspect_ratio
+          ? ["aspect_ratio"]
+          : []),
+        ...(videoSchema &&
+        config.videos.duration_mode === "fixed" &&
+        !videoParameterFields.some((field) => field.key === "duration")
+          ? ["duration"]
+          : []),
+      ]
+    : [];
+  const parametersLoading = imageParameters.loading || videoParameters.loading;
+  const parametersUnavailable = Boolean(imageParameters.error || videoParameters.error);
 
   useEffect(() => {
     setSelectedTemplateName(selectedTemplate?.name ?? "");
@@ -109,6 +172,10 @@ export function EpisodeWorkflowConfig({
 
   async function save() {
     if (!config) return;
+    if (unsupportedParameters.length) {
+      setError("当前模型不支持已保存的生成参数，请先重新选择标记项。");
+      return;
+    }
     setBusy(true);
     setError("");
     try {
@@ -343,26 +410,55 @@ export function EpisodeWorkflowConfig({
               change({ ...config, shot_images: { ...config.shot_images, model_id } })
             }
           />
-          <label>
-            画面比例
-            <select
-              value={config.shot_images.aspect_ratio}
-              onChange={(event) =>
+          {imageParameterFields.length ? (
+            <GenerationParameterFields
+              fields={imageParameterFields}
+              values={{ aspect_ratio: config.shot_images.aspect_ratio }}
+              onChange={(_, value) =>
                 change({
                   ...config,
                   shot_images: {
                     ...config.shot_images,
-                    aspect_ratio: event.target.value,
+                    aspect_ratio: String(value),
                   },
                 })
               }
-            >
-              <option value="">使用模型默认</option>
-              <option value="16:9">16:9</option>
-              <option value="9:16">9:16</option>
-              <option value="1:1">1:1</option>
-            </select>
-          </label>
+            />
+          ) : (
+            <label>
+              画面比例
+              <select
+                value={config.shot_images.aspect_ratio}
+                aria-invalid={
+                  Boolean(imageSchema) && Boolean(config.shot_images.aspect_ratio)
+                }
+                onChange={(event) =>
+                  change({
+                    ...config,
+                    shot_images: {
+                      ...config.shot_images,
+                      aspect_ratio: event.target.value,
+                    },
+                  })
+                }
+              >
+                <option value="">使用模型默认</option>
+                {imageSchema && config.shot_images.aspect_ratio ? (
+                  <option value={config.shot_images.aspect_ratio}>
+                    当前值 {config.shot_images.aspect_ratio}（不支持）
+                  </option>
+                ) : (
+                  !config.shot_images.model_id && (
+                    <>
+                      <option value="16:9">16:9</option>
+                      <option value="9:16">9:16</option>
+                      <option value="1:1">1:1</option>
+                    </>
+                  )
+                )}
+              </select>
+            </label>
+          )}
         </StageRow>
         <StageRow
           label="生成视频"
@@ -381,24 +477,37 @@ export function EpisodeWorkflowConfig({
               change({ ...config, videos: { ...config.videos, model_id } })
             }
           />
-          <label>
-            视频规格
-            <select
-              value={config.videos.aspect_ratio}
-              onChange={(event) =>
-                change({
-                  ...config,
-                  videos: { ...config.videos, aspect_ratio: event.target.value },
-                })
-              }
-            >
-              <option value="">使用模型默认</option>
-              <option value="720P">720P</option>
-              <option value="1080P">1080P</option>
-              <option value="16:9">16:9</option>
-              <option value="9:16">9:16</option>
-            </select>
-          </label>
+          {!videoParameterFields.some((field) => field.key === "aspect_ratio") && (
+            <label>
+              视频规格
+              <select
+                value={config.videos.aspect_ratio}
+                aria-invalid={Boolean(videoSchema) && Boolean(config.videos.aspect_ratio)}
+                onChange={(event) =>
+                  change({
+                    ...config,
+                    videos: { ...config.videos, aspect_ratio: event.target.value },
+                  })
+                }
+              >
+                <option value="">使用模型默认</option>
+                {videoSchema && config.videos.aspect_ratio ? (
+                  <option value={config.videos.aspect_ratio}>
+                    当前值 {config.videos.aspect_ratio}（不支持）
+                  </option>
+                ) : (
+                  !config.videos.model_id && (
+                    <>
+                      <option value="720P">720P</option>
+                      <option value="1080P">1080P</option>
+                      <option value="16:9">16:9</option>
+                      <option value="9:16">9:16</option>
+                    </>
+                  )
+                )}
+              </select>
+            </label>
+          )}
           <label>
             视频时长
             <select
@@ -417,39 +526,85 @@ export function EpisodeWorkflowConfig({
               <option value="fixed">固定时长</option>
             </select>
           </label>
-          {config.videos.duration_mode === "fixed" && (
-            <label>
-              固定秒数
-              <select
-                value={config.videos.duration}
-                onChange={(event) =>
-                  change({
-                    ...config,
-                    videos: {
-                      ...config.videos,
-                      duration: Number(event.target.value) as 5 | 10 | 15,
-                    },
-                  })
-                }
-              >
-                <option value={5}>5 秒</option>
-                <option value={10}>10 秒</option>
-                <option value={15}>15 秒</option>
-              </select>
-            </label>
+          {config.videos.duration_mode === "fixed" &&
+            !videoParameterFields.some((field) => field.key === "duration") && (
+              <label>
+                固定秒数
+                <select
+                  value={config.videos.duration}
+                  aria-invalid={Boolean(videoSchema)}
+                  onChange={(event) =>
+                    change({
+                      ...config,
+                      videos: {
+                        ...config.videos,
+                        duration: Number(event.target.value) as 5 | 10 | 15,
+                      },
+                    })
+                  }
+                >
+                  {videoSchema ? (
+                    <option value={config.videos.duration}>
+                      当前值 {config.videos.duration} 秒（不支持，请改为按镜头设置）
+                    </option>
+                  ) : (
+                    <>
+                      <option value={5}>5 秒</option>
+                      <option value={10}>10 秒</option>
+                      <option value={15}>15 秒</option>
+                    </>
+                  )}
+                </select>
+              </label>
+            )}
+          {!!videoParameterFields.length && (
+            <GenerationParameterFields
+              fields={videoParameterFields}
+              values={{
+                aspect_ratio: config.videos.aspect_ratio,
+                duration: config.videos.duration,
+              }}
+              onChange={(key, value) =>
+                change({
+                  ...config,
+                  videos: {
+                    ...config.videos,
+                    ...(key === "duration"
+                      ? { duration: Number(value) as 5 | 10 | 15 }
+                      : { aspect_ratio: String(value) }),
+                  },
+                })
+              }
+            />
           )}
         </StageRow>
       </div>
 
       <div className="workflow-actions">
-        <button type="button" onClick={() => void save()} disabled={busy || !dirty}>
+        <button
+          type="button"
+          onClick={() => void save()}
+          disabled={
+            busy ||
+            !dirty ||
+            parametersLoading ||
+            parametersUnavailable ||
+            !!unsupportedParameters.length
+          }
+        >
           {dirty ? "保存本集配置" : "配置已保存"}
         </button>
         <button
           type="button"
           className="btn-primary"
           onClick={() => void start()}
-          disabled={busy || dirty}
+          disabled={
+            busy ||
+            dirty ||
+            parametersLoading ||
+            parametersUnavailable ||
+            !!unsupportedParameters.length
+          }
         >
           开始制作本集
         </button>
@@ -468,7 +623,13 @@ export function EpisodeWorkflowConfig({
           </label>
           <button
             type="button"
-            disabled={busy || !templateName.trim()}
+            disabled={
+              busy ||
+              !templateName.trim() ||
+              parametersLoading ||
+              parametersUnavailable ||
+              !!unsupportedParameters.length
+            }
             onClick={() => void createTemplate()}
           >
             保存当前配置
@@ -526,7 +687,13 @@ export function EpisodeWorkflowConfig({
               </button>
               <button
                 type="button"
-                disabled={busy || !config}
+                disabled={
+                  busy ||
+                  !config ||
+                  parametersLoading ||
+                  parametersUnavailable ||
+                  !!unsupportedParameters.length
+                }
                 onClick={() => void updateTemplate({ config: config! })}
               >
                 以当前配置更新
@@ -604,6 +771,21 @@ export function EpisodeWorkflowConfig({
       {notice && (
         <p className="success" role="status">
           {notice}
+        </p>
+      )}
+      {(imageParameters.error || videoParameters.error) && (
+        <p className="error">
+          无法读取所选模型的参数能力：
+          {imageParameters.error || videoParameters.error}
+        </p>
+      )}
+      {!!unsupportedParameters.length && (
+        <p className="error" role="alert">
+          当前模型不支持已保存的
+          {unsupportedParameters
+            .map((key) => (key === "duration" ? "视频时长" : "画面规格"))
+            .join("、")}
+          ，请逐项重新选择后再保存。
         </p>
       )}
       {error && <p className="error">{error}</p>}

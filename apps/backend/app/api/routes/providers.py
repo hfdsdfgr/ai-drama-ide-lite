@@ -7,6 +7,9 @@ from app.schemas.provider import (
     BulkModelsRequest,
     BuiltinModelOut,
     DefaultRequest,
+    GenerationParameterSchemaOut,
+    GenerationParameterValidationOut,
+    GenerationParameterValidationRequest,
     ModelCreate,
     ModelCapabilityUpdate,
     ModelOut,
@@ -231,6 +234,35 @@ def recommend_model(
 @models_router.get("/{model_id}", response_model=ModelOut)
 def get_model(model_id: str, request: Request) -> ModelOut:
     return _repo(request).get_model(model_id)
+
+
+@models_router.get(
+    "/{model_id}/generation-schema",
+    response_model=GenerationParameterSchemaOut,
+)
+def get_generation_schema(
+    model_id: str,
+    capability: str,
+    request: Request,
+) -> dict:
+    return request.app.state.provider_manager.parameter_schema(model_id, capability)
+
+
+@models_router.post(
+    "/{model_id}/generation-schema/validate",
+    response_model=GenerationParameterValidationOut,
+)
+def validate_generation_parameters(
+    model_id: str,
+    payload: GenerationParameterValidationRequest,
+    request: Request,
+) -> dict:
+    values = request.app.state.provider_manager.validate_parameters(
+        model_id,
+        payload.capability,
+        payload.values,
+    )
+    return {"model_id": model_id, "capability": payload.capability, "values": values}
 
 
 @models_router.put("/{model_id}", response_model=ModelOut)
