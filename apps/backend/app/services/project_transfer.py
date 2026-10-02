@@ -13,6 +13,7 @@ from app.schemas.project import ProjectCreate
 from app.services.project_files import ensure_project_layout
 from app.services.project_repo import ProjectRepository
 from app.services.novel_repo import NovelRepository
+from app.services.prompt_settings import validate_overrides
 
 MANIFEST_NAME = "project.json"
 SCHEMA_VERSION = 3
@@ -23,8 +24,36 @@ SNAPSHOT_TABLES = (
     "novels", "chapters", "stories", "characters", "locations", "props",
     "episodes", "scenes", "shots", "assets", "reference_media", "versions",
     "production_edges", "shot_dialogue_reviews", "shot_visual_reviews",
-    "story_consistency_reviews", "pipelines",
+    "story_consistency_reviews", "pipelines", "project_prompt_settings",
 )
+
+
+def _prompt_settings_record(snapshot: dict) -> dict | None:
+    """Only accept the new table's known columns; its primary key is project_id."""
+    rows = snapshot.get("project_prompt_settings", [])
+    if not isinstance(rows, list) or len(rows) > 1:
+        raise AppError(422, "import_invalid_prompt_settings", "项目包的提示词配置格式不正确")
+    if not rows:
+        return None
+    row = rows[0]
+    if not isinstance(row, dict) or set(row) - {"project_id", "revision", "overrides_json", "updated_at"}:
+        raise AppError(422, "import_invalid_prompt_settings", "项目包的提示词配置字段不正确")
+    revision = row.get("revision", 0)
+    if type(revision) is not int or revision < 0:
+        raise AppError(422, "import_invalid_prompt_settings", "项目包的提示词修订号不正确")
+    try:
+        overrides = json.loads(row.get("overrides_json", "{}"))
+        validated = validate_overrides(overrides)
+    except (TypeError, json.JSONDecodeError, AppError) as exc:
+        raise AppError(422, "import_invalid_prompt_settings", "项目包的提示词配置无法解析，请检查后重新导入") from exc
+    updated_at = row.get("updated_at", "")
+    if not isinstance(updated_at, str):
+        raise AppError(422, "import_invalid_prompt_settings", "项目包的提示词更新时间不正确")
+    return {
+        "revision": revision,
+        "overrides_json": json.dumps(validated, ensure_ascii=False),
+        "updated_at": updated_at,
+    }
 
 
 def _manifest(project, novel_repo: NovelRepository | None, db_path: Path | None) -> dict:
@@ -108,6 +137,8 @@ def import_project_zip(raw: bytes, repo: ProjectRepository) -> object:
             manifest = json.loads(zf.read(manifest_entry))
             if manifest.get("schema_version") not in (1, 2, SCHEMA_VERSION):
                 raise AppError(422, "import_version_unsupported", "不支持的 manifest 版本")
+            if manifest.get("snapshot"):
+                _prompt_settings_record(manifest["snapshot"])
             data = manifest.get("project") or {}
             name = str(data.get("name", "")).strip()
             if not name:
@@ -163,7 +194,7 @@ def _restore_snapshot(db_path: Path, project_id: str, snapshot: dict, project_di
     records = {table: list(snapshot.get(table) or []) for table in SNAPSHOT_TABLES}
     id_maps: dict[str, dict[str, str]] = {}
     for table in SNAPSHOT_TABLES:
-        if table == "pipelines":
+        if table in {"pipelines", "project_prompt_settings"}:
             continue
         id_maps[table] = {
             str(row["id"]): f"{row['id']}_{uuid.uuid4().hex[:8]}"
@@ -243,14 +274,17 @@ def _restore_snapshot(db_path: Path, project_id: str, snapshot: dict, project_di
         "novels", "chapters", "stories", "characters", "locations", "props",
         "episodes", "scenes", "shots", "assets", "reference_media", "versions",
         "production_edges", "shot_dialogue_reviews", "shot_visual_reviews",
-        "story_consistency_reviews", "pipelines",
+        "story_consistency_reviews", "pipelines", "project_prompt_settings",
     )
     with get_connection(db_path) as conn:
         for table in insert_order:
             for row in records[table]:
-                data = dict(row)
+                data = (
+                    _prompt_settings_record(snapshot)
+                    if table == "project_prompt_settings" else dict(row)
+                )
                 data["project_id"] = project_id
-                if table != "pipelines":
+                if table not in {"pipelines", "project_prompt_settings"}:
                     data["id"] = mapped(table, data["id"])
                 for column, target in foreign_keys.get(table, {}).items():
                     if data.get(column):

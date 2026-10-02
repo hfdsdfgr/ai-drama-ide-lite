@@ -1963,3 +1963,13 @@ AI 是制作团队。
 
 具体 UI 检查清单见 `docs/development-notes/ui-guidelines.md` 第 9 节；
 强制规则见 `DEVELOPMENT_RULES.md` 第 78 条。
+
+## 60. 项目级提示词配置
+
+用户在设置页修改当前项目各环节的创作规则，替换内置规则；正文、Story Bible、参考资产和单次生成要求作为数据输入。JSON / 正文格式契约及输入指令隔离保留为系统规则，不能通过配置删除。
+
+默认规则统一放在 `Prompt Catalog`，项目仅保存覆盖值。API 使用项目修订号保护并发保存；媒体规则可留空，文本规则必须非空。负向词明确区分默认、自定义与不使用。设置和预览只处理本地配置，不创建 Job、不调用 Provider。
+
+生成操作在启动时读取有效配置；后台 Job 与项目 / 剧集 Pipeline 保存完整快照，恢复和同一任务重试沿用快照。旧项目未设置覆盖值时使用内置默认；配置作为创作数据随项目导出导入，不携带 Provider 凭据。
+
+范围和验证记录见 [项目级提示词实施报告](docs/investigations/project-prompt-settings-implementation-report.md)。

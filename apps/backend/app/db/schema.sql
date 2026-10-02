@@ -17,6 +17,13 @@ CREATE TABLE IF NOT EXISTS project_runtime_state (
     paused_at  TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS project_prompt_settings (
+    project_id     TEXT PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,
+    revision       INTEGER NOT NULL DEFAULT 0 CHECK (revision >= 0),
+    overrides_json TEXT NOT NULL DEFAULT '{}',
+    updated_at     TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS novels (
     id          TEXT PRIMARY KEY,
     project_id  TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,

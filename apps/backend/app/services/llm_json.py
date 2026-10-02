@@ -32,7 +32,22 @@ def trim(text: str, limit: int) -> str:
     return text if len(text) <= limit else text[:limit] + "…（已截断）"
 
 
-def parse_llm_json(model, text: str, chat, model_id: str, label: str):
+def parse_review_result(text: str) -> tuple[bool, str]:
+    """审核输出必须遵循固定契约，避免将字符串 'false' 误判为通过。"""
+    data = json.loads(extract_json(text))
+    if (
+        not isinstance(data, dict)
+        or type(data.get("consistent")) is not bool
+        or not isinstance(data.get("issue"), str)
+    ):
+        raise ValueError("审核结果缺少合法的 consistent / issue 字段")
+    return data["consistent"], data["issue"]
+
+
+def parse_llm_json(
+    model, text: str, chat, model_id: str, label: str,
+    *, system_prompt: str = "",
+):
     """chat 为 callable(model_id, messages, temperature=...)；失败时修复重试一次。"""
     for attempt in range(2):
         try:
@@ -43,7 +58,14 @@ def parse_llm_json(model, text: str, chat, model_id: str, label: str):
                 text = chat(
                     model_id,
                     [
-                        {"role": "system", "content": _REPAIR_SYSTEM},
+                        {
+                            "role": "system",
+                            "content": (
+                                system_prompt + "\n\n" + _REPAIR_SYSTEM
+                                + "保留原有创作意图，只修复结构与字段。输出必须符合以下 JSON Schema：\n"
+                                + json.dumps(model.model_json_schema(), ensure_ascii=False)
+                            ),
+                        },
                         {
                             "role": "user",
                             "content": (

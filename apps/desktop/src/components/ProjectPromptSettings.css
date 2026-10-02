@@ -1,0 +1,100 @@
+.project-prompt-settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-block: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--border);
+}
+
+.project-prompt-head,
+.project-prompt-stage-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.project-prompt-head {
+  justify-content: space-between;
+}
+
+.project-prompt-settings h3,
+.project-prompt-settings h4,
+.project-prompt-settings p {
+  margin: 0;
+}
+
+.project-prompt-settings h4 {
+  font-size: var(--fs-base);
+}
+
+.project-prompt-stage-row label {
+  flex: 1 1 240px;
+  max-width: 440px;
+}
+
+.project-prompt-stage-row > span {
+  margin-top: var(--space-5);
+}
+
+.project-prompt-stage-row > button {
+  align-self: flex-end;
+}
+
+.project-prompt-unsaved {
+  color: var(--warning);
+  font-size: var(--fs-sm);
+}
+
+.project-prompt-notice {
+  color: var(--success);
+}
+
+.project-prompt-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  align-items: start;
+  gap: var(--space-5);
+}
+
+.project-prompt-editor,
+.project-prompt-inspector {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: var(--space-3);
+}
+
+.project-prompt-settings pre {
+  margin: var(--space-2) 0 0;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: var(--fs-sm) / 1.6 var(--mono);
+}
+
+.project-prompt-settings .project-prompt-preview {
+  margin: 0;
+  padding: var(--space-3);
+  background: var(--bg-input);
+  border-radius: var(--radius-sm);
+  max-height: 380px;
+  overflow-y: auto;
+}
+
+.project-prompt-settings summary {
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+}
+
+.project-prompt-settings summary:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+@media (max-width: 1200px) {
+  .project-prompt-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

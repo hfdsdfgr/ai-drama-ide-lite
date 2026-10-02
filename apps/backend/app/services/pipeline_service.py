@@ -22,6 +22,7 @@ from app.schemas.script import SceneCreate, ShotCreate
 from app.services.job_store import JOB_TYPE_PIPELINE
 from app.services.novel_repo import NovelRepository
 from app.services.script_repo import ScriptRepository
+from app.services.prompt_settings import PromptSettingsService
 
 PIPELINE_STAGES: tuple[dict, ...] = (
     {"key": "novel_analysis", "label": "小说分析 / 故事圣经", "kind": "llm"},
@@ -140,6 +141,7 @@ class PipelineService:
             if (include_videos or s["key"] != "videos")
             and (quality_review or s["key"] != "quality_review")
         ]
+        prompt_snapshot = PromptSettingsService(self.db_path).snapshot(project_id)
         now = _now_iso()
         with get_connection(self.db_path) as conn:
             conn.execute("DELETE FROM pipelines WHERE project_id = ?", (project_id,))
@@ -159,6 +161,7 @@ class PipelineService:
             capability="pipeline",
             input_payload={
                 "project_id": project_id,
+                "prompt_snapshot": prompt_snapshot,
                 "auto_continue": bool(auto_continue),
                 "include_videos": bool(include_videos),
                 "quality_review": bool(quality_review),
@@ -238,6 +241,7 @@ class PipelineService:
                 "episode_id": episode_id,
                 "config_revision": expected_config_revision,
                 "config": plan["config"].model_dump(),
+                "prompt_snapshot": PromptSettingsService(self.db_path).snapshot(project_id),
                 "extra": {
                     "target_type": "episode",
                     "target_id": episode_id,
@@ -288,6 +292,15 @@ class PipelineService:
     def run(self, job, store) -> bool:
         """顺序执行阶段；返回 True=全部完成，False=阶段完成后已暂停等确认。"""
         payload = job.input_payload or {}
+        if "prompt_snapshot" not in payload:
+            # Older saved pipelines acquire a snapshot once on their first resumed run.
+            payload["prompt_snapshot"] = PromptSettingsService(self.db_path).snapshot(job.project_id)
+            job.input_payload = payload
+            with get_connection(self.db_path) as conn:
+                conn.execute(
+                    "UPDATE jobs SET input_payload = ? WHERE id = ?",
+                    (json.dumps(payload, ensure_ascii=False), job.id),
+                )
         if payload.get("episode_id"):
             return self._run_episode(job, store)
         project_id = payload.get("project_id") or job.project_id
@@ -311,7 +324,8 @@ class PipelineService:
             self._set_stage(project_id, stage["key"], "running", "")
             try:
                 self._execute_stage(
-                    project_id, stage, model, store, include_videos=include_videos
+                    project_id, stage, model, store, include_videos=include_videos,
+                    prompt_snapshot=payload["prompt_snapshot"],
                 )
             except Exception as exc:
                 self._set_stage(project_id, stage["key"], "failed", str(exc))
@@ -353,7 +367,10 @@ class PipelineService:
 
     def _execute_episode_stage(self, job, episode_id, stage, config, model, store) -> None:
         if stage["key"] == "storyboard":
-            self._run_storyboard_episode(job.project_id, episode_id, model)
+            self._run_storyboard_episode(
+                job.project_id, episode_id, model,
+                prompt_snapshot=job.input_payload["prompt_snapshot"],
+            )
         elif stage["key"] == "shot_images":
             self._run_shot_images_episode(job, episode_id, config, model, store)
         elif stage["key"] == "videos":
@@ -475,7 +492,7 @@ class PipelineService:
             ).fetchone()
         return row["stage_key"] if row else ""
 
-    def _run_storyboard_episode(self, project_id: str, episode_id: str, model) -> None:
+    def _run_storyboard_episode(self, project_id: str, episode_id: str, model, *, prompt_snapshot=None) -> None:
         repo = ScriptRepository(self.db_path)
         with get_connection(self.db_path) as conn:
             rows = conn.execute(
@@ -488,7 +505,9 @@ class PipelineService:
         for row in rows:
             if self._scene_has_shots(row["id"]):
                 continue
-            result = self.ai_script_service.generate_shots(project_id, row["id"], model.id)
+            result = self.ai_script_service.generate_shots(
+                project_id, row["id"], model.id, prompt_snapshot=prompt_snapshot
+            )
             repo.save_scene_shots(
                 project_id,
                 row["id"],
@@ -508,6 +527,7 @@ class PipelineService:
                     model.id,
                     capability=config.capability,
                     aspect_ratio=config.aspect_ratio or None,
+                    prompt_snapshot=parent_job.input_payload["prompt_snapshot"],
                 ),
             )
 
@@ -539,6 +559,7 @@ class PipelineService:
                     duration=duration,
                     aspect_ratio=config.aspect_ratio or None,
                     with_audio=False,
+                    prompt_snapshot=parent_job.input_payload["prompt_snapshot"],
                 ),
             )
 
@@ -664,28 +685,33 @@ class PipelineService:
         store,
         *,
         include_videos: bool = False,
+        prompt_snapshot: dict | None = None,
     ) -> None:
         key = stage["key"]
         if key == "novel_analysis":
-            self._run_novel_analysis(project_id, model)
+            self._run_novel_analysis(project_id, model, prompt_snapshot=prompt_snapshot)
         elif key == "script":
-            self._run_script(project_id, model)
+            self._run_script(project_id, model, prompt_snapshot=prompt_snapshot)
         elif key == "assets":
-            self._run_assets(project_id, model, store)
+            self._run_assets(project_id, model, store, prompt_snapshot=prompt_snapshot)
         elif key == "storyboard":
-            self._run_storyboard(project_id, model)
+            self._run_storyboard(project_id, model, prompt_snapshot=prompt_snapshot)
         elif key == "shot_images":
-            self._run_shot_images(project_id, model, store)
+            self._run_shot_images(project_id, model, store, prompt_snapshot=prompt_snapshot)
         elif key == "videos":
-            self._run_videos(project_id, model, store)
+            self._run_videos(project_id, model, store, prompt_snapshot=prompt_snapshot)
         elif key == "quality_review":
-            self._run_quality_review(project_id, store, include_videos=include_videos)
+            self._run_quality_review(
+                project_id, store, include_videos=include_videos, prompt_snapshot=prompt_snapshot
+            )
 
-    def _run_novel_analysis(self, project_id: str, model) -> None:
+    def _run_novel_analysis(self, project_id: str, model, *, prompt_snapshot=None) -> None:
         novels = NovelRepository(self.db_path).list_novels(project_id)
         if not novels:
             raise AppError(422, "pipeline_no_novel", "项目里还没有小说，请先导入")
-        job = self.story_service.start(project_id, novels[0].id, model.id)
+        job = self.story_service.start(
+            project_id, novels[0].id, model.id, prompt_snapshot=prompt_snapshot
+        )
         while True:
             current = self.story_service.get(job["job_id"])
             if current["status"] == "completed":
@@ -694,12 +720,12 @@ class PipelineService:
                 raise AppError(500, "stage_failed", current.get("error") or "小说分析失败")
             time.sleep(2)
 
-    def _run_script(self, project_id: str, model) -> None:
+    def _run_script(self, project_id: str, model, *, prompt_snapshot=None) -> None:
         novels = NovelRepository(self.db_path).list_novels(project_id)
         if not novels:
             raise AppError(422, "pipeline_no_novel", "项目里还没有小说，请先导入")
         result = self.ai_script_service.generate_episode_script(
-            project_id, novels[0].id, model.id
+            project_id, novels[0].id, model.id, prompt_snapshot=prompt_snapshot
         )
         ScriptRepository(self.db_path).save_episode_script(
             project_id=project_id,
@@ -710,11 +736,11 @@ class PipelineService:
             scenes=[SceneCreate(**scene.model_dump()) for scene in result.scenes],
         )
 
-    def _run_assets(self, project_id: str, model, store) -> None:
-        job = self.asset_service.start(project_id, model.id)
+    def _run_assets(self, project_id: str, model, store, *, prompt_snapshot=None) -> None:
+        job = self.asset_service.start(project_id, model.id, prompt_snapshot=prompt_snapshot)
         self._poll_job(store, job["job_id"])
 
-    def _run_storyboard(self, project_id: str, model) -> None:
+    def _run_storyboard(self, project_id: str, model, *, prompt_snapshot=None) -> None:
         repo = ScriptRepository(self.db_path)
         with get_connection(self.db_path) as conn:
             rows = conn.execute(
@@ -726,7 +752,7 @@ class PipelineService:
             if self._scene_has_shots(scene_id):
                 continue
             result = self.ai_script_service.generate_shots(
-                project_id, scene_id, model.id
+                project_id, scene_id, model.id, prompt_snapshot=prompt_snapshot
             )
             repo.save_scene_shots(
                 project_id,
@@ -734,7 +760,7 @@ class PipelineService:
                 [ShotCreate(**shot.model_dump()) for shot in result.shots],
             )
 
-    def _run_shot_images(self, project_id: str, model, store) -> None:
+    def _run_shot_images(self, project_id: str, model, store, *, prompt_snapshot=None) -> None:
         shots = self._shots_without_image(project_id)
         for shot in shots:
             job = self.image_generation_service.start_shot(
@@ -742,10 +768,11 @@ class PipelineService:
                 shot,
                 model.id,
                 capability="text_to_image",
+                prompt_snapshot=prompt_snapshot,
             )
             self._poll_job(store, job["job_id"])
 
-    def _run_videos(self, project_id: str, model, store) -> None:
+    def _run_videos(self, project_id: str, model, store, *, prompt_snapshot=None) -> None:
         shots = self._shots_without_video(project_id)
         with get_connection(self.db_path) as conn:
             rows = conn.execute(
@@ -774,11 +801,12 @@ class PipelineService:
                 prompt,
                 duration=duration,
                 with_audio=supports_audio,
+                prompt_snapshot=prompt_snapshot,
             )
             self._poll_job(store, job["job_id"])
 
     def _run_quality_review(
-        self, project_id: str, store, *, include_videos: bool = False
+        self, project_id: str, store, *, include_videos: bool = False, prompt_snapshot=None
     ) -> None:
         """对每个已生成分镜图的镜头做视觉一致性（角色）+ 剧情一致性审核；
         若勾选了视频，再对有视频的镜头补台词审核。"""
@@ -818,6 +846,7 @@ class PipelineService:
                 shot_id,
                 model_id=vision_model.id,
                 review_type="character",
+                prompt_snapshot=prompt_snapshot,
             )
             self._poll_job(store, review_job.id)
             story_job = self.story_consistency_service.create_model_review_job(
@@ -825,6 +854,7 @@ class PipelineService:
                 project_id,
                 shot_id,
                 model_id=llm_model.id,
+                prompt_snapshot=prompt_snapshot,
             )
             self._poll_job(store, story_job.id)
             if include_videos and self._shot_has_video(shot_id):
@@ -834,6 +864,7 @@ class PipelineService:
                     shot_id,
                     model_id=asr_model.id,
                     script_model_id=llm_model.id,
+                    prompt_snapshot=prompt_snapshot,
                 )
                 self._poll_job(store, dialogue_job.id)
 

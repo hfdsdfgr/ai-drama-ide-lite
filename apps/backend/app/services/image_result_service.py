@@ -84,6 +84,7 @@ class ImageResultService:
                     "source_refs": extra.get("source_refs", []),
                     "user_prompt": extra.get("user_prompt", ""),
                     "regenerated_from_version_id": extra.get("regenerated_from_version_id", ""),
+                    "prompt_snapshot": extra.get("prompt_snapshot"),
                 },
             )
             records.append(record)

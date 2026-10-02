@@ -22,6 +22,8 @@ from app.services.image_prompt_builder import (
 from app.services.job_store import TERMINAL_STATUSES
 from app.services.script_repo import ScriptRepository
 from app.services.story_repo import StoryRepository
+from app.services.prompt_catalog import get_definition
+from app.services.prompt_settings import PromptSettingsService
 
 
 class ImageGenerationService:
@@ -47,9 +49,14 @@ class ImageGenerationService:
         aspect_ratio: str | None = None,
         art_style: str | None = None,
         negative_prompt: str = "",
+        prompt_snapshot: dict | None = None,
     ) -> dict:
         self._validate_capability(capability)
         asset = self._find_asset(project_id, asset_id)
+        prompts = PromptSettingsService(self.db_path)
+        snapshot = prompt_snapshot if prompt_snapshot is not None else prompts.snapshot(project_id)
+        stage_id = f"image_{asset['asset_type']}"
+        settings = prompts.resolve(project_id, stage_id, snapshot=snapshot)
         plan = build_asset_image_prompt(
             asset["asset_type"],
             asset.get("reference_prompt", ""),
@@ -63,6 +70,11 @@ class ImageGenerationService:
                     "relation": "image_generated_from_asset",
                 }
             ],
+            creative_rules=(
+                None if settings["rules"] == get_definition(stage_id).default_rules
+                else settings["rules"]
+            ),
+            creative_negative_prompt=settings["negative_prompt"],
         )
         return self._create_job(
             project_id=project_id,
@@ -72,6 +84,7 @@ class ImageGenerationService:
             negative_prompt=negative_prompt,
             target_type="asset",
             target_id=asset_id,
+            prompt_snapshot=snapshot,
         )
 
     def start_shot(
@@ -92,6 +105,7 @@ class ImageGenerationService:
         batch_id: str = "",
         batch_label: str = "",
         target_label: str = "",
+        prompt_snapshot: dict | None = None,
     ) -> dict:
         explicit_versions = reference_version_ids is not None
         reference_asset_ids = reference_asset_ids or []
@@ -107,6 +121,9 @@ class ImageGenerationService:
         shot, scene = ScriptRepository(self.db_path).get_shot_with_scene(
             project_id, shot_id
         )
+        prompts = PromptSettingsService(self.db_path)
+        snapshot = prompt_snapshot if prompt_snapshot is not None else prompts.snapshot(project_id)
+        settings = prompts.resolve(project_id, "image_shot", snapshot=snapshot)
         if regenerated_from_version_id:
             original = self.asset_version_service.get(regenerated_from_version_id)
             if (original.project_id, original.entity_type, original.entity_id) != (project_id, "shot", shot_id):
@@ -145,6 +162,11 @@ class ImageGenerationService:
             aspect_ratio=aspect_ratio or None,
             art_style=art_style or None,
             source_refs=source_refs,
+            creative_rules=(
+                None if settings["rules"] == get_definition("image_shot").default_rules
+                else settings["rules"]
+            ),
+            creative_negative_prompt=settings["negative_prompt"],
         )
         return self._create_job(
             project_id=project_id,
@@ -160,6 +182,7 @@ class ImageGenerationService:
             images=self._reference_image_paths(asset_references),
             user_prompt=shot.prompt or shot.action or "",
             regenerated_from_version_id=regenerated_from_version_id or "",
+            prompt_snapshot=snapshot,
         )
 
     def get_job(self, project_id: str, job_id: str) -> dict:
@@ -211,6 +234,7 @@ class ImageGenerationService:
         batch_id = f"batch_{uuid.uuid4().hex[:12]}"
         jobs: list[dict] = []
         skipped = list(plan["skipped"])
+        snapshot = PromptSettingsService(self.db_path).snapshot(project_id)
         for item in plan["ready"]:
             try:
                 jobs.append(
@@ -221,6 +245,7 @@ class ImageGenerationService:
                         batch_id=batch_id,
                         batch_label=batch_label,
                         target_label=item["label"],
+                        prompt_snapshot=snapshot,
                     )
                 )
             except AppError as exc:
@@ -257,6 +282,7 @@ class ImageGenerationService:
         images: list[str] | None = None,
         user_prompt: str = "",
         regenerated_from_version_id: str = "",
+        prompt_snapshot: dict | None = None,
     ) -> dict:
         self.provider_manager.validate_declared_parameters(
             model_id,
@@ -284,6 +310,7 @@ class ImageGenerationService:
                 "source_refs": plan.source_refs,
                 "user_prompt": user_prompt,
                 "regenerated_from_version_id": regenerated_from_version_id,
+                "prompt_snapshot": prompt_snapshot,
             },
         )
 

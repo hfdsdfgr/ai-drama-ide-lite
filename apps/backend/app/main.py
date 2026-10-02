@@ -18,6 +18,7 @@ from app.api.routes import (
     overview,
     pipeline,
     production_graph,
+    prompt_settings,
     references,
     projects,
     quality,
@@ -57,6 +58,7 @@ from app.services.story_consistency_service import StoryConsistencyService
 from app.services.pipeline_service import PipelineService
 from app.services.project_repo import migrate_legacy_json_projects
 from app.services.production_graph import ProductionGraphService
+from app.services.prompt_settings import PromptSettingsService
 from app.services.provider_repo import ProviderRepository
 from app.services.secret_store import KeyringSecretStore, SecretStore
 from app.services.story_analysis import StoryAnalysisService
@@ -169,6 +171,7 @@ def create_app(
         app.state.job_store, app.state.provider_manager, config.db_path
     )
     app.state.production_graph_service = ProductionGraphService(config.db_path)
+    app.state.prompt_settings_service = PromptSettingsService(config.db_path)
     app.state.workflow_template_service = WorkflowTemplateService(
         config.db_path, app.state.provider_manager
     )
@@ -215,6 +218,7 @@ def create_app(
     app.include_router(asset_versions.router)
     app.include_router(overview.router)
     app.include_router(production_graph.router)
+    app.include_router(prompt_settings.router)
     app.include_router(references.router)
     app.include_router(videos.router)
     app.include_router(dialogue_reviews.router)

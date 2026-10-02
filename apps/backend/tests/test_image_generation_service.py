@@ -10,6 +10,13 @@ from app.schemas.script import Scene, Shot
 from app.services.image_generation_service import ImageGenerationService
 from app.services.script_repo import ScriptRepository
 from app.services.story_repo import StoryRepository
+from app.services.prompt_settings import PromptSettingsService
+
+
+@pytest.fixture(autouse=True)
+def _default_prompt_settings(monkeypatch):
+    # These service unit tests mock repositories; project persistence is covered separately.
+    monkeypatch.setattr(PromptSettingsService, "snapshot", lambda self, project_id: {"revision": 0, "stages": {}})
 
 
 class _FakeGenerationService:

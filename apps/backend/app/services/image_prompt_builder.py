@@ -13,65 +13,20 @@ from app.services.asset_service import (
     ASSET_DEFAULT_SPECS,
     resolve_image_spec,
 )
+from app.services.prompt_catalog import (
+    DEFAULT_NEGATIVE_PROMPT,
+    CHARACTER_CONSISTENCY,
+    CHARACTER_THREE_VIEW,
+    LOCATION_CONSISTENCY,
+    PROP_CONSISTENCY,
+    ASSET_NO_TEXT,
+    SHOT_CONSISTENCY,
+    SHOT_STYLE_LOCK,
+    CHARACTER_VIEW_NEGATIVE,
+    SHOT_CHARACTER_CONSISTENCY,
+)
 
 SHOT_ASPECT_RATIO = "16:9"
-
-DEFAULT_NEGATIVE_PROMPT = (
-    "lowres, bad anatomy, bad hands, extra fingers, deformed, blurry, "
-    "watermark, text, logo, extra limbs, cropped, jpeg artifacts, "
-    "oversaturated, overexposed, stiff expression, frozen face, "
-    "disfigured, ugly, duplicate, extra eyes, missing fingers"
-)
-
-CHARACTER_CONSISTENCY = (
-    "character reference sheet, front view, side view, back view, "
-    "same character, consistent character design, consistent outfit, "
-    "solo character, no props, no other characters"
-)
-
-# 角色设定图必须是三视图。放在 prompt 最前面，避免参考描述里的
-# 「front view / full body」等单视图短语把模型带偏成只画正面。
-CHARACTER_THREE_VIEW = (
-    "Character reference sheet, three views of the same character: "
-    "front view, side view, back view, full body, neutral standing pose, "
-    "plain background, consistent face, consistent hairstyle, consistent outfit"
-)
-
-LOCATION_CONSISTENCY = (
-    "cinematic establishing shot, consistent environment, "
-    "clear spatial layout, no people, no characters, no specific props"
-)
-
-PROP_CONSISTENCY = (
-    "product reference shot, empty background, no characters, no scene, "
-    "consistent material and design"
-)
-
-ASSET_NO_TEXT = "no text, no words, no letters, no watermark"
-
-SHOT_CONSISTENCY = (
-    "cinematic still frame, storyboard frame, no text, no subtitles"
-)
-
-SHOT_STYLE_LOCK = (
-    "consistent art style, unified visual style across all shots, "
-    "same art direction as the character and location references, "
-    "cinematic film still"
-)
-
-# 角色三视图专项负面词：三视图之间脸/服装漂移是生图通病，单独追加。
-CHARACTER_VIEW_NEGATIVE = (
-    "inconsistent face between views, different outfits between views, "
-    "smiling, exaggerated expression, open-mouth shouting"
-)
-
-# 分镜图里的角色一致性约束：与资产卡不同，分镜图可以有多个角色和道具，
-# 因此不能复用「solo character, no props」；核心是保持与角色参考图相同的
-# 面部、发型、服装，避免模型因剧情描述（痛苦/扭曲等）把脸画崩。
-SHOT_CHARACTER_CONSISTENCY = (
-    "keep the exact same face, hairstyle and costume as the character references, "
-    "same character identity, do not change facial features, age or skin"
-)
 
 _VIEW_PHRASE_RE = re.compile(
     r"\b(front|side|back) view\b|\bfull body\b", re.IGNORECASE
@@ -183,6 +138,8 @@ def build_asset_image_prompt(
     aspect_ratio: str | None = None,
     art_style: str | None = None,
     source_refs: list[dict] | None = None,
+    creative_rules: str | None = None,
+    creative_negative_prompt: str | None = None,
 ) -> ImagePromptPlan:
     """组装资产卡生图提示词。
 
@@ -191,21 +148,26 @@ def build_asset_image_prompt(
     """
     fields = fields or {}
     base = reference_prompt.strip() or _asset_fields_prompt(asset_type, fields)
-    if not base:
+    if not base and creative_rules is None:
         base = _asset_consistency(asset_type)
 
-    if asset_type == "character":
+    if asset_type == "character" and creative_rules is None:
         base = _join([CHARACTER_THREE_VIEW, _strip_view_phrases(base)])
 
     style = art_style or fields.get("art_style") or ""
     base = _append_if_missing(base, style)
-    base = _append_if_missing(base, _asset_consistency(asset_type))
-    base = _append_if_missing(base, ASSET_NO_TEXT)
+    if creative_rules is None:
+        base = _append_if_missing(base, _asset_consistency(asset_type))
+        base = _append_if_missing(base, ASSET_NO_TEXT)
+    else:
+        base = _join([creative_rules, base])
 
     spec = _asset_spec(asset_type, aspect_ratio or fields.get("aspect_ratio") or None)
     negative = DEFAULT_NEGATIVE_PROMPT
     if asset_type == "character":
         negative = _join([negative, CHARACTER_VIEW_NEGATIVE])
+    if creative_negative_prompt is not None:
+        negative = creative_negative_prompt
     return ImagePromptPlan(
         prompt=base,
         negative_prompt=negative,
@@ -249,6 +211,8 @@ def build_shot_image_prompt(
     aspect_ratio: str | None = None,
     art_style: str | None = None,
     source_refs: list[dict] | None = None,
+    creative_rules: str | None = None,
+    creative_negative_prompt: str | None = None,
 ) -> ImagePromptPlan:
     """组装分镜生图提示词。
 
@@ -275,13 +239,16 @@ def build_shot_image_prompt(
     if reference_lines:
         base = _join([base, *reference_lines])
 
-    if any(
+    if creative_rules is None and any(
         ref.get("asset_type") == "character"
         for ref in asset_references
     ):
         base = _append_if_missing(base, SHOT_CHARACTER_CONSISTENCY)
-    base = _append_if_missing(base, SHOT_CONSISTENCY)
-    base = _append_if_missing(base, SHOT_STYLE_LOCK)
+    if creative_rules is None:
+        base = _append_if_missing(base, SHOT_CONSISTENCY)
+        base = _append_if_missing(base, SHOT_STYLE_LOCK)
+    else:
+        base = _append_if_missing(base, creative_rules)
     if art_style:
         base = _append_if_missing(base, art_style)
 
@@ -291,7 +258,11 @@ def build_shot_image_prompt(
         refs = [{"type": "shot", "id": shot.id, "relation": "image_generated_from_shot"}]
     return ImagePromptPlan(
         prompt=base,
-        negative_prompt=DEFAULT_NEGATIVE_PROMPT,
+        negative_prompt=(
+            DEFAULT_NEGATIVE_PROMPT
+            if creative_negative_prompt is None
+            else creative_negative_prompt
+        ),
         aspect_ratio=spec["aspect_ratio"],
         width=spec["width"],
         height=spec["height"],

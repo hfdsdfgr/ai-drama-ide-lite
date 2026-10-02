@@ -175,7 +175,11 @@ function App() {
               />
             </div>
             <div className={view === "settings" ? "view-pane active" : "view-pane"}>
-              <SettingsPage />
+              <SettingsPage
+                projectId={activeProjectId}
+                active={view === "settings"}
+                onChooseProject={() => setView("project")}
+              />
             </div>
           </main>
           <StatusBar />

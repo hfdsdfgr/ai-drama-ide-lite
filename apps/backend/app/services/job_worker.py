@@ -203,6 +203,7 @@ class JobWorker:
             self.manager,
             job.project_id,
             job.model_id,
+            prompt_snapshot=(job.input_payload or {}).get("prompt_snapshot"),
         )
         self.store.mark_completed(
             job.id, result_payload={"detail": detail}

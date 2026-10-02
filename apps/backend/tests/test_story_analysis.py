@@ -265,5 +265,8 @@ def test_ai_writing_injects_bible_context(client, monkeypatch):
     )
     assert response.status_code == 200
     system = captured["messages"][0]["content"]
-    assert "林凡" in system
+    user = captured["messages"][1]["content"]
+    assert "林凡" not in system
     assert "Story Bible" in system
+    assert "林凡" in user
+    assert "Story Bible" in user

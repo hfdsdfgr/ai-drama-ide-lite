@@ -8,13 +8,8 @@ from app.services.reference_media import ReferenceMediaRepository
 from app.services.generation_service import GenerationService
 from app.services.script_repo import ScriptRepository
 from app.services.story_repo import StoryRepository
-
-
-VIDEO_MOTION_CONSISTENCY = (
-    "\n\n动作自然连贯，符合真实重力与物理规律；"
-    "角色外观、发型、服装、场景与首帧画面及参考图保持一致，画风统一；"
-    "画面中不要出现文字、字幕、水印。"
-)
+from app.services.prompt_settings import PromptSettingsService
+from app.services.prompt_catalog import VIDEO_MOTION_CONSISTENCY  # compatibility for existing callers
 
 
 class VideoGenerationService:
@@ -43,6 +38,7 @@ class VideoGenerationService:
         pinned_version_ids: list[str] | None = None,
         source_image_version_id: str | None = None,
         regenerated_from_version_id: str | None = None,
+        prompt_snapshot: dict | None = None,
     ) -> dict:
         shot, _scene = ScriptRepository(self.db_path).get_shot_with_scene(
             project_id, shot_id
@@ -82,7 +78,10 @@ class VideoGenerationService:
             raise AppError(422, "prompt_required", "请输入视频生成提示词")
         # 图生视频首帧已锁定画面，文字补充运动与一致性约束，避免角色/画风漂移。
         user_prompt = prompt
-        prompt = user_prompt + VIDEO_MOTION_CONSISTENCY
+        prompts = PromptSettingsService(self.db_path)
+        snapshot = prompt_snapshot if prompt_snapshot is not None else prompts.snapshot(project_id)
+        rules = prompts.resolve(project_id, "video_shot", snapshot=snapshot)["rules"]
+        prompt = user_prompt + ("\n\n" + rules if rules else "")
         model = self.generation_service.manager.repo.get_model(model_id)
         capabilities = list(model.capabilities or [])
         supports_dialogue = "video_dialogue" in capabilities
@@ -127,6 +126,7 @@ class VideoGenerationService:
                     }
                 ] + reference_refs,
                 "user_prompt": user_prompt,
+                "prompt_snapshot": snapshot,
                 "regenerated_from_version_id": regenerated_from_version_id or "",
             },
         )

@@ -1,6 +1,7 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 
 import { InfoTip } from "../components/InfoTip";
+import { ProjectPromptSettings } from "../components/ProjectPromptSettings";
 import { checkAppVersion, getAppVersion } from "../api/version";
 import { createGenerationJob, getGenerationJob } from "../api/generation";
 import {
@@ -61,7 +62,15 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export function SettingsPage() {
+export function SettingsPage({
+  projectId,
+  active,
+  onChooseProject,
+}: {
+  projectId: string;
+  active: boolean;
+  onChooseProject: () => void;
+}) {
   const [presets, setPresets] = useState<Preset[]>([]);
   const [providers, setProviders] = useState<Provider[]>([]);
   const [models, setModels] = useState<Model[]>([]);
@@ -510,6 +519,14 @@ export function SettingsPage() {
 
       {updateInfo && <p className="muted">{updateInfo}</p>}
       {appVersion && <p className="muted">当前版本：v{appVersion}</p>}
+
+      <ProjectPromptSettings
+        projectId={projectId}
+        active={active}
+        onChooseProject={onChooseProject}
+      />
+
+      <h3>Provider 与模型</h3>
 
       <p className="muted">
         API Key 仅保存在本机系统凭据管理器中，不会进入项目文件或日志。

@@ -37,7 +37,8 @@ class _FakeReviewServices:
         self.dialogue_jobs = 0
 
     def create_model_review_job(
-        self, store, project_id, shot_id, *, model_id, review_type=None, script_model_id=None
+        self, store, project_id, shot_id, *, model_id, review_type=None, script_model_id=None,
+        prompt_snapshot=None,
     ):
         if review_type == "character":
             self.visual_jobs += 1
@@ -62,7 +63,7 @@ class _FakeServices:
         self.image_jobs = 0
         self.video_jobs = 0
 
-    def start(self, project_id, novel_id=None, model_id=None):
+    def start(self, project_id, novel_id=None, model_id=None, *, prompt_snapshot=None):
         self.story_started = True
         self.asset_started = True
         return {"job_id": "story_1", "project_id": project_id}
@@ -70,22 +71,22 @@ class _FakeServices:
     def get(self, job_id):
         return {"status": "completed", "error": None}
 
-    def generate_episode_script(self, project_id, novel_id, model_id):
+    def generate_episode_script(self, project_id, novel_id, model_id, *, prompt_snapshot=None):
         self.script_calls += 1
         return AiEpisodeScriptResult(
             episode=AiEpisodePlan(title="第一集", summary=""),
             scenes=[],
         )
 
-    def generate_shots(self, project_id, scene_id, model_id):
+    def generate_shots(self, project_id, scene_id, model_id, *, prompt_snapshot=None):
         self.shot_calls += 1
         return AiShotsResult(shots=[])
 
-    def image_start(self, project_id, shot_id, model_id, capability):
+    def image_start(self, project_id, shot_id, model_id, capability, *, prompt_snapshot=None):
         self.image_jobs += 1
         return {"job_id": f"img_{shot_id}"}
 
-    def video_start(self, project_id, shot_id, model_id, prompt, duration, with_audio):
+    def video_start(self, project_id, shot_id, model_id, prompt, duration, with_audio, *, prompt_snapshot=None):
         self.video_jobs += 1
         return {"job_id": f"vid_{shot_id}"}
 
