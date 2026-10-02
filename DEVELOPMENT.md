@@ -1973,3 +1973,9 @@ AI 是制作团队。
 生成操作在启动时读取有效配置；后台 Job 与项目 / 剧集 Pipeline 保存完整快照，恢复和同一任务重试沿用快照。旧项目未设置覆盖值时使用内置默认；配置作为创作数据随项目导出导入，不携带 Provider 凭据。
 
 范围和验证记录见 [项目级提示词实施报告](docs/investigations/project-prompt-settings-implementation-report.md)。
+
+## 61. 免费离线新手教程
+
+顶部设置旁提供教程入口，在独立练习区以本地模板讲解小说 → Story Bible → 剧本 → 资产 → 分镜 → 图片 → 视频 → 合成。按当前目标高亮导航、操作或素材区域，由用户完成操作后推进；不模拟生成等待或百分比进度。
+
+教程无需模型或后端，数据只保存在本次练习的内存状态，禁止调用生产 API 或写入用户项目。原 App 保持挂载，退出后恢复原页面、项目与编辑状态；支持上一步、从头练习、完成和 Escape 退出。素材与验证见 [离线新手教程实施报告](docs/investigations/offline-tutorial-implementation-report.md)。

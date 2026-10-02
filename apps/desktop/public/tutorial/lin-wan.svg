@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+<defs><linearGradient id="sky" x2="0" y2="1"><stop stop-color="#172c40"/><stop offset="1" stop-color="#486576"/></linearGradient>
+<linearGradient id="ground" x2="0" y2="1"><stop stop-color="#233b4b"/><stop offset="1" stop-color="#132535"/></linearGradient>
+<radialGradient id="lamp"><stop stop-color="#ffdea0" stop-opacity=".6"/><stop offset="1" stop-color="#e5b96b" stop-opacity="0"/></radialGradient>
+<pattern id="rain" width="88" height="78" patternUnits="userSpaceOnUse"><path d="M22 4l-12 34M61 29l-10 29" stroke="#b0d1dd" opacity=".16" stroke-width="2"/></pattern></defs>
+<rect width="1280" height="720" fill="#2e4558"/><circle cx="640" cy="330" r="230" fill="#3a5769"/><g transform="translate(640 212) scale(1.9)">
+<path d="M-22 102l-6 102h17l17-99M8 105l8 99h18l-7-104" fill="#17262e"/>
+<path d="M-35 38q32-15 65 0l17 84h-88z" fill="#718b98"/>
+<path d="M-34 39l-15 76 13 3 20-70M27 41l17 71-12 4-22-68" fill="#5f7f90"/>
+<ellipse cy="9" rx="24" ry="31" fill="#e2b6a0"/><path d="M-26 12q-11-45 22-45 36 3 28 48l-11-32-19 8-13 7z" fill="#18212b"/>
+<path d="M-10 12h4M9 12h4" stroke="#2d303a" stroke-width="3" stroke-linecap="round"/><path d="M-4 25q5 3 10-1" fill="none" stroke="#a57770" stroke-width="2"/>
+<path d="M-15 39l13 15 16-15M-2 54v65" fill="none" stroke="#a3b7bd" stroke-width="2"/></g><text x="640" y="665" text-anchor="middle" fill="#d4e0e5" font-family="sans-serif" font-size="24">林晚 · 短黑发 / 蓝灰雨衣</text></svg>

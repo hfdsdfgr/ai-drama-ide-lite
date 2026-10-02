@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+<defs><linearGradient id="sky" x2="0" y2="1"><stop stop-color="#172c40"/><stop offset="1" stop-color="#486576"/></linearGradient>
+<linearGradient id="ground" x2="0" y2="1"><stop stop-color="#233b4b"/><stop offset="1" stop-color="#132535"/></linearGradient>
+<radialGradient id="lamp"><stop stop-color="#ffdea0" stop-opacity=".6"/><stop offset="1" stop-color="#e5b96b" stop-opacity="0"/></radialGradient>
+<pattern id="rain" width="88" height="78" patternUnits="userSpaceOnUse"><path d="M22 4l-12 34M61 29l-10 29" stroke="#b0d1dd" opacity=".16" stroke-width="2"/></pattern></defs>
+<rect width="1280" height="720" fill="#3a4247"/><path d="M314 470l438-262 216 299-572 73z" fill="#b8a98e"/><g transform="translate(648 353) scale(1.9)"><rect x="-160" y="-64" width="322" height="126" rx="8" fill="#dfcca7"/>
+<path d="M63-63v126" stroke="#ad9572" stroke-dasharray="6 5" stroke-width="3"/><text x="-135" y="-22" font-family="sans-serif" font-size="23" fill="#756246">青岚 → 回家</text>
+<text x="-135" y="18" font-family="sans-serif" font-size="15" fill="#917c60">十二年前 · 最后一班</text><text x="85" y="12" font-size="20" fill="#756246">归</text></g></svg>

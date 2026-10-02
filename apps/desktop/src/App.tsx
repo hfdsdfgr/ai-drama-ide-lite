@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { StatusBar } from "./components/StatusBar";
 import { AppSidebar, type NovelJump } from "./components/AppSidebar";
@@ -10,6 +10,7 @@ import { ScriptPage } from "./pages/ScriptPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { StoryboardPage } from "./pages/StoryboardPage";
 import { StoryBiblePage } from "./pages/StoryBiblePage";
+import { CreationTutorial } from "./tutorial/CreationTutorial";
 import "./App.css";
 
 type View =
@@ -40,6 +41,8 @@ const CREATION_MODULES: ModuleDef[] = [
 ];
 
 function App() {
+  const [tutorialOpen, setTutorialOpen] = useState(false);
+  const tutorialButtonRef = useRef<HTMLButtonElement>(null);
   const [view, setView] = useState<View>("project");
   const [jumpToShotId, setJumpToShotId] = useState<string | null>(null);
   const [jumpToMedia, setJumpToMedia] = useState<"image" | "video" | undefined>();
@@ -95,6 +98,14 @@ function App() {
               ))}
             </nav>
             <div className="app-actions">
+              <button
+                ref={tutorialButtonRef}
+                type="button"
+                aria-haspopup="dialog"
+                onClick={() => setTutorialOpen(true)}
+              >
+                教程
+              </button>
               <button
                 type="button"
                 aria-label="设置"
@@ -185,6 +196,14 @@ function App() {
           <StatusBar />
         </div>
       </div>
+      {tutorialOpen && (
+        <CreationTutorial
+          onClose={() => {
+            setTutorialOpen(false);
+            requestAnimationFrame(() => tutorialButtonRef.current?.focus());
+          }}
+        />
+      )}
     </div>
   );
 }

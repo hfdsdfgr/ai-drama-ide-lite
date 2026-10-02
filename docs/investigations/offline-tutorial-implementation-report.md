@@ -1,0 +1,42 @@
+# 离线新手教程实施报告
+
+日期：2026-10-02。
+
+## 用户体验
+
+顶部「设置」旁新增「教程」。点击打开独立免费练习区，跟随 22 个操作 / 阅读步骤完成项目、小说、故事圣经、剧本、参考资产、分镜、关键帧、镜头视频、制作预检与分集合成。当前目标用边框和遮罩聚焦，旁边的教练面板解释此步目的及实际项目中的对应操作。
+
+生成类按钮明确标注「示例」，立即载入内置模板，不伪造模型请求或生成等待。教程支持上一步、从头练习、完成与退出；Escape 退出，焦点回到入口。原 App 保持挂载，当前页面、项目选择与未保存草稿保持原样。
+
+## 数据与费用隔离
+
+- `src/tutorial/tutorialData.ts`：原创《末班灯火》的小说、Bible、场景剧本、四个镜头，以及声明式步骤与目标推进规则。
+- `src/tutorial/CreationTutorial.tsx`：原生模态、只在内存推进的练习控件和焦点 / 高亮管理；不导入 API client、不调用 Provider、不写 localStorage 或项目文件。
+- `public/tutorial/`：8 张本地 SVG 插画、4 条五秒无声镜头视频和一条 20 秒分集视频，素材约 1.4 MB；运行时不依赖后端、模型、构建工具或外网。
+- `scripts/build-tutorial-media.mjs`：使用已有本地浏览器与 FFmpeg 离线制作插画和轻微运镜 / 字幕短片；没有新增应用依赖或调用付费 API。
+
+教程没有生成 Job、伪项目 ID、数据库植入或全局 API 拦截。原应用已有任务不因打开教程被取消；后台状态栏的只读轮询继续运行。
+
+首版是独立练习控件，沿用现有模块顺序与设计 Token；不直接驱动真实页面的付费按钮，也不保存练习成果到真实项目。示意插画和无声短片用于认识流程，真实生成质量及音频能力取决于用户模型。
+
+## 高亮与可访问性
+
+原生 `<dialog>.showModal()` 隔离背景交互。每一步将焦点移至当前目标；SVG 遮罩裁剪到可见练习区，ResizeObserver 观察目标与其布局祖先，监听滚动和窗口变化。教练面板及退出按钮保持可见、可操作，窄窗口将教练面板放在底部。
+
+调研依据与取舍见 [实施计划](offline-tutorial-plan.md)，采用 [W3C 模态焦点规则](https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/) 和 [原生 dialog](https://developer.mozilla.org/en-US/docs/Web/API/HTMLDialogElement/showModal)。
+
+## 验证
+
+- 前端 41 项测试通过：含错误目标不能推进、完整步骤与结束边界、模块覆盖及小说 / Bible / 剧本 / 分镜素材一致性。
+- TypeScript（`tsc -b --force`）、oxlint、Vite build 最终检查通过；构建产物包含全部 13 个媒体文件。
+- `scripts/verify-tutorial-ui.mjs` 挂载真实 App，并拦截所有 API 写请求：完整流程、高亮随滚动 / 缩放 / 从头练习跟随、Escape / 焦点恢复、上一步、原项目和未保存提示词保持，通过。
+- 实际解码播放五秒镜头和 20 秒短片；1440px / 900px / 640px 截图检查通过，无横向溢出。没有生成 / 写请求；原状态栏的 GET 轮询仍允许在背景运行。
+- 从头练习后再次走完整流程并点击「完成教程」退出通过；后台 API 全部被阻断的独立浏览器页仍可完成小说导入与 Bible 分析练习。
+
+本轮只改前端，未修改后端或用户数据库，未运行付费生成或重新打包桌面安装器。
+
+## 复现
+
+前端：`npm test`、`npx tsc -b --force`、`npm run lint`、`npm run build`。
+
+浏览器验收：启动 Vite 后，在仓库根目录执行 `node scripts/verify-tutorial-ui.mjs <Playwright模块目录> <ViteURL> <截图目录>`。Playwright 只用于开发验收，不加入应用依赖。

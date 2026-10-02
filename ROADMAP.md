@@ -1190,6 +1190,16 @@ M4 — Schema 驱动参数与 Agent 入口（P2）
 > TypeScript 构建、oxlint 和 1440px / 900px 浏览器验收通过。保存与预览不调用 Provider，
 > 本轮未执行付费生成。详见 [项目级提示词实施报告](docs/investigations/project-prompt-settings-implementation-report.md)。
 
+补充 — 免费离线新手教程（已完成）
+
+- [x] 设置旁教程入口，22 步操作 / 阅读指引与动态聚焦高亮。
+- [x] 内置小说、Bible、剧本、参考插画、分镜和真实可播放的示例短片，不调用付费 API。
+- [x] 独立内存练习，原项目 / 页面 / 草稿保持，上一步、重练和退出可用。
+
+> 实现记录（2026-10-02）：前端 41 项、类型检查、oxlint 和构建通过；真实 App 浏览器完整流程、
+> 五秒 / 20 秒播放与 1440px / 900px / 640px 交互布局验收通过，无生成或写数据请求。
+> 详见 [离线新手教程实施报告](docs/investigations/offline-tutorial-implementation-report.md)。
+
 完成标准：
 
 - 用户在一个界面即可判断一集是否具备生成条件，并定位所有缺失项。
