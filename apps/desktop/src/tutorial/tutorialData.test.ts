@@ -4,9 +4,30 @@ import {
   TUTORIAL_MODULES,
   TUTORIAL_STEPS,
   TUTORIAL_STORY,
+  TUTORIAL_REFERENCE_ASSETS,
+  tutorialReferencesValid,
 } from "./tutorialData";
 
 describe("offline tutorial", () => {
+  it("requires exactly the assets needed by the first shot", () => {
+    expect(tutorialReferencesValid([])).toBe(false);
+    expect(tutorialReferencesValid(["lin-wan"])).toBe(false);
+    expect(tutorialReferencesValid(["station"])).toBe(false);
+    expect(tutorialReferencesValid(["lin-wan", "chen-shu"])).toBe(false);
+    expect(
+      tutorialReferencesValid(TUTORIAL_REFERENCE_ASSETS.map((asset) => asset.id)),
+    ).toBe(false);
+    expect(tutorialReferencesValid(["lin-wan", "lin-wan"])).toBe(false);
+    expect(tutorialReferencesValid(["station", "lin-wan"])).toBe(true);
+    const targets = TUTORIAL_STEPS.map((step) => step.target);
+    expect(targets.indexOf("reference-selection")).toBe(
+      targets.indexOf("generate-shots") + 1,
+    );
+    expect(targets.indexOf("generate-images")).toBe(
+      targets.indexOf("reference-selection") + 1,
+    );
+  });
+
   it("requires the current target and stops at completion", () => {
     expect(advanceTutorial(0, "generate-videos")).toBe(0);
     let index = 0;

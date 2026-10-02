@@ -4,9 +4,11 @@ import { Stepper } from "../components/Stepper";
 import {
   advanceTutorial,
   TUTORIAL_MODULES,
+  TUTORIAL_REFERENCE_ASSETS,
   TUTORIAL_STEPS,
   TUTORIAL_STORY as story,
   tutorialMedia,
+  tutorialReferencesValid,
 } from "./tutorialData";
 import "./CreationTutorial.css";
 
@@ -21,9 +23,20 @@ export function CreationTutorial({ onClose }: { onClose: () => void }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const coachRef = useRef<HTMLElement>(null);
   const [index, setIndex] = useState(0);
+  const [selectedReferenceIds, setSelectedReferenceIds] = useState<string[]>([]);
   const [highlight, setHighlight] = useState<HighlightRect | null>(null);
   const maskId = useId();
   const step = TUTORIAL_STEPS[index];
+  const referencesValid = tutorialReferencesValid(selectedReferenceIds);
+  const selectedReferenceNames = TUTORIAL_REFERENCE_ASSETS.filter((asset) =>
+    selectedReferenceIds.includes(asset.id),
+  )
+    .map((asset) => asset.name)
+    .join("、");
+  const imagesReady =
+    index >= TUTORIAL_STEPS.findIndex((item) => item.target === "generate-videos");
+  const videosReady =
+    index >= TUTORIAL_STEPS.findIndex((item) => item.target === "nav-generation");
   const moduleIndex = TUTORIAL_MODULES.findIndex((module) => module.id === step.module);
 
   useLayoutEffect(() => {
@@ -289,22 +302,78 @@ export function CreationTutorial({ onClose }: { onClose: () => void }) {
                 <h2>场景分镜</h2>
                 <p className="muted">{story.scene.slugline} · 4 镜头 / 共 20 秒</p>
               </div>
-              {index === 15
+              {step.target === "generate-shots"
                 ? action("generate-shots", "生成分镜（示例）")
-                : index === 16
+                : step.target === "generate-images"
                   ? action("generate-images", "生成分镜图（示例）")
-                  : index === 17
+                  : step.target === "generate-videos"
                     ? action("generate-videos", "生成视频（示例）")
                     : null}
             </div>
-            {index === 15 ? (
+            {step.target === "generate-shots" ? (
               <div className="tutorial-empty">
                 <h3>把场景拆成四个镜头</h3>
                 <p>{story.scene.action}</p>
               </div>
             ) : (
               <>
-                {index === 18 && (
+                {step.target === "reference-selection" && (
+                  <section
+                    className="tutorial-reference-picker"
+                    {...area("reference-selection")}
+                    aria-labelledby="tutorial-reference-title"
+                  >
+                    <h3 id="tutorial-reference-title">镜头 1 · 选择参考资产</h3>
+                    <p>{story.shots[0].action}</p>
+                    <p className="field-help">
+                      先练习为镜头 1
+                      选参考图，其余镜头已按模板配置。勾选与本镜头有关的资产即可。
+                    </p>
+                    <div className="tutorial-reference-options">
+                      {TUTORIAL_REFERENCE_ASSETS.map((asset) => (
+                        <label key={asset.id} className="tutorial-reference-option">
+                          <input
+                            type="checkbox"
+                            aria-label={`使用${asset.label} ${asset.name}作为参考图`}
+                            checked={selectedReferenceIds.includes(asset.id)}
+                            onChange={(event) =>
+                              setSelectedReferenceIds((current) =>
+                                event.target.checked
+                                  ? [...current, asset.id]
+                                  : current.filter((id) => id !== asset.id),
+                              )
+                            }
+                          />
+                          <img src={tutorialMedia(asset.image)} alt="" />
+                          <span>
+                            {asset.label} · {asset.name}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                    <p className="field-help" role="status">
+                      {referencesValid
+                        ? "选择正确：林晚固定人物外观，青岚站固定场景。"
+                        : selectedReferenceIds.some(
+                              (id) => id === "chen-shu" || id === "ticket",
+                            )
+                          ? "陈叔和车票不是这个镜头的参考重点，请取消勾选，并选中林晚和青岚站。"
+                          : "请勾选林晚和青岚站，分别保持人物与地点一致。"}
+                    </p>
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      disabled={!referencesValid}
+                      aria-describedby="tutorial-instruction"
+                      onClick={() => {
+                        if (referencesValid) advance("reference-selection");
+                      }}
+                    >
+                      确认参考资产
+                    </button>
+                  </section>
+                )}
+                {videosReady && (
                   <div className="tutorial-clip-preview">
                     <video
                       controls
@@ -322,7 +391,7 @@ export function CreationTutorial({ onClose }: { onClose: () => void }) {
                 <div className="tutorial-shot-list">
                   {story.shots.map((shot) => (
                     <article key={shot.number} className="tutorial-shot">
-                      {index >= 17 ? (
+                      {imagesReady ? (
                         <img
                           src={tutorialMedia(shot.image)}
                           alt={`镜头 ${shot.number}：${shot.action}`}
@@ -339,15 +408,20 @@ export function CreationTutorial({ onClose }: { onClose: () => void }) {
                         {shot.dialogue && (
                           <p className="tutorial-dialogue">“{shot.dialogue}”</p>
                         )}
-                        <p className="field-help">引用：{shot.references}</p>
+                        <p className="field-help">
+                          引用：
+                          {shot.number === 1
+                            ? selectedReferenceNames || "尚未选择"
+                            : shot.references}
+                        </p>
                         <details>
                           <summary>查看镜头提示词</summary>
                           <p>{shot.prompt}</p>
                         </details>
-                        <p className={index >= 18 ? "tutorial-success" : "muted"}>
-                          {index >= 18
+                        <p className={videosReady ? "tutorial-success" : "muted"}>
+                          {videosReady
                             ? "关键帧与视频已备好"
-                            : index >= 17
+                            : imagesReady
                               ? "关键帧已备好"
                               : "已规划镜头"}
                         </p>
@@ -367,15 +441,15 @@ export function CreationTutorial({ onClose }: { onClose: () => void }) {
                 <h2>剧集制作台</h2>
                 <p className="muted">{story.scene.title}</p>
               </div>
-              {index === 19 ? (
+              {step.target === "prepare-episode" ? (
                 action("prepare-episode", "准备本集（示例）")
-              ) : index === 20 ? (
+              ) : step.target === "compose-episode" ? (
                 action("compose-episode", "合成本集（示例）")
               ) : (
                 <span className="tutorial-success">教程完成</span>
               )}
             </div>
-            {index === 21 ? (
+            {step.target === "finished-film" ? (
               <div className="tutorial-finished" {...area("finished-film")}>
                 <video
                   controls
@@ -392,7 +466,11 @@ export function CreationTutorial({ onClose }: { onClose: () => void }) {
               </div>
             ) : (
               <div className="tutorial-production-overview">
-                <h3>{index === 19 ? "检查本集制作条件" : "本集检查通过"}</h3>
+                <h3>
+                  {step.target === "prepare-episode"
+                    ? "检查本集制作条件"
+                    : "本集检查通过"}
+                </h3>
                 <p className="muted">预检查看已有内容，不重新生成，也不覆盖结果。</p>
                 <div className="tutorial-table-wrap">
                   <table>
@@ -414,15 +492,21 @@ export function CreationTutorial({ onClose }: { onClose: () => void }) {
                           <td>{shot.references}</td>
                           <td>1 张</td>
                           <td>5 秒</td>
-                          <td className={index === 20 ? "tutorial-success" : "muted"}>
-                            {index === 20 ? "可合成" : "待检查"}
+                          <td
+                            className={
+                              step.target === "compose-episode"
+                                ? "tutorial-success"
+                                : "muted"
+                            }
+                          >
+                            {step.target === "compose-episode" ? "可合成" : "待检查"}
                           </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
-                {index === 20 && (
+                {step.target === "compose-episode" && (
                   <p className="tutorial-success" role="status">
                     4 个镜头素材齐全，无缺失项。接下来打开示例合成结果。
                   </p>
@@ -500,7 +584,11 @@ export function CreationTutorial({ onClose }: { onClose: () => void }) {
               {step.continueLabel}
             </button>
           ) : (
-            <p className="tutorial-click-hint">点击高亮区域继续</p>
+            <p className="tutorial-click-hint">
+              {step.target === "reference-selection"
+                ? "在高亮区域勾选资产，再确认选择"
+                : "点击高亮区域继续"}
+            </p>
           )}
           <div className="tutorial-coach-controls">
             <button
@@ -510,7 +598,14 @@ export function CreationTutorial({ onClose }: { onClose: () => void }) {
             >
               上一步
             </button>
-            <button type="button" disabled={index === 0} onClick={() => setIndex(0)}>
+            <button
+              type="button"
+              disabled={index === 0}
+              onClick={() => {
+                setIndex(0);
+                setSelectedReferenceIds([]);
+              }}
+            >
               从头练习
             </button>
           </div>

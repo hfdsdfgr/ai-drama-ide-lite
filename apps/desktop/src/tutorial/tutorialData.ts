@@ -114,6 +114,21 @@ export const TUTORIAL_STORY = {
   ],
 } as const;
 
+export const TUTORIAL_REFERENCE_ASSETS = [
+  { ...TUTORIAL_STORY.bible.characters[0], id: "lin-wan", label: "人物" },
+  { ...TUTORIAL_STORY.bible.characters[1], id: "chen-shu", label: "人物" },
+  { ...TUTORIAL_STORY.bible.location, id: "station", label: "地点" },
+  { ...TUTORIAL_STORY.bible.prop, id: "ticket", label: "道具" },
+] as const;
+
+export function tutorialReferencesValid(selectedIds: readonly string[]): boolean {
+  return (
+    selectedIds.length === 2 &&
+    selectedIds.includes("lin-wan") &&
+    selectedIds.includes("station")
+  );
+}
+
 export const TUTORIAL_MODULES = [
   { id: "project", label: "主页" },
   { id: "novel", label: "小说" },
@@ -256,6 +271,15 @@ export const TUTORIAL_STEPS: readonly TutorialStep[] = [
     instruction:
       "点击「生成分镜（示例）」，载入四个镜头，每个五秒。景别、运镜、动作和台词共同说明怎么拍。",
     realUse: "真实创作：在剧本的场景卡片上生成并保存分镜，然后到分镜模块调整。",
+  },
+  {
+    module: "storyboard",
+    target: "reference-selection",
+    title: "选择哪些资产参与镜头",
+    instruction:
+      "镜头 1 只有林晚走上青岚站台。请勾选「林晚」和「青岚站」，不选尚未出场的陈叔和没有特写的车票，再点击「确认参考资产」。",
+    realUse:
+      "在分镜页选中镜头，再在「参考图」中勾选需要的人物、地点或道具；这些参考图参与生图和图生视频，不必把所有资产都选上。",
   },
   {
     module: "storyboard",

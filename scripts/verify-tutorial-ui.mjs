@@ -170,7 +170,7 @@ try {
   await shot("tutorial-welcome-1440.png");
   assert.equal(await target("nav-script").isDisabled(), true);
   await target("nav-script").evaluate((element) => element.click());
-  assert.match(await stepNumber(), /步骤 1 \/ 22/);
+  assert.match(await stepNumber(), /步骤 1 \/ 23/);
   await page.keyboard.press("Escape");
   tutorialActive = false;
   await dialog.waitFor({ state: "detached" });
@@ -229,7 +229,53 @@ try {
   await target("nav-storyboard").click();
   await target("generate-shots").click();
   assert.equal(await dialog.locator(".tutorial-shot").count(), 4);
+  await checkHighlight("reference-selection");
+  const confirmReferences = dialog.getByRole("button", {
+    name: "确认参考资产",
+    exact: true,
+  });
+  const linWan = dialog.getByRole("checkbox", {
+    name: "使用人物 林晚作为参考图",
+  });
+  const station = dialog.getByRole("checkbox", {
+    name: "使用地点 青岚站作为参考图",
+  });
+  const chenShu = dialog.getByRole("checkbox", {
+    name: "使用人物 陈叔作为参考图",
+  });
+  assert.equal(await dialog.getByRole("checkbox").count(), 4);
+  assert.equal(await confirmReferences.isDisabled(), true);
+  await linWan.check();
+  assert.equal(await confirmReferences.isDisabled(), true);
+  await station.check();
+  await chenShu.check();
+  assert.equal(await confirmReferences.isDisabled(), true);
+  assert.match(
+    await target("reference-selection").getByRole("status").innerText(),
+    /取消勾选/,
+  );
+  await chenShu.uncheck();
+  assert.equal(await confirmReferences.isEnabled(), true);
+  for (const width of [1440, 900, 640]) {
+    await page.setViewportSize({ width, height: 900 });
+    await checkHighlight("reference-selection");
+    await shot(`tutorial-reference-selection-${width}.png`);
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await confirmReferences.click();
   await checkHighlight("generate-images");
+  assert.match(
+    await dialog.locator(".tutorial-shot").first().innerText(),
+    /引用：林晚、青岚站/,
+  );
+  await dialog.getByRole("button", { name: "上一步", exact: true }).click();
+  await checkHighlight("reference-selection");
+  assert.equal(await linWan.isChecked(), true);
+  assert.equal(await station.isChecked(), true);
+  await station.uncheck();
+  assert.equal(await confirmReferences.isDisabled(), true);
+  await station.check();
+  await confirmReferences.click();
   await target("generate-images").click();
   await checkHighlight("generate-videos");
   await shot("tutorial-storyboard-1440.png");
@@ -267,7 +313,7 @@ try {
   }
   await dialog.getByRole("button", { name: "从头练习" }).click();
   await checkHighlight("start");
-  assert.match(await stepNumber(), /步骤 1 \/ 22/);
+  assert.match(await stepNumber(), /步骤 1 \/ 23/);
   const replayTargets = [
     "start",
     "create-project",
@@ -285,6 +331,7 @@ try {
     "asset-content",
     "nav-storyboard",
     "generate-shots",
+    "reference-selection",
     "generate-images",
     "generate-videos",
     "nav-generation",
@@ -292,6 +339,19 @@ try {
     "compose-episode",
   ];
   for (const id of replayTargets) {
+    if (id === "reference-selection") {
+      assert.equal(
+        await linWan.isChecked(),
+        false,
+        "restart clears asset choices",
+      );
+      assert.equal(await station.isChecked(), false);
+      assert.equal(await confirmReferences.isDisabled(), true);
+      await linWan.check();
+      await station.check();
+      await confirmReferences.click();
+      continue;
+    }
     const isButton = await target(id).evaluate(
       (element) => element.tagName === "BUTTON",
     );
@@ -314,7 +374,7 @@ try {
   );
   assert.equal(await settingsButton.getAttribute("aria-current"), "page");
   await open();
-  assert.match(await stepNumber(), /步骤 1 \/ 22/);
+  assert.match(await stepNumber(), /步骤 1 \/ 23/);
   await page.keyboard.press("Tab");
   // Native dialogs may let Tab visit browser chrome; background app controls stay inert.
   assert.equal(
@@ -376,7 +436,7 @@ try {
   assert.deepEqual(browserErrors, []);
   result = "PASS";
   console.log(
-    "PASS: 22-step tutorial, spotlight/scroll/resize, 5s and 20s playback, 1440/900/640 layouts, Escape/focus/back/restart, preserved project and draft, zero write or AI requests",
+    "PASS: 23-step tutorial, required asset selection/missing/extra/back/restart, spotlight/scroll/resize, 5s and 20s playback, 1440/900/640 layouts, Escape/focus/back/restart, preserved project and draft, zero write or AI requests",
   );
 } finally {
   await writeFile(

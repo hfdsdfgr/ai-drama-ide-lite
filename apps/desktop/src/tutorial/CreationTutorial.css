@@ -226,6 +226,43 @@
   flex-direction: column;
   gap: var(--space-4);
 }
+.tutorial-reference-picker {
+  padding: var(--space-4);
+  margin-bottom: var(--space-5);
+  background: var(--bg-panel);
+  border-radius: var(--radius-md);
+}
+.tutorial-reference-picker p {
+  margin-block: var(--space-3);
+}
+.tutorial-reference-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+.tutorial-reference-option {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.tutorial-reference-option:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
+.tutorial-reference-option img {
+  width: 56px;
+  height: 42px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+}
+.tutorial-reference-option input {
+  accent-color: var(--accent);
+}
 .tutorial-shot {
   display: grid;
   grid-template-columns: minmax(160px, 0.8fr) minmax(0, 1fr);
@@ -368,6 +405,9 @@
     padding-top: var(--space-2);
   }
   .tutorial-art-gallery {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .tutorial-reference-options {
     grid-template-columns: minmax(0, 1fr);
   }
   .tutorial-document,
