@@ -42,3 +42,16 @@
 - 本轮三个 pytest 临时目录与 HTTP 冒烟数据库已删除，冒烟后端已停止；未改动用户项目、旧测试目录或凭据，未调用付费 AI API。
 
 CI 发布与安装包核验在标签推送后进行，本节的本地验证不替代双平台打包结果。
+
+## 发布结果
+
+- 标签 `v0.2.62` 对应 `15c5687`；修复提交分别为 `3e03fac`（流水线）、`e546e47`（有声合成）。
+- [Build & Release #37130113387](https://github.com/hfdsdfgr/ai-drama-ide-lite/actions/runs/37130113387) 的双平台后端、桌面端与 Release 作业全部成功。
+- [正式 Release](https://github.com/hfdsdfgr/ai-drama-ide-lite/releases/tag/v0.2.62) 已于 2026-10-03 14:42:37 UTC 发布，并成为 latest。发布说明已采用 `docs/releases/v0.2.62.md`。
+- 六项发布资产齐全：Windows 安装包及签名、macOS Apple Silicon DMG、macOS 更新包及签名、`latest.json`。
+- 更新清单版本为 0.2.62，包含 `windows-x86_64` 与 `darwin-aarch64`；更新地址与 Release 下载地址一致，清单签名与 `.sig` 文件相同。
+- 下载两个完整更新包，用 Node 内置 crypto 按 [Minisign 官方格式](https://jedisct1.github.io/minisign/) 验证应用内置公钥的 Ed25519 文件签名和 trusted comment，均通过；大小与 SHA-256 也与 GitHub Release 记录一致。
+  - Windows：66,384,896 bytes；`a56bca9054804b461d5961fb8055b5243a0856c26a10f85f5d6b79bd17317233`。
+  - macOS 更新包：53,021,990 bytes；`eef985ae82fd864b8c08e3ee9b2cc35e20106e4cb44fb161750797b329fb9cdc`。
+- 首次 Node 下载未使用本机代理而超时，使用已配置代理后验证通过；未改变系统代理或应用配置。
+- 校验工具及下载临时文件已清理；没有安装到用户设备，没有实机安装 / 升级测试，也没有真实服务商的付费生成实测。
