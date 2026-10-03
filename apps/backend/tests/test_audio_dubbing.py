@@ -158,6 +158,7 @@ def test_run_dubbing_writes_voiced_version(tmp_path):
     assert result["entity_type"] == "shot_video_voiced"
     current = versions.get_current("p", "shot_video_voiced", "shot1")
     assert current is not None
+    assert current.payload["source_video_version_id"] == "v_video"
     assert Path(current.file_path).is_file()
     assert current.file_path.endswith(".mp4")
     stems = AudioStemRepository(db_path).list_for_shot("p", "shot1")

@@ -81,16 +81,30 @@ class VideoSequenceService:
 
         video_paths: list[str] = []
         missing: list[str] = []
-        sources: list[tuple[str, str, int]] = []
+        sources: list[tuple[str, str, int, str]] = []
         for item in items:
             record = self.versions.get_current(
                 project_id, source_version_type, item.id
             )
+            if entity_type == "scene":
+                voiced = self.versions.get_current(project_id, "shot_video_voiced", item.id)
+                if voiced is not None:
+                    source_id = voiced.payload.get("source_video_version_id")
+                    stale = record is not None and (
+                        (source_id is not None and source_id != record.id)
+                        or (source_id is None and voiced.created_at < record.created_at)
+                    )
+                    if stale:
+                        raise AppError(
+                            422, "compose_voiced_stale",
+                            f"镜头 {item.shot_number} 的配音属于旧视频，请先重新生成该镜头的声音再合成",
+                        )
+                    record = voiced
             if record is None:
                 missing.append(item.id)
                 continue
             video_paths.append(record.file_path)
-            sources.append((item.id, record.id, record.version))
+            sources.append((item.id, record.id, record.version, record.entity_type))
 
         if missing:
             label = "分镜" if entity_type == "scene" else "场景成片"
@@ -119,13 +133,14 @@ class VideoSequenceService:
                 job_id=job.id,
                 payload={
                     "composed_from": [
-                        {"type": source_node_type, "id": sid, "version": ver}
-                        for sid, _rid, ver in sources
+                        {"type": source_node_type, "id": sid, "version": ver,
+                         "version_id": rid, "entity_type": source_type}
+                        for sid, rid, ver, source_type in sources
                     ],
                     "segment_count": len(video_paths),
                 },
             )
-            for source_id, _rid, _ver in sources:
+            for source_id, _rid, _ver, _source_type in sources:
                 self.graph.add_edge(
                     project_id,
                     source_node_type,

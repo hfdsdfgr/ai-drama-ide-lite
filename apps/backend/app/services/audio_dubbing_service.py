@@ -379,6 +379,7 @@ class AudioDubbingService:
                         "lines": lines,
                         "voice_model_id": job.model_id,
                         "bgm_path": bgm_path,
+                        "source_video_version_id": video.id,
                     },
                 )
             except Exception as exc:

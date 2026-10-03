@@ -5,6 +5,7 @@ import subprocess
 import pytest
 
 from app.db.database import get_connection
+from app.core.errors import AppError
 from app.services.media_mix import _probe_video, concat_videos, ffmpeg_exe
 
 
@@ -165,3 +166,59 @@ def test_compose_api_requires_one_target(client):
         json={},
     )
     assert response.status_code == 422
+
+
+@pytest.mark.parametrize("legacy", [False, True])
+def test_compose_prefers_voiced_clip_and_preserves_audio_in_episode(client, tmp_path, legacy):
+    project_id, scene_id = _setup_scene_with_videos(client, tmp_path)
+    versions = client.app.state.asset_version_service
+    silent = tmp_path / "silent.mp4"
+    voiced_file = tmp_path / "voiced.mp4"
+    _make_video(silent, seconds=1)
+    _make_video(voiced_file, seconds=1, with_audio=True)
+    raw = versions.add_version(project_id, "shot_video", "shot1", source_path=silent, file_ext="mp4")
+    voiced = versions.add_version(
+        project_id, "shot_video_voiced", "shot1", source_path=voiced_file, file_ext="mp4",
+        payload={} if legacy else {"source_video_version_id": raw.id},
+    )
+    db = client.app.state.settings.db_path
+    with get_connection(db) as conn:
+        conn.execute(
+            "INSERT INTO episodes (id, project_id, title, created_at, updated_at) VALUES ('ep1', ?, '第一集', '2026-09-01', '2026-09-01')",
+            (project_id,),
+        )
+        conn.execute("UPDATE scenes SET episode_id = 'ep1' WHERE id = ?", (scene_id,))
+    service = client.app.state.video_sequence_service
+    store = client.app.state.job_store
+    scene_job = store.create("video_compose", project_id, input_payload={"entity_type": "scene", "entity_id": scene_id})
+    service.run(scene_job, store)
+    scene = versions.get_current(project_id, "scene_video", scene_id)
+    assert _probe_video(scene.file_path)["has_audio"] is True
+    source = scene.payload["composed_from"][0]
+    assert source["version_id"] == voiced.id
+    assert source["entity_type"] == "shot_video_voiced"
+    assert scene.payload["composed_from"][1]["entity_type"] == "shot_video"
+    episode_job = store.create("video_compose", project_id, input_payload={"entity_type": "episode", "entity_id": "ep1"})
+    service.run(episode_job, store)
+    episode = versions.get_current(project_id, "episode_video", "ep1")
+    assert _probe_video(episode.file_path)["has_audio"] is True
+    assert _probe_video(episode.file_path)["duration"] == pytest.approx(2, abs=0.6)
+
+
+@pytest.mark.parametrize("legacy", [False, True])
+def test_compose_rejects_voice_from_previous_video_version(client, tmp_path, legacy):
+    project_id, scene_id = _setup_scene_with_videos(client, tmp_path)
+    versions = client.app.state.asset_version_service
+    raw = versions.get_current(project_id, "shot_video", "shot1")
+    versions.add_version(
+        project_id, "shot_video_voiced", "shot1", source_path=raw.file_path, file_ext="mp4",
+        payload={} if legacy else {"source_video_version_id": raw.id},
+    )
+    versions.add_version(project_id, "shot_video", "shot1", source_path=raw.file_path, file_ext="mp4")
+    store = client.app.state.job_store
+    job = store.create("video_compose", project_id, input_payload={"entity_type": "scene", "entity_id": scene_id})
+    with pytest.raises(AppError) as exc:
+        client.app.state.video_sequence_service.run(job, store)
+    assert exc.value.code == "compose_voiced_stale"
+    assert "旧视频" in exc.value.message
+    assert versions.get_current(project_id, "scene_video", scene_id) is None
