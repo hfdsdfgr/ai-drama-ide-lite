@@ -152,6 +152,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="${{ github.ref_name }}"
+          NOTES=(--notes "AI Drama IDE Lite $TAG")
+          if [ -f "docs/releases/$TAG.md" ]; then
+            NOTES=(--notes-file "docs/releases/$TAG.md")
+          fi
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release delete "$TAG" --yes
           fi
@@ -162,4 +166,4 @@ jobs:
             ai-drama-ide-lite-*.app.tar.gz ai-drama-ide-lite-*.app.tar.gz.sig \
             latest.json \
             --title "$TAG" \
-            --notes "AI Drama IDE Lite $TAG"
+            "${NOTES[@]}"
