@@ -194,6 +194,7 @@ def create_app(
         story_consistency_service=app.state.story_consistency_service,
         workflow_template_service=app.state.workflow_template_service,
         dialogue_review_service=app.state.dialogue_review_service,
+        execute_child=app.state.job_worker.execute_pipeline_child,
     )
     app.state.job_worker.pipeline_service = app.state.pipeline_service
     app.add_middleware(

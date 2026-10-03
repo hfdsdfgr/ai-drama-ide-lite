@@ -75,6 +75,7 @@ class PipelineService:
         story_consistency_service=None,
         workflow_template_service=None,
         dialogue_review_service=None,
+        execute_child=None,
     ) -> None:
         self.db_path = Path(db_path)
         self.manager = manager
@@ -88,6 +89,7 @@ class PipelineService:
         self.story_consistency_service = story_consistency_service
         self.workflow_templates = workflow_template_service
         self.dialogue_review_service = dialogue_review_service
+        self.execute_child = execute_child
 
     # ---------- 计划与模型检查 ----------
 
@@ -314,6 +316,8 @@ class PipelineService:
             and (quality_review or s["key"] != "quality_review")
         ]
         for index, stage in enumerate(stages):
+            if store.get(job.id).status in {"paused", "cancelled"}:
+                return False
             if self._get_stage_status(project_id, stage["key"]) == "completed":
                 continue
             model = self._pick_stage_model(stage)
@@ -326,7 +330,13 @@ class PipelineService:
                 self._execute_stage(
                     project_id, stage, model, store, include_videos=include_videos,
                     prompt_snapshot=payload["prompt_snapshot"],
+                    parent_job_id=job.id,
                 )
+            except _PipelineHalt as halt:
+                self._set_stage(project_id, stage["key"], halt.status, halt.message)
+                if halt.status == "paused":
+                    store.pause(job.id)
+                return False
             except Exception as exc:
                 self._set_stage(project_id, stage["key"], "failed", str(exc))
                 raise
@@ -345,6 +355,8 @@ class PipelineService:
         config = WorkflowConfig.model_validate(payload["config"])
         enabled = [stage for stage in EPISODE_STAGES if getattr(config, stage["key"]).enabled]
         for index, stage in enumerate(enabled):
+            if store.get(job.id).status in {"paused", "cancelled"}:
+                return False
             if self._stage_completed_episode(project_id, episode_id, stage["key"]):
                 self._set_run_stage(job.id, stage["key"], "completed", "")
                 continue
@@ -355,6 +367,8 @@ class PipelineService:
                 self._execute_episode_stage(job, episode_id, stage, stage_config, model, store)
             except _PipelineHalt as halt:
                 self._set_run_stage(job.id, stage["key"], halt.status, halt.message)
+                if halt.status == "paused":
+                    store.pause(job.id)
                 return False
             except Exception as exc:
                 self._set_run_stage(job.id, stage["key"], "failed", str(exc))
@@ -469,20 +483,8 @@ class PipelineService:
         self._poll_episode_child(parent_job.id, child_id, store)
 
     def _poll_episode_child(self, parent_job_id: str, child_job_id: str, store) -> None:
-        while True:
-            parent = store.get(parent_job_id)
-            if parent.status == "cancelled":
-                store.cancel(child_job_id)
-                raise _PipelineHalt("cancelled", "生产任务已停止")
-            if parent.status == "paused":
-                raise _PipelineHalt("paused", "生产任务已暂停；当前已提交任务将保留实际状态")
-            child = store.get(child_job_id)
-            if child.status == "completed":
-                self._set_run_stage(parent_job_id, self._child_stage(parent_job_id, child_job_id), "running", "", child_job_id="")
-                return
-            if child.status in {"failed", "cancelled"}:
-                raise AppError(500, "stage_job_failed", child.error or f"子任务未完成（{child.status}）")
-            time.sleep(2)
+        self._poll_job(store, child_job_id, parent_job_id=parent_job_id)
+        self._set_run_stage(parent_job_id, self._child_stage(parent_job_id, child_job_id), "running", "", child_job_id="")
 
     def _child_stage(self, parent_job_id: str, child_job_id: str) -> str:
         with get_connection(self.db_path) as conn:
@@ -686,6 +688,7 @@ class PipelineService:
         *,
         include_videos: bool = False,
         prompt_snapshot: dict | None = None,
+        parent_job_id: str | None = None,
     ) -> None:
         key = stage["key"]
         if key == "novel_analysis":
@@ -693,16 +696,16 @@ class PipelineService:
         elif key == "script":
             self._run_script(project_id, model, prompt_snapshot=prompt_snapshot)
         elif key == "assets":
-            self._run_assets(project_id, model, store, prompt_snapshot=prompt_snapshot)
+            self._run_assets(project_id, model, store, prompt_snapshot=prompt_snapshot, parent_job_id=parent_job_id)
         elif key == "storyboard":
             self._run_storyboard(project_id, model, prompt_snapshot=prompt_snapshot)
         elif key == "shot_images":
-            self._run_shot_images(project_id, model, store, prompt_snapshot=prompt_snapshot)
+            self._run_shot_images(project_id, model, store, prompt_snapshot=prompt_snapshot, parent_job_id=parent_job_id)
         elif key == "videos":
-            self._run_videos(project_id, model, store, prompt_snapshot=prompt_snapshot)
+            self._run_videos(project_id, model, store, prompt_snapshot=prompt_snapshot, parent_job_id=parent_job_id)
         elif key == "quality_review":
             self._run_quality_review(
-                project_id, store, include_videos=include_videos, prompt_snapshot=prompt_snapshot
+                project_id, store, include_videos=include_videos, prompt_snapshot=prompt_snapshot, parent_job_id=parent_job_id
             )
 
     def _run_novel_analysis(self, project_id: str, model, *, prompt_snapshot=None) -> None:
@@ -736,9 +739,10 @@ class PipelineService:
             scenes=[SceneCreate(**scene.model_dump()) for scene in result.scenes],
         )
 
-    def _run_assets(self, project_id: str, model, store, *, prompt_snapshot=None) -> None:
-        job = self.asset_service.start(project_id, model.id, prompt_snapshot=prompt_snapshot)
-        self._poll_job(store, job["job_id"])
+    def _run_assets(self, project_id: str, model, store, *, prompt_snapshot=None, parent_job_id=None) -> None:
+        self._run_project_child(store, parent_job_id, "assets", lambda: self.asset_service.start(
+            project_id, model.id, prompt_snapshot=prompt_snapshot
+        )["job_id"])
 
     def _run_storyboard(self, project_id: str, model, *, prompt_snapshot=None) -> None:
         repo = ScriptRepository(self.db_path)
@@ -760,19 +764,18 @@ class PipelineService:
                 [ShotCreate(**shot.model_dump()) for shot in result.shots],
             )
 
-    def _run_shot_images(self, project_id: str, model, store, *, prompt_snapshot=None) -> None:
+    def _run_shot_images(self, project_id: str, model, store, *, prompt_snapshot=None, parent_job_id=None) -> None:
         shots = self._shots_without_image(project_id)
         for shot in shots:
-            job = self.image_generation_service.start_shot(
+            self._run_project_child(store, parent_job_id, f"image:{shot}", lambda shot=shot: self.image_generation_service.start_shot(
                 project_id,
                 shot,
                 model.id,
                 capability="text_to_image",
                 prompt_snapshot=prompt_snapshot,
-            )
-            self._poll_job(store, job["job_id"])
+            )["job_id"])
 
-    def _run_videos(self, project_id: str, model, store, *, prompt_snapshot=None) -> None:
+    def _run_videos(self, project_id: str, model, store, *, prompt_snapshot=None, parent_job_id=None) -> None:
         shots = self._shots_without_video(project_id)
         with get_connection(self.db_path) as conn:
             rows = conn.execute(
@@ -794,7 +797,7 @@ class PipelineService:
                 duration = 15
             else:
                 duration = round(duration / 5) * 5
-            job = self.video_generation_service.start_shot_video(
+            self._run_project_child(store, parent_job_id, f"video:{row['id']}", lambda row=row, prompt=prompt, duration=duration: self.video_generation_service.start_shot_video(
                 project_id,
                 row["id"],
                 model.id,
@@ -802,11 +805,10 @@ class PipelineService:
                 duration=duration,
                 with_audio=supports_audio,
                 prompt_snapshot=prompt_snapshot,
-            )
-            self._poll_job(store, job["job_id"])
+            )["job_id"])
 
     def _run_quality_review(
-        self, project_id: str, store, *, include_videos: bool = False, prompt_snapshot=None
+        self, project_id: str, store, *, include_videos: bool = False, prompt_snapshot=None, parent_job_id=None
     ) -> None:
         """对每个已生成分镜图的镜头做视觉一致性（角色）+ 剧情一致性审核；
         若勾选了视频，再对有视频的镜头补台词审核。"""
@@ -840,36 +842,66 @@ class PipelineService:
 
         shots = self._shots_with_image(project_id)
         for shot_id in shots:
-            review_job = self.visual_review_service.create_model_review_job(
+            self._run_project_child(store, parent_job_id, f"visual_review:{shot_id}", lambda shot_id=shot_id: self.visual_review_service.create_model_review_job(
                 store,
                 project_id,
                 shot_id,
                 model_id=vision_model.id,
                 review_type="character",
                 prompt_snapshot=prompt_snapshot,
-            )
-            self._poll_job(store, review_job.id)
-            story_job = self.story_consistency_service.create_model_review_job(
+            ).id)
+            self._run_project_child(store, parent_job_id, f"story_review:{shot_id}", lambda shot_id=shot_id: self.story_consistency_service.create_model_review_job(
                 store,
                 project_id,
                 shot_id,
                 model_id=llm_model.id,
                 prompt_snapshot=prompt_snapshot,
-            )
-            self._poll_job(store, story_job.id)
+            ).id)
             if include_videos and self._shot_has_video(shot_id):
-                dialogue_job = self.dialogue_review_service.create_model_review_job(
+                self._run_project_child(store, parent_job_id, f"dialogue_review:{shot_id}", lambda shot_id=shot_id: self.dialogue_review_service.create_model_review_job(
                     store,
                     project_id,
                     shot_id,
                     model_id=asr_model.id,
                     script_model_id=llm_model.id,
                     prompt_snapshot=prompt_snapshot,
-                )
-                self._poll_job(store, dialogue_job.id)
+                ).id)
 
-    def _poll_job(self, store, job_id: str) -> None:
+    def _run_project_child(self, store, parent_job_id, key: str, create) -> None:
+        """Keep child IDs in the saved run so resume cannot submit paid work twice."""
+        if not parent_job_id or not self.execute_child:
+            self._poll_job(store, create(), parent_job_id=parent_job_id)
+            return
+        parent = store.get(parent_job_id)
+        children = parent.input_payload.setdefault("pipeline_children", {})
+        child_id = children.get(key)
+        if not child_id:
+            if parent.status in {"paused", "cancelled"}:
+                raise _PipelineHalt(parent.status, "生产任务已停止提交新任务")
+            child_id = create()
+            children[key] = child_id
+            child_payload = store.get(child_id).input_payload
+            child_payload["pipeline_parent_job_id"] = parent_job_id
+            with get_connection(self.db_path) as conn:
+                conn.execute("UPDATE jobs SET input_payload = ? WHERE id = ?", (
+                    json.dumps(parent.input_payload, ensure_ascii=False), parent_job_id,
+                ))
+                conn.execute("UPDATE jobs SET input_payload = ? WHERE id = ?", (
+                    json.dumps(child_payload, ensure_ascii=False), child_id,
+                ))
+        if store.get(child_id).status == "paused":
+            store.resume(child_id)
+        self._poll_job(store, child_id, parent_job_id=parent_job_id)
+
+    def _poll_job(self, store, job_id: str, *, parent_job_id: str | None = None) -> None:
         while True:
+            if parent_job_id:
+                parent = store.get(parent_job_id)
+                if parent.status == "cancelled":
+                    store.cancel_many([job_id])
+                    raise _PipelineHalt("cancelled", "生产任务已停止；已提交远程任务可能仍在执行")
+                if parent.status == "paused":
+                    raise _PipelineHalt("paused", "生产任务已暂停；已提交任务保留实际状态")
             record = store.get(job_id)
             if record.status == "completed":
                 return
@@ -879,6 +911,17 @@ class PipelineService:
                     "stage_job_failed",
                     record.error or f"子任务未完成（{record.status}）",
                 )
+            if record.status == "paused":
+                raise _PipelineHalt("paused", "子任务已暂停，请恢复生产任务后继续")
+            if record.status == "running" and self.execute_child and parent_job_id:
+                # An inline child cannot still be running after returning. A saved
+                # running child belongs to an interrupted run; resume its task ID.
+                store.pause(job_id)
+                store.resume(job_id)
+                continue
+            if record.status == "queued" and self.execute_child and parent_job_id:
+                self.execute_child(parent_job_id, job_id)
+                continue
             time.sleep(2)
 
     # ---------- 状态与查询 ----------

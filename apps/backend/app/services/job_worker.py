@@ -17,6 +17,7 @@ from pathlib import Path
 
 from app.core.errors import AppError
 from app.core.logging import get_logger
+from app.db.database import get_connection
 from app.services.adapters.base import GenerationRequest, GenerationResult
 from app.services.adapters.manager import ProviderManager
 from app.services.asset_service import run_asset_completion
@@ -128,14 +129,38 @@ class JobWorker:
                 break
             self._execute(job)
 
-    def _execute(self, job) -> None:
+    def execute_pipeline_child(self, parent_job_id: str, child_job_id: str) -> None:
+        """Execute one pipeline child inline, preserving the single-worker contract."""
+        if self._stop.is_set():
+            self.store.pause(parent_job_id)
+            self.store.pause_many([child_job_id])
+            return
+        if self.store.get(parent_job_id).status in (STATUS_PAUSED, STATUS_CANCELLED):
+            return
+        child = self.store.get(child_job_id)
+        if child.type == JOB_TYPE_PIPELINE:
+            raise AppError(422, "nested_pipeline", "流水线不能作为另一条流水线的子任务")
+        self._execute(child, parent_job_id=parent_job_id)
+
+    def _execute(self, job, *, parent_job_id: str | None = None) -> None:
         """领取一个任务并执行；返回前必须落到终态（或保持 cancelled/paused）。"""
+        if parent_job_id is None and job.type != JOB_TYPE_PIPELINE:
+            if (job.input_payload or {}).get("pipeline_parent_job_id"):
+                return
+            with get_connection(self.store.db_path) as conn:
+                row = conn.execute(
+                    "SELECT job_id FROM pipeline_run_stages WHERE child_job_id = ?",
+                    (job.id,),
+                ).fetchone()
+            if row:
+                # The owning pipeline resumes the child after becoming running itself.
+                return
         if not self.store.mark_running(job.id):
             return  # 已被取消 / 其他 worker 领取
         job = self.store.get(job.id)
         try:
             if job.type == JOB_TYPE_GENERATION:
-                self._run_generation(job)
+                self._run_generation(job, parent_job_id=parent_job_id)
             elif job.type == JOB_TYPE_ASSET_COMPLETION:
                 self._run_asset_completion(job)
             elif job.type == "dubbing":
@@ -165,9 +190,9 @@ class JobWorker:
 
     # ---------- 任务执行器 ----------
 
-    def _run_generation(self, job) -> None:
+    def _run_generation(self, job, *, parent_job_id: str | None = None) -> None:
         if job.task_id:
-            self._poll_until_done(job.id)
+            self._poll_until_done(job.id, parent_job_id=parent_job_id)
             return
         payload = job.input_payload or {}
         request_extra = dict(payload.get("extra") or {})
@@ -194,7 +219,7 @@ class JobWorker:
             )
             return
         self.store.set_task_id(job.id, task_id)
-        self._poll_until_done(job.id)
+        self._poll_until_done(job.id, parent_job_id=parent_job_id)
 
     def _run_asset_completion(self, job) -> None:
         """资产卡补全：LLM 字段级补全（只补空不覆盖），结果写回 Story Bible。"""
@@ -288,9 +313,17 @@ class JobWorker:
             output_files=self._local_files(result),
         )
 
-    def _poll_until_done(self, job_id: str) -> None:
+    def _poll_until_done(self, job_id: str, *, parent_job_id: str | None = None) -> None:
         """异步厂商任务轮询：检查本地状态（cancel/pause）与厂商真实状态。"""
         while not self._stop.is_set():
+            if parent_job_id:
+                parent = self.store.get(parent_job_id)
+                if parent.status == STATUS_CANCELLED:
+                    self.store.cancel(job_id)
+                    return
+                if parent.status == STATUS_PAUSED:
+                    self.store.pause(job_id)
+                    return
             current = self.store.get(job_id)
             if current.status in (STATUS_CANCELLED, STATUS_PAUSED):
                 return  # 已取消或暂停：worker 停止轮询，任务保持该状态
@@ -329,6 +362,9 @@ class JobWorker:
             if status.progress is not None:
                 self.store.update_progress(job_id, int(status.progress * 100))
             self._stop.wait(self.poll_interval)
+        if parent_job_id:
+            self.store.pause(job_id)
+            self.store.pause(parent_job_id)
 
     # ---------- 结果处理 ----------
 
